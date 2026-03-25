@@ -5,17 +5,36 @@
  * Supports running as a Windows service (default), in console mode
  * (--console / -c), or performing install/uninstall operations.
  *
- * The skeleton loop will be replaced by AgentClient + CommandDispatcher
- * in Task 10.
+ * The agent lifecycle:
+ *   1. Load configuration
+ *   2. Create CommandDispatcher and register all 5 feature handlers
+ *   3. Create AgentClient and register with the server
+ *   4. Enter main loop:
+ *      a. Poll commands from server
+ *      b. Dispatch each command to the appropriate handler
+ *      c. Report results back to server
+ *      d. Send heartbeat periodically
+ *      e. Check for stop signal
+ *   5. Unregister from server on shutdown
  */
 
 #include <spdlog/spdlog.h>
 #include <csignal>
 #include <iostream>
 #include <thread>
+#include <chrono>
 
 #include "hub32agent/AgentConfig.hpp"
 #include "hub32agent/WinServiceAdapter.hpp"
+#include "hub32agent/AgentClient.hpp"
+#include "hub32agent/CommandDispatcher.hpp"
+
+// Feature handlers
+#include "hub32agent/features/ScreenCapture.hpp"
+#include "hub32agent/features/ScreenLock.hpp"
+#include "hub32agent/features/InputLock.hpp"
+#include "hub32agent/features/MessageDisplay.hpp"
+#include "hub32agent/features/PowerControl.hpp"
 
 namespace {
 
@@ -26,8 +45,7 @@ static volatile sig_atomic_t g_stopRequested = 0;
  * @brief Async-signal-safe signal handler.
  *
  * Sets a flag instead of calling non-signal-safe functions like spdlog
- * or mutex-protected methods. A watcher thread polls this flag and
- * logs the shutdown message.
+ * or mutex-protected methods. The main loop polls this flag.
  *
  * @param sig The signal number (unused).
  */
@@ -37,39 +55,122 @@ void signalHandler(int /*sig*/)
 }
 
 /**
+ * @brief Creates a CommandDispatcher and registers all 5 feature handlers.
+ * @return Configured CommandDispatcher ready to receive commands.
+ */
+hub32agent::CommandDispatcher createDispatcher()
+{
+    hub32agent::CommandDispatcher dispatcher;
+    dispatcher.registerHandler(std::make_unique<hub32agent::features::ScreenCapture>());
+    dispatcher.registerHandler(std::make_unique<hub32agent::features::ScreenLock>());
+    dispatcher.registerHandler(std::make_unique<hub32agent::features::InputLock>());
+    dispatcher.registerHandler(std::make_unique<hub32agent::features::MessageDisplay>());
+    dispatcher.registerHandler(std::make_unique<hub32agent::features::PowerControl>());
+    return dispatcher;
+}
+
+/**
  * @brief Runs the agent main loop.
  *
- * Installs signal handlers, starts a watcher thread for graceful shutdown,
- * and enters the skeleton polling loop.
+ * 1. Creates CommandDispatcher with all feature handlers
+ * 2. Creates AgentClient and registers with the server
+ * 3. Enters poll/dispatch/report loop until stop signal
+ * 4. Unregisters from server on shutdown
  *
  * @param cfg Agent configuration.
  * @return 0 on success, 1 on failure.
- *
- * @note This is a skeleton -- Task 10 will wire in AgentClient,
- *       CommandDispatcher, and all feature handlers.
  */
 int runAgent(const hub32agent::AgentConfig& cfg)
 {
-    spdlog::info("[Agent] starting -- server: {}", cfg.serverUrl);
+    spdlog::info("[Agent] starting — server: {}", cfg.serverUrl);
 
     std::signal(SIGINT,  signalHandler);
     std::signal(SIGTERM, signalHandler);
 
-    // Watcher thread for graceful shutdown
-    std::thread watcher([] {
-        while (!g_stopRequested) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        }
-        spdlog::info("[Agent] stop requested, shutting down");
-    });
-
-    // Skeleton loop -- will be replaced by AgentClient + CommandDispatcher in Task 10
-    while (!g_stopRequested) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    // --- 1. Create dispatcher and register feature handlers ---
+    auto dispatcher = createDispatcher();
+    {
+        const auto features = dispatcher.registeredFeatures();
+        spdlog::info("[Agent] {} features registered: {}", features.size(),
+                     [&features] {
+                         std::string s;
+                         for (size_t i = 0; i < features.size(); ++i) {
+                             if (i > 0) s += ", ";
+                             s += features[i];
+                         }
+                         return s;
+                     }());
     }
 
-    g_stopRequested = 1;
-    watcher.join();
+    // --- 2. Create client and register with server ---
+    hub32agent::AgentClient client(cfg);
+
+    // Retry registration with exponential backoff
+    int retryDelay = 1;
+    while (!g_stopRequested && !client.isRegistered()) {
+        if (client.registerWithServer()) {
+            spdlog::info("[Agent] registered as '{}' with server", client.agentId());
+            break;
+        }
+        spdlog::warn("[Agent] registration failed, retrying in {}s", retryDelay);
+        for (int i = 0; i < retryDelay * 5 && !g_stopRequested; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        }
+        retryDelay = std::min(retryDelay * 2, 60); // max 60s between retries
+    }
+
+    if (g_stopRequested) {
+        spdlog::info("[Agent] stop requested before registration completed");
+        return 0;
+    }
+
+    // --- 3. Main loop: poll → dispatch → report → heartbeat ---
+    auto lastHeartbeat = std::chrono::steady_clock::now();
+    const auto pollInterval = std::chrono::milliseconds(cfg.pollIntervalMs);
+    const auto heartbeatInterval = std::chrono::milliseconds(cfg.heartbeatIntervalMs);
+
+    spdlog::info("[Agent] entering main loop (poll={}ms, heartbeat={}ms)",
+                 cfg.pollIntervalMs, cfg.heartbeatIntervalMs);
+
+    while (!g_stopRequested) {
+        // --- Poll commands ---
+        auto commands = client.pollCommands();
+
+        // --- Dispatch each command ---
+        for (const auto& cmd : commands) {
+            if (g_stopRequested) break;
+
+            spdlog::info("[Agent] executing command '{}': feature='{}' op='{}'",
+                         cmd.commandId, cmd.featureUid, cmd.operation);
+
+            auto result = dispatcher.dispatch(cmd);
+
+            // Report result back to server
+            const std::string status = result.success ? "success" : "failed";
+            client.reportResult(cmd.commandId, status, result.result, result.durationMs);
+
+            spdlog::info("[Agent] command '{}' {} ({}ms)",
+                         cmd.commandId, status, result.durationMs);
+        }
+
+        // --- Heartbeat ---
+        const auto now = std::chrono::steady_clock::now();
+        if (now - lastHeartbeat >= heartbeatInterval) {
+            client.sendHeartbeat();
+            lastHeartbeat = now;
+        }
+
+        // --- Wait for next poll ---
+        // Sleep in small increments so we can respond to stop signal quickly
+        const auto sleepEnd = std::chrono::steady_clock::now() + pollInterval;
+        while (!g_stopRequested && std::chrono::steady_clock::now() < sleepEnd) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        }
+    }
+
+    // --- 4. Graceful shutdown ---
+    spdlog::info("[Agent] shutting down, unregistering from server");
+    client.unregister();
     spdlog::info("[Agent] shutdown complete");
     return 0;
 }
