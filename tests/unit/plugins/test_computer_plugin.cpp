@@ -89,7 +89,8 @@ public:
      * @brief Returns FramebufferNotAvailable (mock has no real screen data).
      */
     Result<FramebufferImage> getFramebuffer(
-        const Uid& /*uid*/, int /*width*/, int /*height*/, ImageFormat /*fmt*/) override
+        const Uid& /*uid*/, int /*width*/, int /*height*/, ImageFormat /*fmt*/,
+        int /*compression*/ = -1, int /*quality*/ = -1) override
     {
         return Result<FramebufferImage>::fail(
             ApiError{ ErrorCode::FramebufferNotAvailable, "mock" });

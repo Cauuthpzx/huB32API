@@ -7,9 +7,11 @@
 #include "../core/internal/ConnectionPool.hpp"
 #include "../auth/JwtAuth.hpp"
 #include "../auth/Hub32KeyAuth.hpp"
+#include "../agent/AgentRegistry.hpp"
 #include "../plugins/computer/ComputerPlugin.hpp"
 #include "../plugins/feature/FeaturePlugin.hpp"
 #include "../plugins/session/SessionPlugin.hpp"
+#include "../plugins/metrics/MetricsPlugin.hpp"
 
 #include <httplib.h>
 
@@ -23,6 +25,7 @@ struct HttpServer::Impl
     std::unique_ptr<core::internal::ConnectionPool>   pool;
     std::unique_ptr<auth::JwtAuth>                    jwtAuth;
     std::unique_ptr<auth::Hub32KeyAuth>               keyAuth;
+    std::unique_ptr<agent::AgentRegistry>             agentRegistry;
     std::unique_ptr<server::internal::ThreadPool>     threadPool;
     std::unique_ptr<httplib::Server>                  httpServer;
     std::unique_ptr<server::internal::Router>         router;
@@ -42,6 +45,7 @@ HttpServer::HttpServer(const ServerConfig& cfg)
     m_impl->registry->registerPlugin(std::make_unique<plugins::ComputerPlugin>(*m_impl->hub32Core));
     m_impl->registry->registerPlugin(std::make_unique<plugins::FeaturePlugin>(*m_impl->hub32Core));
     m_impl->registry->registerPlugin(std::make_unique<plugins::SessionPlugin>(*m_impl->hub32Core));
+    m_impl->registry->registerPlugin(std::make_unique<plugins::MetricsPlugin>());
     m_impl->registry->initializeAll();
 
     // 3. Connection pool
@@ -55,15 +59,30 @@ HttpServer::HttpServer(const ServerConfig& cfg)
     // 4. Auth
     m_impl->jwtAuth = std::make_unique<auth::JwtAuth>(cfg);
     m_impl->keyAuth = std::make_unique<auth::Hub32KeyAuth>();
+    m_impl->agentRegistry = std::make_unique<agent::AgentRegistry>();
 
-    // 5. HTTP server + router
+    // 5. HTTP/HTTPS server + router
+#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+    if (cfg.tlsEnabled && !cfg.tlsCertFile.empty() && !cfg.tlsKeyFile.empty()) {
+        m_impl->httpServer = std::make_unique<httplib::SSLServer>(
+            cfg.tlsCertFile.c_str(), cfg.tlsKeyFile.c_str());
+        spdlog::info("[HttpServer] TLS enabled with cert={}", cfg.tlsCertFile);
+    } else {
+        m_impl->httpServer = std::make_unique<httplib::Server>();
+    }
+#else
     m_impl->httpServer = std::make_unique<httplib::Server>();
+    if (cfg.tlsEnabled) {
+        spdlog::warn("[HttpServer] TLS requested but OpenSSL support not compiled in");
+    }
+#endif
     m_impl->httpServer->new_task_queue = [&cfg] {
         return new httplib::ThreadPool(cfg.workerThreads);
     };
 
     server::internal::Router::Services svcs{
-        *m_impl->registry, *m_impl->pool, *m_impl->jwtAuth, *m_impl->keyAuth
+        *m_impl->registry, *m_impl->pool, *m_impl->jwtAuth, *m_impl->keyAuth,
+        *m_impl->agentRegistry
     };
     m_impl->router = std::make_unique<server::internal::Router>(*m_impl->httpServer, svcs);
     m_impl->router->registerAll();

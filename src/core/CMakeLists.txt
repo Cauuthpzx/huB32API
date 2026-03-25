@@ -12,6 +12,7 @@ add_library(hub32api-core SHARED
     ../auth/Hub32KeyAuth.cpp
     ../config/ServerConfig.cpp
     ../config/internal/ConfigValidator.cpp
+    ../agent/AgentRegistry.cpp
 )
 
 generate_export_header(hub32api-core

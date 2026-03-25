@@ -23,6 +23,16 @@
  *   GET    /api/v1/computers/:id/features/:fid
  *   PUT    /api/v1/computers/:id/features/:fid
  *
+ *  v1 — Agents
+ *   POST   /api/v1/agents/register                 (public, validates agentKey)
+ *   GET    /api/v1/agents                           (protected)
+ *   DELETE /api/v1/agents/:id                       (protected)
+ *   GET    /api/v1/agents/:id/status                (protected)
+ *   POST   /api/v1/agents/:id/commands              (protected)
+ *   GET    /api/v1/agents/:id/commands              (protected)
+ *   PUT    /api/v1/agents/:id/commands/:cid         (protected)
+ *   POST   /api/v1/agents/:id/heartbeat             (protected)
+ *
  *  v2 — Locations (protected)
  *   GET    /api/v2/locations
  *   GET    /api/v2/locations/:id
@@ -47,6 +57,7 @@
 
 // Controllers — v1
 #include "../api/v1/controllers/AuthController.hpp"
+#include "../api/v1/controllers/AgentController.hpp"
 #include "../api/v1/controllers/ComputerController.hpp"
 #include "../api/v1/controllers/FeatureController.hpp"
 #include "../api/v1/controllers/FramebufferController.hpp"
@@ -72,11 +83,20 @@
 #include "../auth/JwtAuth.hpp"
 #include "../auth/Hub32KeyAuth.hpp"
 
+// Agent
+#include "../agent/AgentRegistry.hpp"
+
+#include "../plugins/metrics/MetricsPlugin.hpp"
+
 #include <httplib.h>
+#include <sstream>
+#include <cstdlib>
 
 #ifdef _WIN32
 #  include <winsock2.h>
 #  include <ws2tcpip.h>
+#  include <iphlpapi.h>
+#  include <icmpapi.h>
 #endif
 
 namespace hub32api::server::internal {
@@ -147,6 +167,67 @@ bool tcpPing(const std::string& host, int port = 11100, int timeoutMs = 1500)
     (void)host; (void)port; (void)timeoutMs;
     return false;
 #endif
+}
+
+struct HostStateResult {
+    std::string state;   // "online" | "up" | "down"
+    bool reachable = false;
+    int latencyMs = -1;
+    int pingLatencyMs = -1;
+};
+
+HostStateResult checkHostState(const std::string& host, int vncPort = 11100, int timeoutMs = 1500)
+{
+    HostStateResult result;
+
+    // 1. Try TCP connect (VNC port)
+    if (tcpPing(host, vncPort, timeoutMs)) {
+        result.state = "online";
+        result.reachable = true;
+        // measure latency
+        auto start = std::chrono::steady_clock::now();
+        tcpPing(host, vncPort, 500);
+        auto end = std::chrono::steady_clock::now();
+        result.latencyMs = static_cast<int>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
+        return result;
+    }
+
+    // 2. Fallback: ICMP ping (Windows only)
+#ifdef _WIN32
+    {
+        HANDLE hIcmp = IcmpCreateFile();
+        if (hIcmp != INVALID_HANDLE_VALUE) {
+            // Resolve hostname
+            addrinfo hints{}, *res = nullptr;
+            hints.ai_family = AF_INET;
+            if (::getaddrinfo(host.c_str(), nullptr, &hints, &res) == 0 && res) {
+                auto* addr = reinterpret_cast<sockaddr_in*>(res->ai_addr);
+                IPAddr destIp = addr->sin_addr.S_un.S_addr;
+                freeaddrinfo(res);
+
+                char replyBuf[sizeof(ICMP_ECHO_REPLY) + 32];
+                DWORD ret = IcmpSendEcho(hIcmp, destIp, nullptr, 0,
+                                         nullptr, replyBuf, sizeof(replyBuf),
+                                         static_cast<DWORD>(timeoutMs));
+                if (ret > 0) {
+                    auto* reply = reinterpret_cast<ICMP_ECHO_REPLY*>(replyBuf);
+                    result.state = "up";
+                    result.reachable = true;
+                    result.pingLatencyMs = static_cast<int>(reply->RoundTripTime);
+                    IcmpCloseHandle(hIcmp);
+                    return result;
+                }
+            }
+            IcmpCloseHandle(hIcmp);
+        }
+    }
+#endif
+
+    // 3. Both failed
+    result.state = "down";
+    result.reachable = false;
+    return result;
 }
 
 /**
@@ -242,6 +323,49 @@ nlohmann::json buildOpenApiSpec()
         {"hostname", {{"type","string"}}},
         {"online",   {{"type","boolean"}}},
         {"latencyMs",{{"type","integer"}}}
+    }}};
+
+    s["AgentRegisterRequest"] = {
+        {"type","object"},
+        {"required", json::array({"hostname","agentKey"})},
+        {"properties", {
+            {"hostname",    {{"type","string"}}},
+            {"agentKey",    {{"type","string"}}},
+            {"osVersion",   {{"type","string"}}},
+            {"agentVersion",{{"type","string"}}},
+            {"capabilities",{{"type","array"},{"items",{{"type","string"}}}}}
+        }}
+    };
+
+    s["AgentRegisterResponse"] = { {"type","object"}, {"properties", {
+        {"agentId",             {{"type","string"}}},
+        {"authToken",           {{"type","string"}}},
+        {"commandPollIntervalMs",{{"type","integer"}}}
+    }}};
+
+    s["AgentStatus"] = { {"type","object"}, {"properties", {
+        {"agentId",      {{"type","string"}}},
+        {"hostname",     {{"type","string"}}},
+        {"ipAddress",    {{"type","string"}}},
+        {"state",        {{"type","string"},{"enum",json::array({"offline","online","busy","error"})}}},
+        {"agentVersion", {{"type","string"}}},
+        {"lastHeartbeat",{{"type","string"},{"format","date-time"}}},
+        {"capabilities", {{"type","array"},{"items",{{"type","string"}}}}}
+    }}};
+
+    s["AgentCommandRequest"] = {
+        {"type","object"},
+        {"required", json::array({"featureUid","operation"})},
+        {"properties", {
+            {"featureUid",{{"type","string"}}},
+            {"operation", {{"type","string"},{"enum",json::array({"start","stop"})}}},
+            {"arguments", {{"type","object"}}}
+        }}
+    };
+
+    s["AgentCommandResponse"] = { {"type","object"}, {"properties", {
+        {"commandId",{{"type","string"}}},
+        {"status",   {{"type","string"}}}
     }}};
 
     // Helper lambda for $ref
@@ -416,6 +540,126 @@ nlohmann::json buildOpenApiSpec()
         paths["/api/v2/metrics"]["get"] = op;
     }
 
+    // ── Agent endpoints ──────────────────────────────────────────────────
+
+    // Reusable agent path parameter
+    auto agentIdParam = json::object({
+        {"name","id"},{"in","path"},{"required",true},
+        {"description","Agent UUID"},
+        {"schema",json{{"type","string"}}}
+    });
+    auto cmdIdParam = json::object({
+        {"name","cid"},{"in","path"},{"required",true},
+        {"description","Command UUID"},
+        {"schema",json{{"type","string"}}}
+    });
+
+    // POST /api/v1/agents/register
+    {
+        json op;
+        op["summary"]     = "Register a new agent";
+        op["description"] = "Agents self-register by providing a pre-shared agentKey. "
+                            "Returns a JWT for subsequent authenticated requests.";
+        op["tags"]        = json::array({"Agents"});
+        op["security"]    = noAuth;
+        op["requestBody"]["required"] = true;
+        op["requestBody"]["content"]["application/json"]["schema"] = ref("AgentRegisterRequest");
+        op["responses"]["200"]["description"] = "Agent registered";
+        op["responses"]["200"]["content"]["application/json"]["schema"] = ref("AgentRegisterResponse");
+        op["responses"]["401"]["description"] = "Invalid agent key";
+        paths["/api/v1/agents/register"]["post"] = op;
+    }
+
+    // GET /api/v1/agents
+    {
+        json op;
+        op["summary"]  = "List all registered agents";
+        op["tags"]     = json::array({"Agents"});
+        op["security"] = bearerSec;
+        op["responses"]["200"]["description"] = "OK";
+        op["responses"]["200"]["content"]["application/json"]["schema"]["type"] = "array";
+        op["responses"]["200"]["content"]["application/json"]["schema"]["items"] = ref("AgentStatus");
+        paths["/api/v1/agents"]["get"] = op;
+    }
+
+    // DELETE /api/v1/agents/{id}
+    {
+        json op;
+        op["summary"]    = "Unregister an agent";
+        op["tags"]       = json::array({"Agents"});
+        op["security"]   = bearerSec;
+        op["parameters"] = json::array({agentIdParam});
+        op["responses"]["204"]["description"] = "Agent unregistered";
+        paths["/api/v1/agents/{id}"]["delete"] = op;
+    }
+
+    // GET /api/v1/agents/{id}/status
+    {
+        json op;
+        op["summary"]    = "Get agent status";
+        op["tags"]       = json::array({"Agents"});
+        op["security"]   = bearerSec;
+        op["parameters"] = json::array({agentIdParam});
+        op["responses"]["200"]["description"] = "OK";
+        op["responses"]["200"]["content"]["application/json"]["schema"] = ref("AgentStatus");
+        op["responses"]["404"]["description"] = "Agent not found";
+        paths["/api/v1/agents/{id}/status"]["get"] = op;
+    }
+
+    // POST /api/v1/agents/{id}/commands
+    {
+        json op;
+        op["summary"]    = "Push a command to an agent";
+        op["tags"]       = json::array({"Agents"});
+        op["security"]   = bearerSec;
+        op["parameters"] = json::array({agentIdParam});
+        op["requestBody"]["required"] = true;
+        op["requestBody"]["content"]["application/json"]["schema"] = ref("AgentCommandRequest");
+        op["responses"]["200"]["description"] = "Command queued";
+        op["responses"]["200"]["content"]["application/json"]["schema"] = ref("AgentCommandResponse");
+        paths["/api/v1/agents/{id}/commands"]["post"] = op;
+    }
+
+    // GET /api/v1/agents/{id}/commands
+    {
+        json op;
+        op["summary"]    = "Poll pending commands for an agent";
+        op["tags"]       = json::array({"Agents"});
+        op["security"]   = bearerSec;
+        op["parameters"] = json::array({agentIdParam});
+        op["responses"]["200"]["description"] = "OK";
+        op["responses"]["200"]["content"]["application/json"]["schema"]["type"] = "array";
+        paths["/api/v1/agents/{id}/commands"]["get"] = op;
+    }
+
+    // PUT /api/v1/agents/{id}/commands/{cid}
+    {
+        json op;
+        op["summary"]    = "Report command execution result";
+        op["tags"]       = json::array({"Agents"});
+        op["security"]   = bearerSec;
+        op["parameters"] = json::array({agentIdParam, cmdIdParam});
+        op["requestBody"]["required"] = true;
+        op["requestBody"]["content"]["application/json"]["schema"]["type"] = "object";
+        op["requestBody"]["content"]["application/json"]["schema"]["properties"]["commandId"]["type"] = "string";
+        op["requestBody"]["content"]["application/json"]["schema"]["properties"]["status"]["type"] = "string";
+        op["requestBody"]["content"]["application/json"]["schema"]["properties"]["result"]["type"] = "string";
+        op["requestBody"]["content"]["application/json"]["schema"]["properties"]["durationMs"]["type"] = "integer";
+        op["responses"]["200"]["description"] = "Result recorded";
+        paths["/api/v1/agents/{id}/commands/{cid}"]["put"] = op;
+    }
+
+    // POST /api/v1/agents/{id}/heartbeat
+    {
+        json op;
+        op["summary"]    = "Agent heartbeat";
+        op["tags"]       = json::array({"Agents"});
+        op["security"]   = bearerSec;
+        op["parameters"] = json::array({agentIdParam});
+        op["responses"]["200"]["description"] = "OK";
+        paths["/api/v1/agents/{id}/heartbeat"]["post"] = op;
+    }
+
     return spec;
 }
 
@@ -439,9 +683,21 @@ Router::Router(httplib::Server& server, Services svcs)
 void Router::registerAll()
 {
     registerV1();
+    registerAgentRoutes();
     registerV2();
     registerHealthAndMetrics();
     registerOpenApi();
+    registerDebug();
+
+    // Wire MetricsPlugin to record every request
+    auto* metricsRaw = m_svcs.registry.find("a1b2c3d4-0004-0004-0004-000000000004");
+    if (auto* mp = dynamic_cast<plugins::MetricsPlugin*>(metricsRaw)) {
+        m_server.set_post_routing_handler(
+            [mp](const httplib::Request& /*req*/, httplib::Response& res) {
+                mp->recordRequest(res.status);
+            });
+    }
+
     spdlog::info("[Router] all routes registered");
 }
 
@@ -523,7 +779,10 @@ void Router::registerV1()
     publicRoute("GET", "/api/v1/auth/methods",
         [](const httplib::Request&, httplib::Response& res) {
             nlohmann::json j;
-            j["methods"] = nlohmann::json::array({"hub32-key", "logon"});
+            j["methods"] = nlohmann::json::array({
+                nlohmann::json{{"name", "hub32-key"}, {"uuid", "0c69b301-81b4-42d6-8fae-128cdd113314"}},
+                nlohmann::json{{"name", "logon"}, {"uuid", "63611f7c-b457-42c7-832e-67d0f9281085"}}
+            });
             res.status = 200;
             res.set_content(j.dump(), "application/json");
         });
@@ -603,6 +862,123 @@ void Router::registerV1()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Agent routes
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * @brief Registers all /api/v1/agents/ routes.
+ *
+ * Each route is wrapped with: CORS -> Logging -> RateLimit -> (Auth for protected).
+ * The agent registration endpoint is public (authenticates via agentKey in body).
+ */
+void Router::registerAgentRoutes()
+{
+    // ── Controller ───────────────────────────────────────────────────────
+    auto agentCtrl = std::make_shared<api::v1::AgentController>(
+        m_svcs.agentRegistry, m_svcs.jwtAuth);
+
+    // ── Middleware ────────────────────────────────────────────────────────
+    const api::v1::middleware::CorsConfig corsConfig{
+        {"*"},
+        {"GET","POST","PUT","DELETE","OPTIONS"},
+        {"Authorization","Content-Type","X-Request-ID","Accept"},
+        false,
+        3600
+    };
+    const api::v1::middleware::RateLimitConfig rlConfig{ 120, 20 };
+
+    auto cors   = std::make_shared<api::v1::middleware::CorsMiddleware>(corsConfig);
+    auto logger = std::make_shared<api::v1::middleware::LoggingMiddleware>();
+    auto rl     = std::make_shared<api::v1::middleware::RateLimitMiddleware>(rlConfig);
+    auto auth   = std::make_shared<api::v1::middleware::AuthMiddleware>(m_svcs.jwtAuth);
+
+    // ── Route builders ────────────────────────────────────────────────────
+    // Public: CORS + Logging + RateLimit (no JWT)
+    auto publicRoute = [&](const std::string& method, const std::string& path, auto handler)
+    {
+        auto h = [cors, logger, rl, handler]
+            (const httplib::Request& req, httplib::Response& res)
+        {
+            logger->logRequest(req);
+            if (!cors->process(req, res)) { logger->logResponse(req, res); return; }
+            if (!rl->process(req, res))   { logger->logResponse(req, res); return; }
+            handler(req, res);
+            logger->logResponse(req, res);
+        };
+        if (method == "GET")    m_server.Get(path.c_str(), h);
+        else if (method == "POST")   m_server.Post(path.c_str(), h);
+        else if (method == "DELETE") m_server.Delete(path.c_str(), h);
+    };
+
+    // Protected: CORS + Logging + RateLimit + JWT
+    auto protectedRoute = [&](const std::string& method, const std::string& path, auto handler)
+    {
+        auto h = [cors, logger, rl, auth, handler]
+            (const httplib::Request& req, httplib::Response& res)
+        {
+            logger->logRequest(req);
+            if (!cors->process(req, res)) { logger->logResponse(req, res); return; }
+            if (!rl->process(req, res))   { logger->logResponse(req, res); return; }
+            core::internal::ApiContext ctx;
+            ctx.requestId = req.has_header("X-Request-ID")
+                ? req.get_header_value("X-Request-ID") : "";
+            if (!auth->process(req, res, ctx)) { logger->logResponse(req, res); return; }
+            handler(req, res);
+            logger->logResponse(req, res);
+        };
+        if (method == "GET")    m_server.Get(path.c_str(), h);
+        else if (method == "POST")   m_server.Post(path.c_str(), h);
+        else if (method == "PUT")    m_server.Put(path.c_str(), h);
+        else if (method == "DELETE") m_server.Delete(path.c_str(), h);
+    };
+
+    // ── Public: agent registration ───────────────────────────────────────
+    publicRoute("POST", "/api/v1/agents/register",
+        [agentCtrl](const httplib::Request& req, httplib::Response& res) {
+            agentCtrl->handleRegister(req, res);
+        });
+
+    // ── Protected: all other agent endpoints ─────────────────────────────
+    protectedRoute("GET", "/api/v1/agents",
+        [agentCtrl](const httplib::Request& req, httplib::Response& res) {
+            agentCtrl->handleList(req, res);
+        });
+
+    protectedRoute("DELETE", R"(/api/v1/agents/([^/]+))",
+        [agentCtrl](const httplib::Request& req, httplib::Response& res) {
+            agentCtrl->handleUnregister(req, res);
+        });
+
+    protectedRoute("GET", R"(/api/v1/agents/([^/]+)/status)",
+        [agentCtrl](const httplib::Request& req, httplib::Response& res) {
+            agentCtrl->handleStatus(req, res);
+        });
+
+    protectedRoute("POST", R"(/api/v1/agents/([^/]+)/commands)",
+        [agentCtrl](const httplib::Request& req, httplib::Response& res) {
+            agentCtrl->handlePushCommand(req, res);
+        });
+
+    protectedRoute("GET", R"(/api/v1/agents/([^/]+)/commands)",
+        [agentCtrl](const httplib::Request& req, httplib::Response& res) {
+            agentCtrl->handlePollCommands(req, res);
+        });
+
+    // PUT with 2 captures: /agents/{id}/commands/{cid}
+    protectedRoute("PUT", R"(/api/v1/agents/([^/]+)/commands/([^/]+))",
+        [agentCtrl](const httplib::Request& req, httplib::Response& res) {
+            agentCtrl->handleReportResult(req, res);
+        });
+
+    protectedRoute("POST", R"(/api/v1/agents/([^/]+)/heartbeat)",
+        [agentCtrl](const httplib::Request& req, httplib::Response& res) {
+            agentCtrl->handleHeartbeat(req, res);
+        });
+
+    spdlog::debug("[Router] agent routes registered");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // v2
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -657,33 +1033,30 @@ void Router::registerV2()
             batchCtrl->handleBatchFeature(req, res);
         });
 
-    // Computer TCP state check — exceeds original WebAPI capability
+    // Computer host state check — exceeds original WebAPI capability
     protectedRoute("GET", R"(/api/v2/computers/([^/]+)/state)",
         [this](const httplib::Request& req, httplib::Response& res) {
-            const std::string id = req.matches.size() > 1 ? req.matches[1].str() : "";
-            if (id.empty()) { sendError(res, 400, "Missing computer id"); return; }
+            const std::string compId = req.matches.size() > 1 ? req.matches[1].str() : "";
+            if (compId.empty()) { sendError(res, 400, "Missing computer id"); return; }
 
             // Try to resolve hostname via plugin; fall back to treating id as hostname
-            std::string hostname = id;
+            std::string hostname = compId;
             auto* plugin = m_svcs.registry.computerPlugin();
             if (plugin) {
-                auto info = plugin->getComputer(id);
+                auto info = plugin->getComputer(compId);
                 if (info.is_ok()) hostname = info.value().hostname;
             }
 
-            const auto t0  = std::chrono::steady_clock::now();
-            const bool online = tcpPing(hostname);
-            const auto t1  = std::chrono::steady_clock::now();
-            const int latencyMs = static_cast<int>(
-                std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count());
-
-            nlohmann::json j;
-            j["id"]        = id;
-            j["hostname"]  = hostname;
-            j["online"]    = online;
-            j["latencyMs"] = online ? latencyMs : -1;
+            auto hostResult = checkHostState(hostname);
+            nlohmann::json body;
+            body["id"] = compId;
+            body["hostname"] = hostname;
+            body["state"] = hostResult.state;
+            body["reachable"] = hostResult.reachable;
+            body["latencyMs"] = hostResult.latencyMs;
+            body["pingLatencyMs"] = hostResult.pingLatencyMs;
             res.status = 200;
-            res.set_content(j.dump(), "application/json");
+            res.set_content(body.dump(), "application/json");
         });
 
     spdlog::debug("[Router] v2 routes registered");
@@ -746,6 +1119,68 @@ void Router::registerOpenApi()
     });
 
     spdlog::debug("[Router] OpenAPI 3.1 spec registered at /openapi.json");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Debug endpoints (enabled via HUB32API_DEBUG env variable)
+// ─────────────────────────────────────────────────────────────────────────────
+
+void Router::registerDebug()
+{
+    // Only enable when HUB32API_DEBUG environment variable is set
+    if (!std::getenv("HUB32API_DEBUG")) return;
+
+    spdlog::info("[Router] debug endpoints enabled (HUB32API_DEBUG set)");
+
+    m_server.Get("/api/v1/debug/info",
+        [this](const httplib::Request& /*req*/, httplib::Response& res)
+    {
+        using Clock = std::chrono::steady_clock;
+        static const auto startTime = Clock::now();
+        const int uptimeSec = static_cast<int>(
+            std::chrono::duration_cast<std::chrono::seconds>(
+                Clock::now() - startTime).count());
+
+        const auto plugins = m_svcs.registry.all();
+        const int connCount = m_svcs.pool.activeCount();
+
+        // Read MetricsPlugin counters
+        int totalReqs = 0, failedReqs = 0;
+        auto* metricsRaw = m_svcs.registry.find("a1b2c3d4-0004-0004-0004-000000000004");
+        if (auto* mp = dynamic_cast<plugins::MetricsPlugin*>(metricsRaw)) {
+            totalReqs = mp->totalRequests();
+            failedReqs = mp->failedRequests();
+        }
+
+        std::ostringstream html;
+        html << "<!DOCTYPE html>\n<html><head><title>Hub32 API Debug</title>"
+             << "<style>body{font-family:monospace;margin:2em;}"
+             << "table{border-collapse:collapse;} td,th{border:1px solid #ccc;padding:4px 8px;}"
+             << "h1{color:#333;} h2{color:#666;margin-top:1.5em;}</style></head><body>\n"
+             << "<h1>Hub32 API Debug Information</h1>\n"
+             << "<h2>System</h2>\n"
+             << "<ul>\n"
+             << "<li><b>Server version:</b> 1.0.0</li>\n"
+             << "<li><b>Uptime:</b> " << uptimeSec << " seconds</li>\n"
+             << "<li><b>Bind address:</b> " << m_svcs.pool.activeCount() << " active connections</li>\n"
+             << "</ul>\n"
+             << "<h2>Statistics</h2>\n"
+             << "<ul>\n"
+             << "<li><b>Total requests:</b> " << totalReqs << "</li>\n"
+             << "<li><b>Failed requests (5xx):</b> " << failedReqs << "</li>\n"
+             << "<li><b>Active connections:</b> " << connCount << "</li>\n"
+             << "</ul>\n"
+             << "<h2>Loaded Plugins (" << plugins.size() << ")</h2>\n"
+             << "<table><tr><th>UID</th><th>Name</th><th>Version</th><th>Description</th></tr>\n";
+        for (auto* p : plugins) {
+            html << "<tr><td>" << p->uid() << "</td><td>" << p->name()
+                 << "</td><td>" << p->version() << "</td><td>" << p->description() << "</td></tr>\n";
+        }
+        html << "</table>\n</body></html>";
+
+        res.status = 200;
+        res.set_content(html.str(), "text/html");
+    });
 }
 
 } // namespace hub32api::server::internal

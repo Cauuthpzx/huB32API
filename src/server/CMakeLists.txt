@@ -7,6 +7,7 @@ add_library(hub32api-server SHARED
     ThreadPool.cpp
 
     # v1 controllers
+    ../api/v1/controllers/AgentController.cpp
     ../api/v1/controllers/AuthController.cpp
     ../api/v1/controllers/ComputerController.cpp
     ../api/v1/controllers/FeatureController.cpp
@@ -49,6 +50,7 @@ target_link_libraries(hub32api-server
     PRIVATE
         httplib::httplib
         ws2_32
+        iphlpapi
 )
 
 add_pch(hub32api-server "${CMAKE_SOURCE_DIR}/src/core/PrecompiledHeader.hpp")

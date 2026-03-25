@@ -6,6 +6,7 @@
 namespace httplib { class Server; }
 namespace hub32api::core::internal { class PluginRegistry; class ConnectionPool; }
 namespace hub32api::auth { class JwtAuth; class Hub32KeyAuth; }
+namespace hub32api::agent { class AgentRegistry; }
 
 namespace hub32api::server::internal {
 
@@ -22,6 +23,7 @@ public:
         core::internal::ConnectionPool& pool;
         auth::JwtAuth&                  jwtAuth;
         auth::Hub32KeyAuth&             keyAuth;
+        agent::AgentRegistry&           agentRegistry;
     };
 
     explicit Router(httplib::Server& server, Services svcs);
@@ -33,6 +35,8 @@ private:
     void registerV2();
     void registerHealthAndMetrics();
     void registerOpenApi();
+    void registerAgentRoutes();
+    void registerDebug();
 
     httplib::Server& m_server;
     Services         m_svcs;

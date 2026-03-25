@@ -51,11 +51,11 @@ public:
     Result<std::vector<FeatureDescriptor>> listFeatures(const Uid& /*computerUid*/) override
     {
         return Result<std::vector<FeatureDescriptor>>::ok({
-            { "feat-screen-lock",     "ScreenLock",     "Lock student screens",        false, true, false, "" },
-            { "feat-input-lock",      "InputLock",      "Lock keyboard and mouse",     false, true, false, "" },
-            { "feat-screen-broadcast","ScreenBroadcast","Broadcast teacher screen",    false, true, false, "" },
-            { "feat-text-message",    "TextMessage",    "Send text message to student", false, true, false, "" },
-            { "feat-power-control",   "PowerControl",   "Power on/off/reboot",         false, true, true,  "" },
+            { "feat-screen-lock",     "", "ScreenLock",     "Lock student screens",        false, true, false, "" },
+            { "feat-input-lock",      "", "InputLock",      "Lock keyboard and mouse",     false, true, false, "" },
+            { "feat-screen-broadcast","", "ScreenBroadcast","Broadcast teacher screen",    false, true, false, "" },
+            { "feat-text-message",    "", "TextMessage",    "Send text message to student", false, true, false, "" },
+            { "feat-power-control",   "", "PowerControl",   "Power on/off/reboot",         false, true, true,  "" },
         });
     }
 
