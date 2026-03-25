@@ -7,11 +7,17 @@ add_executable(hub32agent-service
     src/AgentClient.cpp
     src/CommandDispatcher.cpp
     src/WinServiceAdapter.cpp
+    src/features/ScreenCapture.cpp
+    src/features/ScreenLock.cpp
+    src/features/InputLock.cpp
+    src/features/MessageDisplay.cpp
+    src/features/PowerControl.cpp
 )
 
 target_include_directories(hub32agent-service
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_BINARY_DIR}/include
 )
@@ -22,6 +28,10 @@ target_link_libraries(hub32agent-service
         spdlog::spdlog
         httplib::httplib
         ws2_32
+        d3d11
+        dxgi
+        dxguid
+        ole32
 )
 
 # Windows resources (optional version info)
