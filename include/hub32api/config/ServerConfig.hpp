@@ -35,6 +35,10 @@ struct HUB32API_EXPORT ServerConfig
     // JWT authentication
     std::string jwtSecret;
     int         jwtExpirySeconds   = 3600;
+    std::string jwtAlgorithm       = "RS256";  // RS256 (default) or HS256
+    std::string jwtPrivateKeyFile;              // PEM private key path (RS256)
+    std::string jwtPublicKeyFile;               // PEM public key path (RS256)
+    std::string tokenRevocationFile;            // path to persist revoked tokens (empty = in-memory only)
 
     // Hub32 integration
     std::string hub32PluginDir;   // path to hub32 plugin directory
@@ -42,6 +46,7 @@ struct HUB32API_EXPORT ServerConfig
     // Logging
     std::string logLevel           = "info";  // trace|debug|info|warn|error
     std::string logFile;                      // empty = stdout
+    std::string auditLogFile;                 // path to SQLite audit log (empty = disabled)
 
     // Metrics
     bool metricsEnabled            = false;

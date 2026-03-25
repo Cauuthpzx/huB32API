@@ -122,7 +122,8 @@ Result<ComputerState> ComputerPlugin::getState(const Uid& uid)
  * @return Result containing the FramebufferImage, or an error if the computer is not found.
  */
 Result<FramebufferImage> ComputerPlugin::getFramebuffer(
-    const Uid& uid, int width, int height, ImageFormat fmt)
+    const Uid& uid, int width, int height, ImageFormat fmt,
+    int compression, int quality)
 {
     // Verify the computer exists in the mock directory
     NetworkDirectoryBridge bridge(m_core);

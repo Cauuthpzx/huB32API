@@ -7,6 +7,7 @@ namespace httplib { class Server; }
 namespace hub32api::core::internal { class PluginRegistry; class ConnectionPool; }
 namespace hub32api::auth { class JwtAuth; class Hub32KeyAuth; }
 namespace hub32api::agent { class AgentRegistry; }
+namespace hub32api::server { class SseManager; }
 
 namespace hub32api::server::internal {
 
@@ -36,10 +37,12 @@ private:
     void registerHealthAndMetrics();
     void registerOpenApi();
     void registerAgentRoutes();
+    void registerSse();
     void registerDebug();
 
     httplib::Server& m_server;
     Services         m_svcs;
+    std::shared_ptr<server::SseManager> m_sse;
 };
 
 } // namespace hub32api::server::internal

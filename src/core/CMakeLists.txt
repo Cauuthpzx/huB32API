@@ -6,6 +6,7 @@ add_library(hub32api-core SHARED
     PluginRegistry.cpp
     ConnectionPool.cpp
     ApiContext.cpp
+    AuditLog.cpp
     ../auth/JwtAuth.cpp
     ../auth/internal/JwtValidator.cpp
     ../auth/internal/TokenStore.cpp
@@ -36,6 +37,7 @@ target_link_libraries(hub32api-core
         spdlog::spdlog
     PRIVATE
         jwt-cpp::jwt-cpp
+        SQLite::SQLite3
         ws2_32
         crypt32
         $<IF:$<TARGET_EXISTS:OpenSSL::SSL>,OpenSSL::SSL,ssl>

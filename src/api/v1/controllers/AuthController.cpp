@@ -30,6 +30,15 @@ void sendError(httplib::Response& res,
     res.set_content(j.dump(), "application/json");
 }
 
+std::string normalizeAuthMethod(const std::string& method)
+{
+    // Veyon-compatible UUIDs
+    if (method == "0c69b301-81b4-42d6-8fae-128cdd113314") return "hub32-key";
+    if (method == "63611f7c-b457-42c7-832e-67d0f9281085") return "logon";
+    // Already a string name
+    return method;
+}
+
 } // anonymous namespace
 
 namespace hub32api::api::v1 {
@@ -69,6 +78,8 @@ void AuthController::handleLogin(const httplib::Request& req, httplib::Response&
         sendError(res, 400, "Invalid request body", ex.what());
         return;
     }
+
+    req_dto.method = normalizeAuthMethod(req_dto.method);
 
     // --- Validate method ---
     if (req_dto.method != "hub32-key" && req_dto.method != "logon") {

@@ -20,15 +20,20 @@
     "workerCount": 8
   },
   "jwt": {
+    "algorithm": "RS256",
     "secret": "CHANGE_ME_IN_PRODUCTION",
-    "expirySeconds": 3600
+    "privateKeyFile": "",
+    "publicKeyFile": "",
+    "expirySeconds": 3600,
+    "tokenRevocationFile": ""
   },
   "hub32": {
     "pluginDir": ""
   },
   "logging": {
     "level": "info",
-    "file": ""
+    "file": "",
+    "auditLogFile": ""
   },
   "metrics": {
     "enabled": false,

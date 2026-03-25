@@ -6,11 +6,19 @@
 #include <csignal>
 #include <iostream>
 #include <thread>
+#include <filesystem>
+#include <fstream>
 
 namespace {
 
 /// @brief Async-signal-safe stop flag set by the signal handler.
 static volatile sig_atomic_t g_stopRequested = 0;
+
+/// @brief Config reload flag — set when config file mtime changes.
+static volatile sig_atomic_t g_reloadRequested = 0;
+
+/// @brief Path to the active config file (empty if loaded from registry).
+static std::string g_configPath;
 
 /**
  * @brief Async-signal-safe signal handler.
@@ -40,10 +48,46 @@ int runServer(const hub32api::ServerConfig& cfg)
     std::signal(SIGINT,  signalHandler);
     std::signal(SIGTERM, signalHandler);
 
-    // Watcher thread: polls g_stopRequested and stops server gracefully
+    // Watcher thread: polls g_stopRequested and monitors config file for hot-reload
     std::thread watcher([&server] {
+        namespace fs = std::filesystem;
+        fs::file_time_type lastMtime{};
+
+        // Capture initial mtime of config file
+        if (!g_configPath.empty()) {
+            std::error_code ec;
+            lastMtime = fs::last_write_time(g_configPath, ec);
+            if (ec) lastMtime = fs::file_time_type{};
+        }
+
         while (!g_stopRequested) {
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+            // Check config file for changes every ~5 seconds (25 iterations of 200ms)
+            static int checkCounter = 0;
+            if (!g_configPath.empty() && ++checkCounter % 25 == 0) {
+                std::error_code ec;
+                auto currentMtime = fs::last_write_time(g_configPath, ec);
+                if (!ec && currentMtime != lastMtime && lastMtime != fs::file_time_type{}) {
+                    lastMtime = currentMtime;
+                    spdlog::info("[main] config file '{}' changed — reload available on next restart",
+                                 g_configPath);
+                    // NOTE: Full hot-reload would require reconstructing HttpServer.
+                    // For now, we reload the log level as a safe runtime change.
+                    try {
+                        auto newCfg = hub32api::ServerConfig::from_file(g_configPath);
+                        auto lvl = spdlog::level::from_str(newCfg.logLevel);
+                        if (lvl != spdlog::get_level()) {
+                            spdlog::set_level(lvl);
+                            spdlog::info("[main] log level hot-reloaded to '{}'", newCfg.logLevel);
+                        }
+                    } catch (const std::exception& ex) {
+                        spdlog::warn("[main] config reload failed: {}", ex.what());
+                    }
+                } else if (!ec && lastMtime == fs::file_time_type{}) {
+                    lastMtime = currentMtime;  // First successful read
+                }
+            }
         }
         spdlog::info("[main] stop requested, shutting down server");
         server.stop();
@@ -82,6 +126,7 @@ int main(int argc, char* argv[])
     if (doUninstall) return hub32api::WinServiceAdapter::uninstall()            ? 0 : 1;
 
     // Load configuration
+    g_configPath = configPath;
     auto cfg = configPath.empty()
         ? hub32api::ServerConfig::from_registry()
         : hub32api::ServerConfig::from_file(configPath);

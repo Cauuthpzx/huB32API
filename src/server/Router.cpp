@@ -86,6 +86,9 @@
 // Agent
 #include "../agent/AgentRegistry.hpp"
 
+// SSE
+#include "SseManager.hpp"
+
 #include "../plugins/metrics/MetricsPlugin.hpp"
 
 #include <httplib.h>
@@ -675,7 +678,7 @@ nlohmann::json buildOpenApiSpec()
  * @param svcs    All service references needed by controllers.
  */
 Router::Router(httplib::Server& server, Services svcs)
-    : m_server(server), m_svcs(svcs) {}
+    : m_server(server), m_svcs(svcs), m_sse(std::make_shared<server::SseManager>()) {}
 
 /**
  * @brief Registers all routes. Call once before Server::listen().
@@ -687,6 +690,7 @@ void Router::registerAll()
     registerV2();
     registerHealthAndMetrics();
     registerOpenApi();
+    registerSse();
     registerDebug();
 
     // Wire MetricsPlugin to record every request
@@ -1119,6 +1123,88 @@ void Router::registerOpenApi()
     });
 
     spdlog::debug("[Router] OpenAPI 3.1 spec registered at /openapi.json");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SSE (Server-Sent Events) endpoints for real-time push
+// ─────────────────────────────────────────────────────────────────────────────
+
+void Router::registerSse()
+{
+    // GET /api/v1/events — SSE stream for real-time events
+    m_server.Get("/api/v1/events", [this](const httplib::Request& /*req*/, httplib::Response& res) {
+        // Generate unique client ID
+        static std::atomic<int> clientCounter{0};
+        const std::string clientId = "sse-" + std::to_string(++clientCounter);
+
+        res.set_header("Cache-Control", "no-cache");
+        res.set_header("Connection", "keep-alive");
+        res.set_header("Access-Control-Allow-Origin", "*");
+
+        // Use chunked content provider for SSE
+        res.set_chunked_content_provider(
+            "text/event-stream",
+            [this, clientId](size_t /*offset*/, httplib::DataSink& sink) -> bool {
+                // Send initial connected event
+                std::string connectMsg = "event: connected\ndata: {\"clientId\":\"" + clientId + "\"}\n\n";
+                sink.write(connectMsg.c_str(), connectMsg.size());
+
+                // Register this client's sink function
+                auto sinkFn = [&sink](const std::string& data) -> bool {
+                    return sink.write(data.c_str(), data.size());
+                };
+
+                m_sse->subscribe("events", clientId, sinkFn);
+
+                // Keep connection alive with heartbeat
+                while (true) {
+                    std::this_thread::sleep_for(std::chrono::seconds(15));
+                    std::string heartbeat = ":heartbeat\n\n";
+                    if (!sink.write(heartbeat.c_str(), heartbeat.size())) {
+                        break;  // Client disconnected
+                    }
+                }
+
+                m_sse->unsubscribe("events", clientId);
+                return false;  // Close
+            });
+    });
+
+    // GET /api/v1/computers/:id/screen/stream — SSE stream for screen updates
+    m_server.Get(R"(/api/v1/computers/([^/]+)/screen/stream)",
+        [this](const httplib::Request& req, httplib::Response& res) {
+            const std::string compId = req.matches[1].str();
+            static std::atomic<int> counter{0};
+            const std::string clientId = "screen-" + std::to_string(++counter);
+            const std::string channel = "screen:" + compId;
+
+            res.set_header("Cache-Control", "no-cache");
+            res.set_header("Connection", "keep-alive");
+            res.set_header("Access-Control-Allow-Origin", "*");
+
+            res.set_chunked_content_provider(
+                "text/event-stream",
+                [this, clientId, channel, compId](size_t /*offset*/, httplib::DataSink& sink) -> bool {
+                    std::string connectMsg = "event: connected\ndata: {\"computer\":\"" + compId + "\"}\n\n";
+                    sink.write(connectMsg.c_str(), connectMsg.size());
+
+                    auto sinkFn = [&sink](const std::string& data) -> bool {
+                        return sink.write(data.c_str(), data.size());
+                    };
+                    m_sse->subscribe(channel, clientId, sinkFn);
+
+                    while (true) {
+                        std::this_thread::sleep_for(std::chrono::seconds(15));
+                        std::string heartbeat = ":heartbeat\n\n";
+                        if (!sink.write(heartbeat.c_str(), heartbeat.size())) break;
+                    }
+
+                    m_sse->unsubscribe(channel, clientId);
+                    return false;
+                });
+        });
+
+    spdlog::debug("[Router] SSE streaming routes registered");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

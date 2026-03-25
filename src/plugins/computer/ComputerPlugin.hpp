@@ -30,7 +30,8 @@ public:
     Result<ComputerInfo>              getComputer(const Uid& uid) override;
     Result<ComputerState>             getState(const Uid& uid) override;
     Result<FramebufferImage>          getFramebuffer(
-        const Uid& uid, int width, int height, ImageFormat fmt) override;
+        const Uid& uid, int width, int height, ImageFormat fmt,
+        int compression = -1, int quality = -1) override;
 
 private:
     core::internal::Hub32CoreWrapper& m_core;

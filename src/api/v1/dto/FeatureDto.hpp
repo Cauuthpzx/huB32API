@@ -16,6 +16,7 @@ namespace hub32api::api::v1::dto {
 struct FeatureDto
 {
     std::string uid;
+    std::string parentUid;
     std::string name;
     std::string description;
     bool        isActive       = false;
@@ -29,13 +30,13 @@ struct FeatureDto
      */
     static FeatureDto from(const FeatureDescriptor& fd)
     {
-        return FeatureDto{fd.uid, fd.name, fd.description,
+        return FeatureDto{fd.uid, fd.parentUid, fd.name, fd.description,
                           fd.isActive, fd.isMasterSide, fd.isServiceSide};
     }
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(FeatureDto,
-    uid, name, description, isActive, isMasterSide, isServiceSide)
+    uid, parentUid, name, description, isActive, isMasterSide, isServiceSide)
 
 struct FeatureListDto
 {

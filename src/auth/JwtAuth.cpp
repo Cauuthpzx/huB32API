@@ -2,8 +2,12 @@
  * @file JwtAuth.cpp
  * @brief Full implementation of JwtAuth — JWT token issuance and validation.
  *
- * issueToken() builds a signed HS256 JWT containing all required claims
- * and a UUID-style jti for revocation support.
+ * issueToken() builds a signed JWT (RS256 or HS256) containing all required
+ * claims and a UUID-style jti for revocation support.
+ *
+ * When RS256 is configured with valid PEM key files, tokens are signed with
+ * the RSA private key and verified with the public key. Falls back to HS256
+ * if RS256 keys are not available.
  *
  * authenticate() delegates signature/claims verification to JwtValidator,
  * then checks the in-memory token denylist before returning an AuthContext.
@@ -20,6 +24,7 @@
 #include "internal/TokenStore.hpp"
 
 #include <atomic>
+#include <fstream>
 #include <random>
 #include <sstream>
 #include <iomanip>
@@ -65,6 +70,21 @@ namespace {
             << std::setw(12) << (lo4 & 0x0000FFFFFFFFFFFFULL);
         return oss.str();
     }
+    /**
+     * @brief Reads the entire content of a file into a string.
+     *
+     * Used to load PEM-encoded RSA key files for RS256 JWT signing/verification.
+     *
+     * @param path  Filesystem path to the file.
+     * @return The file content as a string, or empty string if the file cannot be opened.
+     */
+    std::string readFileContent(const std::string& path)
+    {
+        std::ifstream f(path);
+        if (!f.is_open()) return {};
+        return std::string(std::istreambuf_iterator<char>(f),
+                           std::istreambuf_iterator<char>());
+    }
 } // anonymous namespace
 
 // ---------------------------------------------------------------------------
@@ -76,8 +96,17 @@ namespace {
  */
 struct JwtAuth::Impl
 {
+    /** @brief Algorithm in use: "RS256" or "HS256". */
+    std::string algorithm;
+
     /** @brief Raw HMAC secret for signing/verifying HS256 tokens. */
     std::string secret;
+
+    /** @brief PEM-encoded RSA private key content for RS256 signing. */
+    std::string privateKey;
+
+    /** @brief PEM-encoded RSA public key content for RS256 verification. */
+    std::string publicKey;
 
     /** @brief Number of seconds until a newly issued token expires. */
     int expirySeconds;
@@ -96,18 +125,41 @@ struct JwtAuth::Impl
 /**
  * @brief Constructs JwtAuth from server configuration.
  *
- * Creates a JwtValidator seeded with @p cfg.jwtSecret, and an empty
- * in-memory TokenStore for the revocation denylist.
+ * When jwtAlgorithm is "RS256" and valid PEM key files are provided,
+ * tokens will be signed with the RSA private key and verified with the
+ * public key. If the key files are missing or unreadable, falls back
+ * to HS256 with a warning.
  *
- * @param cfg  Server configuration providing jwtSecret and jwtExpirySeconds.
+ * Creates a JwtValidator with the resolved algorithm and credentials,
+ * and an empty in-memory TokenStore for the revocation denylist.
+ *
+ * @param cfg  Server configuration providing JWT settings.
  */
 JwtAuth::JwtAuth(const ServerConfig& cfg)
     : m_impl(std::make_unique<Impl>())
 {
+    m_impl->algorithm     = cfg.jwtAlgorithm;
     m_impl->secret        = cfg.jwtSecret;
     m_impl->expirySeconds = cfg.jwtExpirySeconds;
-    m_impl->validator     = std::make_unique<internal::JwtValidator>(cfg.jwtSecret);
-    m_impl->store         = std::make_unique<internal::TokenStore>();
+
+    // Load RSA keys if RS256 is configured
+    if (cfg.jwtAlgorithm == "RS256") {
+        if (!cfg.jwtPrivateKeyFile.empty())
+            m_impl->privateKey = readFileContent(cfg.jwtPrivateKeyFile);
+        if (!cfg.jwtPublicKeyFile.empty())
+            m_impl->publicKey = readFileContent(cfg.jwtPublicKeyFile);
+
+        if (m_impl->privateKey.empty() || m_impl->publicKey.empty()) {
+            spdlog::warn("[JwtAuth] RS256 keys not found or unreadable, falling back to HS256");
+            m_impl->algorithm = "HS256";
+        }
+    }
+
+    m_impl->validator = std::make_unique<internal::JwtValidator>(
+        m_impl->algorithm, m_impl->secret, m_impl->publicKey);
+    m_impl->store = std::make_unique<internal::TokenStore>(cfg.tokenRevocationFile);
+
+    spdlog::info("[JwtAuth] using {} algorithm", m_impl->algorithm);
 }
 
 /**
@@ -120,7 +172,7 @@ JwtAuth::~JwtAuth() = default;
 // ---------------------------------------------------------------------------
 
 /**
- * @brief Issues a signed HS256 JWT for the given subject and role.
+ * @brief Issues a signed JWT (RS256 or HS256) for the given subject and role.
  *
  * The generated token contains the following claims:
  *  - iss  "hub32api"
@@ -130,6 +182,9 @@ JwtAuth::~JwtAuth() = default;
  *  - jti  UUID v4 (for revocation)
  *  - iat  current time
  *  - exp  current time + jwtExpirySeconds
+ *
+ * When the active algorithm is RS256, the token is signed with the RSA
+ * private key. Otherwise, HS256 signing with the shared secret is used.
  *
  * @param subject  The authenticated username to embed as the "sub" claim.
  * @param role     The role string to embed as the "role" claim.
@@ -145,19 +200,25 @@ Result<std::string> JwtAuth::issueToken(
         const auto expiry = now + std::chrono::seconds(m_impl->expirySeconds);
         const std::string jti = generateUuid();
 
-        const std::string token =
-            jwt::create()
-                .set_type("JWT")
-                .set_issuer(k_issuer)
-                .set_audience(k_audience)
-                .set_subject(subject)
-                .set_issued_at(now)
-                .set_expires_at(expiry)
-                .set_id(jti)
-                .set_payload_claim("role", jwt::claim(role))
-                .sign(jwt::algorithm::hs256{m_impl->secret});
+        auto builder = jwt::create()
+            .set_type("JWT")
+            .set_issuer(k_issuer)
+            .set_audience(k_audience)
+            .set_subject(subject)
+            .set_issued_at(now)
+            .set_expires_at(expiry)
+            .set_id(jti)
+            .set_payload_claim("role", jwt::claim(role));
 
-        spdlog::debug("[JwtAuth] issued token: sub={} role={} jti={}", subject, role, jti);
+        std::string token;
+        if (m_impl->algorithm == "RS256") {
+            token = builder.sign(jwt::algorithm::rs256{m_impl->publicKey, m_impl->privateKey, "", ""});
+        } else {
+            token = builder.sign(jwt::algorithm::hs256{m_impl->secret});
+        }
+
+        spdlog::debug("[JwtAuth] issued token: sub={} role={} jti={} alg={}",
+                      subject, role, jti, m_impl->algorithm);
         return Result<std::string>::ok(std::move(token));
     }
     catch (const std::exception& ex) {

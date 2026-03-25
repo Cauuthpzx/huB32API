@@ -61,6 +61,7 @@ include(GenerateExportHeader)
 # Main targets
 # -----------------------------------------------------------------------
 add_subdirectory(src)
+add_subdirectory(agent)
 
 # -----------------------------------------------------------------------
 # Optional components

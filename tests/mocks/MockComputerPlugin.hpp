@@ -17,7 +17,7 @@ public:
     MOCK_METHOD(Result<ComputerInfo>, getComputer, (const Uid&), (override));
     MOCK_METHOD(Result<ComputerState>, getState, (const Uid&), (override));
     MOCK_METHOD(Result<FramebufferImage>, getFramebuffer,
-                (const Uid&, int, int, ImageFormat), (override));
+                (const Uid&, int, int, ImageFormat, int, int), (override));
 };
 
 } // namespace hub32api

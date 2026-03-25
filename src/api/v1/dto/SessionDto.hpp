@@ -40,6 +40,8 @@ struct SessionDto
     std::string clientAddress;
     int64_t     uptimeSeconds = 0;
     std::string sessionType;
+    std::string sessionClientName;
+    std::string sessionHostName;
 
     /**
      * @brief Constructs a SessionDto from a domain SessionInfo value.
@@ -48,13 +50,22 @@ struct SessionDto
      */
     static SessionDto from(const SessionInfo& s)
     {
-        return SessionDto{s.sessionId, s.userLogin, s.userFullName,
-                          s.clientAddress, s.uptimeSeconds, s.sessionType};
+        SessionDto d;
+        d.sessionId = s.sessionId;
+        d.userLogin = s.userLogin;
+        d.userFullName = s.userFullName;
+        d.clientAddress = s.clientAddress;
+        d.uptimeSeconds = s.uptimeSeconds;
+        d.sessionType = s.sessionType;
+        d.sessionClientName = s.sessionClientName;
+        d.sessionHostName = s.sessionHostName;
+        return d;
     }
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(SessionDto,
-    sessionId, userLogin, userFullName, clientAddress, uptimeSeconds, sessionType)
+    sessionId, userLogin, userFullName, clientAddress, uptimeSeconds, sessionType,
+    sessionClientName, sessionHostName)
 
 struct ScreenDto
 {

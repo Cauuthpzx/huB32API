@@ -1,0 +1,55 @@
+# Doxyfile for hub32api
+PROJECT_NAME           = "Hub32 API"
+PROJECT_NUMBER         = 1.0.0
+PROJECT_BRIEF          = "REST API server for Hub32 educational monitoring system"
+OUTPUT_DIRECTORY       = docs/doxygen
+CREATE_SUBDIRS         = YES
+
+# Input
+INPUT                  = include src README.md
+FILE_PATTERNS          = *.h *.hpp *.cpp *.md
+RECURSIVE              = YES
+EXCLUDE_PATTERNS       = */build/* */test/* */_deps/*
+USE_MDFILE_AS_MAINPAGE = README.md
+
+# Build
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = YES
+EXTRACT_LOCAL_METHODS  = NO
+
+# Source browsing
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = NO
+STRIP_CODE_COMMENTS    = YES
+REFERENCED_BY_RELATION = YES
+REFERENCES_RELATION    = YES
+
+# Diagrams
+HAVE_DOT               = NO
+CLASS_DIAGRAMS         = YES
+COLLABORATION_GRAPH    = NO
+
+# Output
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+GENERATE_XML           = NO
+HTML_TIMESTAMP         = YES
+HTML_DYNAMIC_SECTIONS  = YES
+GENERATE_TREEVIEW      = YES
+DISABLE_INDEX          = NO
+
+# Warnings
+WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_DOC_ERROR      = YES
+WARN_NO_PARAMDOC       = YES
+WARN_FORMAT            = "$file:$line: $text"
+
+# Preprocessing
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+PREDEFINED             = HUB32API_EXPORT= \
+                         HUB32API_PLUGIN_METADATA(a,b,c,d)=
+
+# Performance
+DOT_NUM_THREADS        = 4

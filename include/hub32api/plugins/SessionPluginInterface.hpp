@@ -18,6 +18,8 @@ struct HUB32API_EXPORT SessionInfo
     std::string clientAddress;
     int64_t     uptimeSeconds   = 0;
     std::string sessionType;    // "console" | "rdp" | "ssh"
+    std::string sessionClientName;
+    std::string sessionHostName;
 };
 
 // -----------------------------------------------------------------------

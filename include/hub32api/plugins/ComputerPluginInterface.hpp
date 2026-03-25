@@ -33,6 +33,8 @@ struct HUB32API_EXPORT FramebufferImage
     ImageFormat          format = ImageFormat::Png;
     int                  width  = 0;
     int                  height = 0;
+    int compression = -1;  // PNG compression 0-9, -1 = default
+    int quality     = -1;  // JPEG quality 0-100, -1 = default
 };
 
 // -----------------------------------------------------------------------
@@ -45,7 +47,8 @@ public:
     virtual Result<ComputerInfo>   getComputer(const Uid& uid) = 0;
     virtual Result<ComputerState>  getState(const Uid& uid) = 0;
     virtual Result<FramebufferImage> getFramebuffer(
-        const Uid& uid, int width, int height, ImageFormat fmt) = 0;
+        const Uid& uid, int width, int height, ImageFormat fmt,
+        int compression = -1, int quality = -1) = 0;
 };
 
 } // namespace hub32api

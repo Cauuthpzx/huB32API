@@ -3,6 +3,7 @@
 #include "core/internal/PluginRegistry.hpp"
 
 #include <httplib.h>
+#include <algorithm>
 
 namespace {
 
@@ -92,8 +93,19 @@ void FramebufferController::handleGetFramebuffer(
         // default is already Png
     }
 
+    int compression = -1;
+    int quality     = -1;
+    const std::string compParam = req.get_param_value("compression");
+    const std::string qualParam = req.get_param_value("quality");
+    if (!compParam.empty()) {
+        try { compression = std::clamp(std::stoi(compParam), 0, 9); } catch (...) {}
+    }
+    if (!qualParam.empty()) {
+        try { quality = std::clamp(std::stoi(qualParam), 0, 100); } catch (...) {}
+    }
+
     // --- Capture framebuffer ---
-    const auto result = plugin->getFramebuffer(id, width, height, format);
+    const auto result = plugin->getFramebuffer(id, width, height, format, compression, quality);
     if (result.is_err()) {
         const auto& err = result.error();
         const bool notFound = (err.code == ErrorCode::ComputerNotFound ||

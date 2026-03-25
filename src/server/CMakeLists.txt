@@ -4,6 +4,7 @@ include(WindowsBuildHelpers)
 add_library(hub32api-server SHARED
     HttpServer.cpp
     Router.cpp
+    SseManager.cpp
     ThreadPool.cpp
 
     # v1 controllers

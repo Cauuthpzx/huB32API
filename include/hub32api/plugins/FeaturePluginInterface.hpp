@@ -14,6 +14,7 @@ namespace hub32api {
 struct HUB32API_EXPORT FeatureDescriptor
 {
     Uid         uid;
+    std::string parentUid;
     std::string name;
     std::string description;
     bool        isActive    = false;

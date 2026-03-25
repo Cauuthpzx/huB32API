@@ -42,6 +42,7 @@ Result<std::vector<FeatureDescriptor>> FeaturePlugin::listFeatures(const Uid& co
     std::vector<FeatureDescriptor> features = {
         FeatureDescriptor{
             "feat-lock-screen",
+            "",                // parentUid (top-level)
             "Lock Screen",
             "Lock computer screen",
             false,   // isActive (overridden below)
@@ -51,6 +52,7 @@ Result<std::vector<FeatureDescriptor>> FeaturePlugin::listFeatures(const Uid& co
         },
         FeatureDescriptor{
             "feat-screen-broadcast",
+            "",                // parentUid (top-level)
             "Screen Broadcast",
             "Broadcast teacher screen",
             false,
@@ -60,6 +62,7 @@ Result<std::vector<FeatureDescriptor>> FeaturePlugin::listFeatures(const Uid& co
         },
         FeatureDescriptor{
             "feat-input-lock",
+            "feat-lock-screen", // parentUid (sub-feature of lock)
             "Input Lock",
             "Lock keyboard and mouse",
             false,
@@ -69,6 +72,7 @@ Result<std::vector<FeatureDescriptor>> FeaturePlugin::listFeatures(const Uid& co
         },
         FeatureDescriptor{
             "feat-message",
+            "",                // parentUid (top-level)
             "Show Message",
             "Display message on screen",
             false,
@@ -78,6 +82,7 @@ Result<std::vector<FeatureDescriptor>> FeaturePlugin::listFeatures(const Uid& co
         },
         FeatureDescriptor{
             "feat-power-control",
+            "",                // parentUid (top-level)
             "Power Control",
             "Power on/off/reboot",
             false,

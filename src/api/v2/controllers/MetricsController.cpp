@@ -3,6 +3,7 @@
 #include "../dto/MetricsDto.hpp"
 #include "core/internal/PluginRegistry.hpp"
 #include "core/internal/ConnectionPool.hpp"
+#include "plugins/metrics/MetricsPlugin.hpp"
 #include <httplib.h>
 
 namespace hub32api::api::v2 {
@@ -97,14 +98,10 @@ void MetricsController::handleMetrics(const httplib::Request& req, httplib::Resp
     dto.uptimeSeconds     = uptimeSec;
     dto.serverVersion     = "1.0.0";
     dto.hub32Version      = "4.x";  // populated from Hub32 core at runtime
-    // Read from MetricsPlugin if registered; otherwise report 0.
-    // MetricsPlugin must be registered in HttpServer to get real values.
     auto* metricsRaw = m_registry.find("a1b2c3d4-0004-0004-0004-000000000004");
-    if (metricsRaw) {
-        // MetricsPlugin is not a typed interface, so we cast via PluginInterface
-        // and call its public methods through the known UID.
-        dto.totalRequests  = 0;  // TODO: wire MetricsPlugin counters when registered
-        dto.failedRequests = 0;
+    if (auto* mp = dynamic_cast<plugins::MetricsPlugin*>(metricsRaw)) {
+        dto.totalRequests  = mp->totalRequests();
+        dto.failedRequests = mp->failedRequests();
     } else {
         dto.totalRequests  = 0;
         dto.failedRequests = 0;

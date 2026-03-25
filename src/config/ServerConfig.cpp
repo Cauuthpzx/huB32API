@@ -206,9 +206,34 @@ ServerConfig ServerConfig::from_file(const std::string& path)
     cfg.workerThreads         = j.value("workerThreads", cfg.workerThreads);
     cfg.jwtSecret             = j.value("jwtSecret", cfg.jwtSecret);
     cfg.jwtExpirySeconds      = j.value("jwtExpirySeconds", cfg.jwtExpirySeconds);
+    cfg.jwtAlgorithm          = j.value("jwtAlgorithm", cfg.jwtAlgorithm);
+    cfg.jwtPrivateKeyFile     = j.value("jwtPrivateKeyFile", cfg.jwtPrivateKeyFile);
+    cfg.jwtPublicKeyFile      = j.value("jwtPublicKeyFile", cfg.jwtPublicKeyFile);
+    cfg.tokenRevocationFile   = j.value("tokenRevocationFile", cfg.tokenRevocationFile);
+
+    // Support nested "jwt" object from default.json format
+    if (j.contains("jwt") && j["jwt"].is_object()) {
+        const auto& jwtObj = j["jwt"];
+        cfg.jwtAlgorithm      = jwtObj.value("algorithm", cfg.jwtAlgorithm);
+        cfg.jwtSecret         = jwtObj.value("secret", cfg.jwtSecret);
+        cfg.jwtPrivateKeyFile = jwtObj.value("privateKeyFile", cfg.jwtPrivateKeyFile);
+        cfg.jwtPublicKeyFile  = jwtObj.value("publicKeyFile", cfg.jwtPublicKeyFile);
+        cfg.jwtExpirySeconds  = jwtObj.value("expirySeconds", cfg.jwtExpirySeconds);
+        cfg.tokenRevocationFile = jwtObj.value("tokenRevocationFile", cfg.tokenRevocationFile);
+    }
     cfg.hub32PluginDir        = j.value("hub32PluginDir", cfg.hub32PluginDir);
     cfg.logLevel              = j.value("logLevel", cfg.logLevel);
     cfg.logFile               = j.value("logFile", cfg.logFile);
+    cfg.auditLogFile          = j.value("auditLogFile", cfg.auditLogFile);
+
+    // Support nested "logging" object from default.json format
+    if (j.contains("logging") && j["logging"].is_object()) {
+        const auto& logObj = j["logging"];
+        cfg.logLevel     = logObj.value("level", cfg.logLevel);
+        cfg.logFile      = logObj.value("file", cfg.logFile);
+        cfg.auditLogFile = logObj.value("auditLogFile", cfg.auditLogFile);
+    }
+
     cfg.metricsEnabled        = j.value("metricsEnabled", cfg.metricsEnabled);
     cfg.metricsPort           = j.value("metricsPort", cfg.metricsPort);
 
@@ -284,9 +309,14 @@ ServerConfig ServerConfig::from_registry()
     readRegistryString(hKey, "tlsCertFile", cfg.tlsCertFile);
     readRegistryString(hKey, "tlsKeyFile", cfg.tlsKeyFile);
     readRegistryString(hKey, "jwtSecret", cfg.jwtSecret);
+    readRegistryString(hKey, "jwtAlgorithm", cfg.jwtAlgorithm);
+    readRegistryString(hKey, "jwtPrivateKeyFile", cfg.jwtPrivateKeyFile);
+    readRegistryString(hKey, "jwtPublicKeyFile", cfg.jwtPublicKeyFile);
     readRegistryString(hKey, "hub32PluginDir", cfg.hub32PluginDir);
+    readRegistryString(hKey, "tokenRevocationFile", cfg.tokenRevocationFile);
     readRegistryString(hKey, "logLevel", cfg.logLevel);
     readRegistryString(hKey, "logFile", cfg.logFile);
+    readRegistryString(hKey, "auditLogFile", cfg.auditLogFile);
 
     RegCloseKey(hKey);
 

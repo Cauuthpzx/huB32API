@@ -89,13 +89,17 @@ Result<SessionInfo> SessionPlugin::getSession(const Uid& computerUid)
         });
     }
 
+    const std::string hostname = hostnameFor(computerUid);
+
     SessionInfo info;
-    info.sessionId     = simpleHash(computerUid);
-    info.userLogin     = "student01";
-    info.userFullName  = "Student User";
-    info.clientAddress = hostnameFor(computerUid);
-    info.uptimeSeconds = 3600;
-    info.sessionType   = "console";
+    info.sessionId         = simpleHash(computerUid);
+    info.userLogin         = "student01";
+    info.userFullName      = "Student User";
+    info.clientAddress     = hostname;
+    info.uptimeSeconds     = 3600;
+    info.sessionType       = "console";
+    info.sessionClientName = hostname;
+    info.sessionHostName   = hostname;
 
     return Result<SessionInfo>::ok(std::move(info));
 }
