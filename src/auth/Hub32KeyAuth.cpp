@@ -2,9 +2,18 @@
  * @file Hub32KeyAuth.cpp
  * @brief Implementation of Hub32KeyAuth — bridges Hub32's key-based authentication.
  *
- * Authentication key is read from the @c HUB32_AUTH_KEY environment variable.
- * If the variable is not set, all key-auth attempts are rejected and a
- * warning is logged on every attempt.
+ * SECURITY: Authentication key hash is loaded from a file at startup and stored
+ * in memory. Verification uses PBKDF2-SHA256 with constant-time comparison
+ * (OpenSSL CRYPTO_memcmp) via UserRoleStore::verifyPassword.
+ *
+ * ATTACK PREVENTED: Previously used std::getenv("HUB32_AUTH_KEY") with
+ * non-constant-time string comparison (operator!=). This had two flaws:
+ *   (a) Timing side-channel — attacker can measure response time to
+ *       brute-force the key one byte at a time
+ *   (b) Environment variable exposure — visible in /proc/self/environ,
+ *       process listings, container inspection, and crash dumps
+ *
+ * Blast radius: arbitrary agent impersonation, commands sent to student PCs.
  *
  * @todo Replace with real Hub32Core key auth when linking against Hub32Core.
  *       The real implementation should:
@@ -15,17 +24,24 @@
 
 #include "../core/PrecompiledHeader.hpp"
 #include "Hub32KeyAuth.hpp"
-
-#include <cstdlib>
+#include "UserRoleStore.hpp"
 
 namespace hub32api::auth {
 
 /**
+ * @brief Constructs Hub32KeyAuth with a pre-loaded key hash.
+ * @param keyHash PBKDF2-SHA256 hash string (empty = all auth disabled).
+ */
+Hub32KeyAuth::Hub32KeyAuth(const std::string& keyHash)
+    : m_keyHash(keyHash)
+{}
+
+/**
  * @brief Authenticates a user using Hub32 key-based credentials.
  *
- * Validates @c creds.keyData against the @c HUB32_AUTH_KEY environment
- * variable.  If the environment variable is not set, authentication is
- * unconditionally rejected to prevent unauthenticated access.
+ * Validates @c creds.keyData against the stored PBKDF2-SHA256 key hash
+ * using constant-time comparison. If no key hash is configured,
+ * authentication is unconditionally rejected to prevent unauthenticated access.
  *
  * @todo Replace with real Hub32Core key auth when linking against Hub32Core.
  *
@@ -39,30 +55,29 @@ Result<std::string> Hub32KeyAuth::authenticate(const Credentials& creds) const
 
     if (creds.keyName.empty())
     {
-        spdlog::warn("[Hub32KeyAuth] authentication failed: empty keyName");
         return Result<std::string>::fail(ApiError{
             ErrorCode::InvalidCredentials,
             "keyName must not be empty"
         });
     }
 
-    // Get auth key from environment (secure: not hardcoded).
-    // If the environment variable is absent, reject all key-auth attempts.
-    const char* envKey = std::getenv("HUB32_AUTH_KEY");
-    if (!envKey) {
-        spdlog::warn("[Hub32KeyAuth] HUB32_AUTH_KEY not set — rejecting all key auth attempts");
+    // SECURITY: Key validation using stored hash with constant-time comparison.
+    // ATTACK PREVENTED: Previously used std::getenv("HUB32_AUTH_KEY") with
+    // non-constant-time string comparison — timing side-channel attack.
+    // Now uses PBKDF2 hash verification via CRYPTO_memcmp.
+    if (m_keyHash.empty()) {
+        spdlog::warn("[Hub32KeyAuth] no auth key configured — rejecting all key auth attempts");
         return Result<std::string>::fail(ApiError{
             ErrorCode::AuthenticationFailed,
-            "Hub32 key authentication is not configured (HUB32_AUTH_KEY not set)"
+            "Hub32 key authentication is not configured"
         });
     }
 
-    if (creds.keyData != envKey)
-    {
+    if (!UserRoleStore::verifyPassword(creds.keyData, m_keyHash)) {
         spdlog::warn("[Hub32KeyAuth] authentication failed for keyName='{}'", creds.keyName);
         return Result<std::string>::fail(ApiError{
             ErrorCode::AuthenticationFailed,
-            "Hub32 key authentication failed for '" + creds.keyName + "'"
+            "Hub32 key authentication failed"
         });
     }
 

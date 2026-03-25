@@ -731,7 +731,7 @@ void Router::registerAll()
 void Router::registerV1()
 {
     // ── Controllers ───────────────────────────────────────────────────────
-    auto authCtrl     = std::make_shared<api::v1::AuthController>(m_svcs.jwtAuth, m_svcs.keyAuth);
+    auto authCtrl     = std::make_shared<api::v1::AuthController>(m_svcs.jwtAuth, m_svcs.keyAuth, m_svcs.roleStore);
     auto computerCtrl = std::make_shared<api::v1::ComputerController>(m_svcs.registry);
     auto featureCtrl  = std::make_shared<api::v1::FeatureController>(m_svcs.registry);
     auto fbCtrl       = std::make_shared<api::v1::FramebufferController>(m_svcs.registry);
@@ -893,7 +893,7 @@ void Router::registerAgentRoutes()
 {
     // ── Controller ───────────────────────────────────────────────────────
     auto agentCtrl = std::make_shared<api::v1::AgentController>(
-        m_svcs.agentRegistry, m_svcs.jwtAuth);
+        m_svcs.agentRegistry, m_svcs.jwtAuth, m_svcs.agentKeyHash);
 
     // ── Middleware ────────────────────────────────────────────────────────
     const api::v1::middleware::CorsConfig corsConfig{

@@ -7,6 +7,7 @@
 #include "../core/internal/ConnectionPool.hpp"
 #include "../auth/JwtAuth.hpp"
 #include "../auth/Hub32KeyAuth.hpp"
+#include "../auth/UserRoleStore.hpp"
 #include "../agent/AgentRegistry.hpp"
 #include "../core/internal/I18n.hpp"
 #include "../plugins/computer/ComputerPlugin.hpp"
@@ -15,8 +16,49 @@
 #include "../plugins/metrics/MetricsPlugin.hpp"
 
 #include <httplib.h>
+#include <fstream>
 
 namespace hub32api {
+
+namespace {
+
+/**
+ * @brief Loads a PBKDF2 key hash from a file.
+ *
+ * Reads the first line from the specified file, trims trailing whitespace,
+ * and returns it. Returns empty string (disabling related auth) if the file
+ * is missing, empty, or unreadable.
+ *
+ * @param filePath Path to the key hash file.
+ * @param name     Human-readable name for logging (e.g. "agentKeyFile").
+ * @return The key hash string, or empty if unavailable.
+ */
+std::string loadKeyHash(const std::string& filePath, const char* name)
+{
+    if (filePath.empty()) {
+        spdlog::warn("[HttpServer] {} not configured — related auth will be disabled", name);
+        return {};
+    }
+    std::ifstream f(filePath);
+    if (!f.is_open()) {
+        spdlog::warn("[HttpServer] cannot read {} file: {} — related auth will be disabled",
+                     name, filePath);
+        return {};
+    }
+    std::string hash;
+    std::getline(f, hash);
+    // Trim trailing whitespace (newline, carriage return, space)
+    while (!hash.empty() && (hash.back() == '\n' || hash.back() == '\r' || hash.back() == ' '))
+        hash.pop_back();
+    if (hash.empty()) {
+        spdlog::warn("[HttpServer] {} file is empty: {}", name, filePath);
+        return {};
+    }
+    spdlog::info("[HttpServer] loaded {} from: {}", name, filePath);
+    return hash;
+}
+
+} // anonymous namespace
 
 struct HttpServer::Impl
 {
@@ -26,6 +68,7 @@ struct HttpServer::Impl
     std::unique_ptr<core::internal::ConnectionPool>   pool;
     std::unique_ptr<auth::JwtAuth>                    jwtAuth;
     std::unique_ptr<auth::Hub32KeyAuth>               keyAuth;
+    std::unique_ptr<auth::UserRoleStore>              roleStore;
     std::unique_ptr<agent::AgentRegistry>             agentRegistry;
     std::unique_ptr<server::internal::ThreadPool>     threadPool;
     std::unique_ptr<httplib::Server>                  httpServer;
@@ -59,7 +102,15 @@ HttpServer::HttpServer(const ServerConfig& cfg)
 
     // 4. Auth
     m_impl->jwtAuth = std::make_unique<auth::JwtAuth>(cfg);
-    m_impl->keyAuth = std::make_unique<auth::Hub32KeyAuth>();
+
+    // SECURITY: Load key hashes from files instead of environment variables.
+    // This prevents exposure via /proc/self/environ, crash dumps, container
+    // inspection, and process listings.
+    const std::string authKeyHash  = loadKeyHash(cfg.authKeyFile,  "authKeyFile");
+    const std::string agentKeyHash = loadKeyHash(cfg.agentKeyFile, "agentKeyFile");
+
+    m_impl->keyAuth = std::make_unique<auth::Hub32KeyAuth>(authKeyHash);
+    m_impl->roleStore = std::make_unique<auth::UserRoleStore>(cfg.usersFile);
     m_impl->agentRegistry = std::make_unique<agent::AgentRegistry>();
 
     // 4a. Wire AgentRegistry into plugins for live agent routing
@@ -94,7 +145,7 @@ HttpServer::HttpServer(const ServerConfig& cfg)
 
     server::internal::Router::Services svcs{
         *m_impl->registry, *m_impl->pool, *m_impl->jwtAuth, *m_impl->keyAuth,
-        *m_impl->agentRegistry
+        *m_impl->roleStore, *m_impl->agentRegistry, agentKeyHash
     };
     m_impl->router = std::make_unique<server::internal::Router>(*m_impl->httpServer, svcs);
     m_impl->router->registerAll();

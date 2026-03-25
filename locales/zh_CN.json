@@ -39,7 +39,8 @@
     "missing_computer_ids": "缺少计算机 ID 列表",
     "invalid_operation": "无效操作：{0}",
     "too_many_requests": "请求过多",
-    "rate_limit_exceeded": "已超过速率限制"
+    "rate_limit_exceeded": "已超过速率限制",
+    "service_unavailable": "服务不可用"
   },
   "auth": {
     "method_hub32_key": "Hub32 密钥认证",

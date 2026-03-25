@@ -4,6 +4,7 @@
 #include "../dto/ErrorDto.hpp"
 #include "auth/JwtAuth.hpp"
 #include "auth/Hub32KeyAuth.hpp"
+#include "auth/UserRoleStore.hpp"
 #include "core/internal/I18n.hpp"
 
 // cpp-httplib
@@ -56,10 +57,12 @@ namespace hub32api::api::v1 {
  * @param keyAuth  Service used for Hub32 public-key authentication.
  */
 AuthController::AuthController(
-    auth::JwtAuth&      jwtAuth,
-    auth::Hub32KeyAuth& keyAuth)
+    auth::JwtAuth&       jwtAuth,
+    auth::Hub32KeyAuth&  keyAuth,
+    auth::UserRoleStore& roleStore)
     : m_jwtAuth(jwtAuth)
     , m_keyAuth(keyAuth)
+    , m_roleStore(roleStore)
 {}
 
 /**
@@ -91,17 +94,43 @@ void AuthController::handleLogin(const httplib::Request& req, httplib::Response&
 
     req_dto.method = normalizeAuthMethod(req_dto.method);
 
-    // --- Validate method ---
-    if (req_dto.method != "hub32-key" && req_dto.method != "logon") {
+    // --- Authenticate and determine role ---
+    // SECURITY: Role is determined by authenticated lookup in persistent store.
+    // No code path exists where role is derived from username string comparison.
+    //
+    // ATTACK PREVENTED: Previously, sending username="admin" with method="logon"
+    // granted admin role with zero credential verification. Now the password
+    // must match the PBKDF2-SHA256 hash stored in users.json, and role comes
+    // from the store entry, not from the username string.
+    std::string role;
+
+    if (req_dto.method == "logon") {
+        // Authenticate against UserRoleStore (password verification + role lookup)
+        auto authResult = m_roleStore.authenticate(req_dto.username, req_dto.password);
+        if (authResult.is_err()) {
+            sendError(res, 401, tr(lang, "error.auth_failed"),
+                      authResult.error().message);
+            return;
+        }
+        role = authResult.value();
+    }
+    else if (req_dto.method == "hub32-key") {
+        // Hub32 key auth -- delegates to Hub32KeyAuth
+        auto keyResult = m_keyAuth.authenticate({req_dto.keyName, req_dto.keyData});
+        if (keyResult.is_err()) {
+            sendError(res, 401, tr(lang, "error.auth_failed"),
+                      keyResult.error().message);
+            return;
+        }
+        // Hub32 key users get "teacher" role by default
+        // PHASE-3 TODO: allow key-to-role mapping in the store
+        role = "teacher";
+    }
+    else {
         sendError(res, 400, tr(lang, "error.unsupported_auth_method"),
                   tr(lang, "error.supported_methods"));
         return;
     }
-
-    // --- Determine role based on auth method + credentials ---
-    // TODO: Replace with proper role resolution from a user/role store.
-    const std::string role =
-        (req_dto.method == "logon" && req_dto.username == "admin") ? "admin" : "teacher";
 
     // --- Issue JWT ---
     const auto tokenResult = m_jwtAuth.issueToken(req_dto.username, role);

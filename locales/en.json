@@ -39,7 +39,8 @@
     "missing_computer_ids": "Missing computer IDs",
     "invalid_operation": "Invalid operation: {0}",
     "too_many_requests": "Too Many Requests",
-    "rate_limit_exceeded": "Rate limit exceeded"
+    "rate_limit_exceeded": "Rate limit exceeded",
+    "service_unavailable": "Service Unavailable"
   },
   "auth": {
     "method_hub32_key": "Hub32 Key Authentication",

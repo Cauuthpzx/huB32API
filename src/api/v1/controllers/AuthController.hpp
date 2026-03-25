@@ -5,7 +5,7 @@
 
 // Forward declarations
 namespace httplib { class Request; class Response; }
-namespace hub32api::auth { class JwtAuth; class Hub32KeyAuth; }
+namespace hub32api::auth { class JwtAuth; class Hub32KeyAuth; class UserRoleStore; }
 
 namespace hub32api::api::v1 {
 
@@ -16,8 +16,9 @@ class AuthController
 {
 public:
     explicit AuthController(
-        auth::JwtAuth&      jwtAuth,
-        auth::Hub32KeyAuth& keyAuth);
+        auth::JwtAuth&       jwtAuth,
+        auth::Hub32KeyAuth&  keyAuth,
+        auth::UserRoleStore& roleStore);
 
     // POST /api/v1/auth
     void handleLogin(const httplib::Request& req, httplib::Response& res);
@@ -26,8 +27,9 @@ public:
     void handleLogout(const httplib::Request& req, httplib::Response& res);
 
 private:
-    auth::JwtAuth&      m_jwtAuth;
-    auth::Hub32KeyAuth& m_keyAuth;
+    auth::JwtAuth&       m_jwtAuth;
+    auth::Hub32KeyAuth&  m_keyAuth;
+    auth::UserRoleStore& m_roleStore;
 };
 
 } // namespace hub32api::api::v1

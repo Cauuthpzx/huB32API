@@ -7,6 +7,7 @@
 #include "AgentController.hpp"
 #include "../dto/AgentDto.hpp"
 #include "auth/JwtAuth.hpp"
+#include "auth/UserRoleStore.hpp"
 #include "agent/AgentRegistry.hpp"
 #include "hub32api/agent/AgentInfo.hpp"
 #include "hub32api/agent/AgentCommand.hpp"
@@ -110,18 +111,22 @@ namespace hub32api::api::v1 {
 
 /**
  * @brief Constructs the AgentController with the required services.
- * @param registry Reference to the agent registry.
- * @param jwtAuth  Reference to the JWT auth service for issuing agent tokens.
+ * @param registry     Reference to the agent registry.
+ * @param jwtAuth      Reference to the JWT auth service for issuing agent tokens.
+ * @param agentKeyHash PBKDF2-SHA256 hash of the agent registration key (empty = disabled).
  */
-AgentController::AgentController(agent::AgentRegistry& registry, auth::JwtAuth& jwtAuth)
+AgentController::AgentController(agent::AgentRegistry& registry, auth::JwtAuth& jwtAuth,
+                                  const std::string& agentKeyHash)
     : m_registry(registry)
     , m_jwtAuth(jwtAuth)
+    , m_agentKeyHash(agentKeyHash)
 {}
 
 /**
  * @brief Handles POST /api/v1/agents/register — agent self-registration.
  *
- * Validates the agentKey against the HUB32_AGENT_KEY environment variable.
+ * Validates the agentKey against a PBKDF2-SHA256 hash loaded from a file
+ * at startup, using constant-time comparison (CRYPTO_memcmp).
  * On success, registers the agent in the AgentRegistry and issues a JWT
  * token with role "agent" for subsequent authenticated requests.
  *
@@ -144,9 +149,29 @@ void AgentController::handleRegister(const httplib::Request& req, httplib::Respo
         return;
     }
 
-    // --- Validate agentKey against HUB32_AGENT_KEY env var ---
-    const char* expectedKey = std::getenv("HUB32_AGENT_KEY");
-    if (!expectedKey || reqDto.agentKey != expectedKey) {
+    // SECURITY: Agent key validation using PBKDF2 hash with constant-time comparison.
+    //
+    // ATTACK PREVENTED: Previously used std::getenv("HUB32_AGENT_KEY") with
+    // string operator!= which is:
+    //   (a) NOT constant-time — leaks key bytes via timing side-channel,
+    //       allowing an attacker to brute-force the key one byte at a time
+    //       by measuring response time differences
+    //   (b) Stored in env var — visible in /proc/self/environ, process
+    //       listings, container inspection, and crash dumps
+    //   (c) No key rotation without server restart
+    //
+    // Blast radius: arbitrary agent impersonation, commands sent to student PCs.
+    //
+    // Now the key hash is loaded from a file at startup. The submitted key
+    // is verified against the stored PBKDF2-SHA256 hash using OpenSSL
+    // CRYPTO_memcmp for constant-time comparison.
+    if (m_agentKeyHash.empty()) {
+        sendError(res, 503, tr(lang, "error.service_unavailable"),
+                  "Agent registration is not configured (no agent key file)");
+        return;
+    }
+
+    if (!hub32api::auth::UserRoleStore::verifyPassword(reqDto.agentKey, m_agentKeyHash)) {
         sendError(res, 401, tr(lang, "error.unauthorized"), tr(lang, "error.invalid_agent_key"));
         return;
     }

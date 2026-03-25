@@ -5,6 +5,8 @@
  * @brief REST controller for agent management endpoints.
  */
 
+#include <string>
+
 // Forward declarations
 namespace httplib { class Request; class Response; }
 namespace hub32api::agent { class AgentRegistry; }
@@ -16,7 +18,7 @@ namespace hub32api::api::v1 {
  * @brief REST controller for agent management endpoints.
  *
  * Handles 8 endpoints:
- * - POST   /api/v1/agents/register            — agent self-registration (public, validates agentKey via HUB32_AGENT_KEY env var)
+ * - POST   /api/v1/agents/register            — agent self-registration (public, validates agentKey via PBKDF2 hash)
  * - DELETE  /api/v1/agents/{id}                — unregister agent (protected)
  * - GET     /api/v1/agents                     — list all agents (protected, admin)
  * - GET     /api/v1/agents/{id}/status         — single agent status (protected)
@@ -30,10 +32,12 @@ class AgentController
 public:
     /**
      * @brief Constructs the AgentController.
-     * @param registry Reference to the agent registry.
-     * @param jwtAuth  Reference to JWT auth service (for issuing agent tokens).
+     * @param registry     Reference to the agent registry.
+     * @param jwtAuth      Reference to JWT auth service (for issuing agent tokens).
+     * @param agentKeyHash PBKDF2-SHA256 hash of the agent registration key (empty = disabled).
      */
-    AgentController(agent::AgentRegistry& registry, auth::JwtAuth& jwtAuth);
+    AgentController(agent::AgentRegistry& registry, auth::JwtAuth& jwtAuth,
+                    const std::string& agentKeyHash);
 
     /**
      * @brief Handles POST /api/v1/agents/register — agent self-registration.
@@ -92,8 +96,9 @@ public:
     void handleHeartbeat(const httplib::Request& req, httplib::Response& res);
 
 private:
-    agent::AgentRegistry& m_registry; ///< Agent registry for managing agent state
-    auth::JwtAuth& m_jwtAuth;         ///< JWT auth service for issuing tokens
+    agent::AgentRegistry& m_registry;  ///< Agent registry for managing agent state
+    auth::JwtAuth& m_jwtAuth;          ///< JWT auth service for issuing tokens
+    std::string m_agentKeyHash;        ///< PBKDF2-SHA256 hash of agent registration key
 };
 
 } // namespace hub32api::api::v1

@@ -12,6 +12,7 @@ add_library(hub32api-core SHARED
     ../auth/internal/JwtValidator.cpp
     ../auth/internal/TokenStore.cpp
     ../auth/Hub32KeyAuth.cpp
+    ../auth/UserRoleStore.cpp
     ../config/ServerConfig.cpp
     ../config/internal/ConfigValidator.cpp
     ../agent/AgentRegistry.cpp

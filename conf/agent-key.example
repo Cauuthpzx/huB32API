@@ -1,0 +1,4 @@
+# Agent registration key hash.
+# Generate with: hub32api-service --hash-password <your-agent-key>
+# Then paste the output here (one line, starts with $pbkdf2-sha256$).
+# Example: $pbkdf2-sha256$100000$<salt_hex>$<hash_hex>

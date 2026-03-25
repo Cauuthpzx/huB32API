@@ -1,0 +1,16 @@
+{
+    "_comment": "Copy this file to users.json and set real password hashes.",
+    "_howto": "Use: hub32api-service --hash-password <password> to generate hashes.",
+    "users": [
+        {
+            "username": "admin",
+            "passwordHash": "SET_ME_USING_HASH_PASSWORD_COMMAND",
+            "role": "admin"
+        },
+        {
+            "username": "teacher",
+            "passwordHash": "SET_ME_USING_HASH_PASSWORD_COMMAND",
+            "role": "teacher"
+        }
+    ]
+}

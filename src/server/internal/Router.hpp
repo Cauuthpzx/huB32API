@@ -1,11 +1,12 @@
 #pragma once
 
 #include <memory>
+#include <string>
 
 // Forward declarations
 namespace httplib { class Server; }
 namespace hub32api::core::internal { class PluginRegistry; class ConnectionPool; }
-namespace hub32api::auth { class JwtAuth; class Hub32KeyAuth; }
+namespace hub32api::auth { class JwtAuth; class Hub32KeyAuth; class UserRoleStore; }
 namespace hub32api::agent { class AgentRegistry; }
 namespace hub32api::server { class SseManager; }
 
@@ -24,7 +25,9 @@ public:
         core::internal::ConnectionPool& pool;
         auth::JwtAuth&                  jwtAuth;
         auth::Hub32KeyAuth&             keyAuth;
+        auth::UserRoleStore&            roleStore;
         agent::AgentRegistry&           agentRegistry;
+        std::string                     agentKeyHash;  ///< PBKDF2-SHA256 hash of agent registration key
     };
 
     explicit Router(httplib::Server& server, Services svcs);

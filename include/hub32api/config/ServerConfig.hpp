@@ -40,6 +40,15 @@ struct HUB32API_EXPORT ServerConfig
     std::string jwtPublicKeyFile;               // PEM public key path (RS256)
     std::string tokenRevocationFile;            // path to persist revoked tokens (empty = in-memory only)
 
+    // User/role store for authentication (replaces hardcoded role assignment)
+    std::string usersFile;        // path to users.json for role-based auth
+
+    // SECURITY: File-based key hashes replace env-var key storage.
+    // Each file contains a single line: a PBKDF2-SHA256 hash string.
+    // Generate with: hub32api-service --hash-password <your-key>
+    std::string agentKeyFile;     // path to file containing hashed agent registration key
+    std::string authKeyFile;      // path to file containing hashed Hub32 auth key
+
     // Hub32 integration
     std::string hub32PluginDir;   // path to hub32 plugin directory
 
