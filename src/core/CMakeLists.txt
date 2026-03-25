@@ -33,8 +33,16 @@ target_link_libraries(veyon32api-core
         nlohmann_json::nlohmann_json
         spdlog::spdlog
     PRIVATE
+        jwt-cpp::jwt-cpp
         ws2_32
         crypt32
+        ssl
+        crypto
+)
+
+target_include_directories(veyon32api-core
+    PRIVATE
+        ${CMAKE_BINARY_DIR}/_deps/jwt-cpp-src/include
 )
 
 add_pch(veyon32api-core "${CMAKE_CURRENT_SOURCE_DIR}/PrecompiledHeader.hpp")

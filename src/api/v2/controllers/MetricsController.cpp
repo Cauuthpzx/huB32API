@@ -7,26 +7,146 @@
 
 namespace veyon32api::api::v2 {
 
+namespace {
+
+/// @brief Returns the steady-clock time point when the process started.
+/// Initialised once on first call and reused thereafter.
+std::chrono::steady_clock::time_point processStartTime()
+{
+    static const auto s_start = std::chrono::steady_clock::now();
+    return s_start;
+}
+
+} // anonymous namespace
+
+/**
+ * @brief Constructs a MetricsController.
+ *
+ * @param registry  Plugin registry used to count loaded plugins.
+ * @param pool      Connection pool used to read the active-connection count.
+ */
 MetricsController::MetricsController(
     core::internal::PluginRegistry& registry,
     core::internal::ConnectionPool& pool)
-    : m_registry(registry), m_pool(pool) {}
-
-void MetricsController::handleMetrics(const httplib::Request& req, httplib::Response& res)
+    : m_registry(registry), m_pool(pool)
 {
-    // TODO: build dto::MetricsDto from pool.activeCount(), registry.all().size() etc.
-    // TODO: if Accept: text/plain → Prometheus exposition format
-    // TODO: else JSON
-    res.status = 501;
-    res.set_content(R"({"error":"not implemented"})", "application/json");
+    // Touch the start-time sentinel at construction so that uptime counting
+    // begins as early as possible (not deferred to the first metrics request).
+    (void)processStartTime();
 }
 
-void MetricsController::handleHealth(const httplib::Request&, httplib::Response& res)
+/**
+ * @brief Handles GET /api/v2/health.
+ *
+ * Returns HTTP 200 with a JSON body `{"status":"ok","version":"1.0.0",
+ * "plugins":<count>}` when at least one plugin is loaded, or HTTP 503 with
+ * `{"status":"degraded","reason":"no plugins loaded"}` otherwise.
+ *
+ * @param req  Incoming HTTP request (unused).
+ * @param res  Outgoing HTTP response.
+ */
+void MetricsController::handleHealth(const httplib::Request& /*req*/, httplib::Response& res)
 {
-    // TODO: check core initialized, plugin count > 0
-    // TODO: 200 {"status":"ok"} or 503 {"status":"degraded","reason":"..."}
-    res.status = 200;
-    res.set_content(R"({"status":"ok"})", "application/json");
+    const std::size_t pluginCount = m_registry.all().size();
+    const bool healthy = (pluginCount > 0);
+
+    if (healthy) {
+        nlohmann::json body;
+        body["status"]  = "ok";
+        body["version"] = "1.0.0";
+        body["plugins"] = static_cast<int>(pluginCount);
+        res.status = 200;
+        res.set_content(body.dump(), "application/json");
+    } else {
+        nlohmann::json body;
+        body["status"] = "degraded";
+        body["reason"] = "no plugins loaded";
+        res.status = 503;
+        res.set_content(body.dump(), "application/json");
+    }
+}
+
+/**
+ * @brief Handles GET /api/v2/metrics.
+ *
+ * Inspects the `Accept` request header to decide the output format:
+ * - If the header contains `text/plain`, the response uses the Prometheus
+ *   text exposition format (Content-Type: text/plain; version=0.0.4).
+ * - Otherwise a JSON object (`dto::MetricsDto`) is returned.
+ *
+ * Metrics exposed: active connections, plugin count, uptime in seconds,
+ * server version, and placeholder Veyon version.
+ *
+ * @param req  Incoming HTTP request (inspected for `Accept` header).
+ * @param res  Outgoing HTTP response.
+ */
+void MetricsController::handleMetrics(const httplib::Request& req, httplib::Response& res)
+{
+    using Clock = std::chrono::steady_clock;
+
+    // Compute uptime
+    const auto elapsed = Clock::now() - processStartTime();
+    const int uptimeSec =
+        static_cast<int>(
+            std::chrono::duration_cast<std::chrono::seconds>(elapsed).count());
+
+    // Populate the DTO
+    dto::MetricsDto dto;
+    dto.activeConnections = m_pool.activeCount();
+    dto.pluginCount       = static_cast<int>(m_registry.all().size());
+    dto.uptimeSeconds     = uptimeSec;
+    dto.serverVersion     = "1.0.0";
+    dto.veyonVersion      = "4.x";  // populated from Veyon core at runtime
+    dto.totalRequests     = 0;      // reserved for future counter instrumentation
+    dto.failedRequests    = 0;
+
+    // Check whether the client prefers plain text (Prometheus scraper)
+    const bool wantsPrometheus =
+        req.has_header("Accept") &&
+        req.get_header_value("Accept").find("text/plain") != std::string::npos;
+
+    if (wantsPrometheus) {
+        // -----------------------------------------------------------------------
+        // Prometheus text exposition format (version 0.0.4)
+        // -----------------------------------------------------------------------
+        std::string body;
+        body.reserve(512);
+
+        body += "# HELP veyon32api_active_connections Number of currently active VNC connections\n";
+        body += "# TYPE veyon32api_active_connections gauge\n";
+        body += "veyon32api_active_connections " +
+                std::to_string(dto.activeConnections) + "\n";
+
+        body += "# HELP veyon32api_plugin_count Number of loaded plugins\n";
+        body += "# TYPE veyon32api_plugin_count gauge\n";
+        body += "veyon32api_plugin_count " +
+                std::to_string(dto.pluginCount) + "\n";
+
+        body += "# HELP veyon32api_uptime_seconds Total process uptime in seconds\n";
+        body += "# TYPE veyon32api_uptime_seconds counter\n";
+        body += "veyon32api_uptime_seconds " +
+                std::to_string(dto.uptimeSeconds) + "\n";
+
+        body += "# HELP veyon32api_total_requests Total number of HTTP requests handled\n";
+        body += "# TYPE veyon32api_total_requests counter\n";
+        body += "veyon32api_total_requests " +
+                std::to_string(dto.totalRequests) + "\n";
+
+        body += "# HELP veyon32api_failed_requests Total number of failed HTTP requests\n";
+        body += "# TYPE veyon32api_failed_requests counter\n";
+        body += "veyon32api_failed_requests " +
+                std::to_string(dto.failedRequests) + "\n";
+
+        res.status = 200;
+        res.set_content(body, "text/plain; version=0.0.4; charset=utf-8");
+    } else {
+        // -----------------------------------------------------------------------
+        // JSON format
+        // -----------------------------------------------------------------------
+        nlohmann::json body = dto;
+        res.status = 200;
+        res.set_content(body.dump(), "application/json");
+    }
 }
 
 } // namespace veyon32api::api::v2

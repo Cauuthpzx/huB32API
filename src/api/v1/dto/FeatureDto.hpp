@@ -8,6 +8,11 @@
 
 namespace veyon32api::api::v1::dto {
 
+/**
+ * @brief Data Transfer Object representing a single Veyon feature.
+ *
+ * Carries metadata and runtime state for one feature exposed to API consumers.
+ */
 struct FeatureDto
 {
     std::string uid;
@@ -17,7 +22,16 @@ struct FeatureDto
     bool        isMasterSide   = false;
     bool        isServiceSide  = false;
 
-    static FeatureDto from(const FeatureDescriptor& fd);
+    /**
+     * @brief Constructs a FeatureDto from a domain FeatureDescriptor.
+     * @param fd The descriptor returned by the feature plugin.
+     * @return A populated FeatureDto ready for JSON serialisation.
+     */
+    static FeatureDto from(const FeatureDescriptor& fd)
+    {
+        return FeatureDto{fd.uid, fd.name, fd.description,
+                          fd.isActive, fd.isMasterSide, fd.isServiceSide};
+    }
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(FeatureDto,

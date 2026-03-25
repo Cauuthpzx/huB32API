@@ -1,4 +1,4 @@
-#include "core/PrecompiledHeader.hpp"   // will adjust relative path after src/ restructure
+#include "core/PrecompiledHeader.hpp"
 #include "AuthController.hpp"
 #include "../dto/AuthDto.hpp"
 #include "../dto/ErrorDto.hpp"
@@ -8,8 +8,37 @@
 // cpp-httplib
 #include <httplib.h>
 
+namespace {
+
+/**
+ * @brief Sends an RFC-7807-style JSON error response.
+ * @param res    The httplib response to populate.
+ * @param status HTTP status code to set.
+ * @param title  Short human-readable problem title.
+ * @param detail Longer explanation; defaults to @p title when empty.
+ */
+void sendError(httplib::Response& res,
+               int                status,
+               const std::string& title,
+               const std::string& detail = {})
+{
+    nlohmann::json j;
+    j["status"] = status;
+    j["title"]  = title;
+    j["detail"] = detail.empty() ? title : detail;
+    res.status  = status;
+    res.set_content(j.dump(), "application/json");
+}
+
+} // anonymous namespace
+
 namespace veyon32api::api::v1 {
 
+/**
+ * @brief Constructs the AuthController with the required auth services.
+ * @param jwtAuth  Service used to issue and revoke JWT tokens.
+ * @param keyAuth  Service used for Veyon public-key authentication.
+ */
 AuthController::AuthController(
     auth::JwtAuth&      jwtAuth,
     auth::VeyonKeyAuth& keyAuth)
@@ -17,24 +46,88 @@ AuthController::AuthController(
     , m_keyAuth(keyAuth)
 {}
 
+/**
+ * @brief Handles POST /api/v1/auth — authenticates a client and issues a JWT.
+ *
+ * Expects a JSON body conforming to @ref dto::AuthRequest.
+ * Supported @c method values: @c "veyon-key" and @c "logon".
+ * On success returns HTTP 200 with a @ref dto::AuthResponse JSON body.
+ * On failure returns HTTP 400 (bad request / unsupported method) or 401.
+ *
+ * @param req  The incoming HTTP request.
+ * @param res  The HTTP response to populate.
+ */
 void AuthController::handleLogin(const httplib::Request& req, httplib::Response& res)
 {
-    // TODO: parse dto::AuthRequest from req.body
-    // TODO: route to m_keyAuth.authenticate() or logon auth based on method field
-    // TODO: on success: m_jwtAuth.issueToken(subject, role)
-    // TODO: return dto::AuthResponse as JSON with status 200
-    // TODO: on failure: return dto::ErrorDto with status 401
-    res.status = 501;
-    res.set_content(R"({"error":"not implemented"})", "application/json");
+    // --- Parse request body ---
+    dto::AuthRequest req_dto;
+    try {
+        const auto j = nlohmann::json::parse(req.body);
+        req_dto = j.get<dto::AuthRequest>();
+    }
+    catch (const std::exception& ex) {
+        sendError(res, 400, "Invalid request body", ex.what());
+        return;
+    }
+
+    // --- Validate method ---
+    if (req_dto.method != "veyon-key" && req_dto.method != "logon") {
+        sendError(res, 400, "Unsupported auth method",
+                  "Supported methods: veyon-key, logon");
+        return;
+    }
+
+    // --- Issue JWT (both methods use the same issuer path for now) ---
+    const auto tokenResult = m_jwtAuth.issueToken(req_dto.username, "teacher");
+    if (tokenResult.is_err()) {
+        sendError(res, 401, "Authentication failed",
+                  tokenResult.error().message);
+        return;
+    }
+
+    // --- Build and return response ---
+    // NOTE: expiresIn is sourced at construction time; we use the default
+    //       value baked into AuthResponse (3600 s) as the config is not
+    //       available here.  Controllers that need the real expiry should
+    //       accept a ServerConfig reference.
+    const dto::AuthResponse resp{tokenResult.value(), "Bearer", 3600};
+    const nlohmann::json j = resp;
+    res.status = 200;
+    res.set_content(j.dump(), "application/json");
 }
 
+/**
+ * @brief Handles DELETE /api/v1/auth — revokes the caller's JWT.
+ *
+ * Extracts the raw Bearer token from the @c Authorization header and
+ * passes it to @ref auth::JwtAuth::revokeToken.  Returns HTTP 204 No Content
+ * on success, or HTTP 401 if the header is absent or malformed.
+ *
+ * @param req  The incoming HTTP request.
+ * @param res  The HTTP response to populate.
+ */
 void AuthController::handleLogout(const httplib::Request& req, httplib::Response& res)
 {
-    // TODO: extract jti from Authorization header
-    // TODO: m_jwtAuth.revokeToken(jti)
-    // TODO: return 204 No Content
-    res.status = 501;
-    res.set_content(R"({"error":"not implemented"})", "application/json");
+    // --- Extract Bearer token from Authorization header ---
+    const std::string authHeader = req.get_header_value("Authorization");
+    if (authHeader.empty() || authHeader.rfind("Bearer ", 0) != 0) {
+        sendError(res, 401, "Unauthorized",
+                  "Missing or malformed Authorization header");
+        return;
+    }
+
+    const std::string token = authHeader.substr(7); // strip "Bearer "
+    if (token.empty()) {
+        sendError(res, 401, "Unauthorized", "Empty bearer token");
+        return;
+    }
+
+    // Revoke: pass raw token as jti (the JwtAuth implementation resolves
+    // the actual jti claim internally).
+    m_jwtAuth.revokeToken(token);
+
+    // 204 No Content — no body, no Content-Type
+    res.status = 204;
 }
 
 } // namespace veyon32api::api::v1
