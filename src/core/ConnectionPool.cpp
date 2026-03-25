@@ -1,7 +1,7 @@
 #include "PrecompiledHeader.hpp"
 #include "internal/ConnectionPool.hpp"
 
-namespace veyon32api::core::internal {
+namespace hub32api::core::internal {
 
 struct ConnectionPool::Entry
 {
@@ -9,7 +9,7 @@ struct ConnectionPool::Entry
     Port        port = 0;
     std::chrono::steady_clock::time_point createdAt;
     std::chrono::steady_clock::time_point lastUsedAt;
-    // TODO: std::unique_ptr<VeyonConnection> connection;
+    // TODO: std::unique_ptr<Hub32Connection> connection;
 };
 
 ConnectionPool::ConnectionPool(Limits limits)
@@ -28,7 +28,7 @@ Result<Uid> ConnectionPool::acquire(const std::string& hostname, Port port)
 
     // TODO: Check global limit
     // TODO: Check per-host limit
-    // TODO: Find idle existing connection or create new VeyonConnection
+    // TODO: Find idle existing connection or create new Hub32Connection
     // TODO: Return connection token (UUID)
 
     spdlog::debug("[ConnectionPool] acquire stub for {}:{}", hostname, port);
@@ -63,4 +63,4 @@ int ConnectionPool::hostCount() const noexcept
     return 0;
 }
 
-} // namespace veyon32api::core::internal
+} // namespace hub32api::core::internal

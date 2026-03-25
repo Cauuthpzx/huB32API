@@ -2,19 +2,19 @@
 
 #include <string>
 #include <memory>
-#include "veyon32api/export.h"
-#include "veyon32api/auth/JwtToken.hpp"
-#include "veyon32api/auth/AuthContext.hpp"
-#include "veyon32api/config/ServerConfig.hpp"
-#include "veyon32api/core/Result.hpp"
+#include "hub32api/export.h"
+#include "hub32api/auth/JwtToken.hpp"
+#include "hub32api/auth/AuthContext.hpp"
+#include "hub32api/config/ServerConfig.hpp"
+#include "hub32api/core/Result.hpp"
 
-namespace veyon32api::auth {
+namespace hub32api::auth {
 
 // -----------------------------------------------------------------------
 // JwtAuth — issues and validates JWT Bearer tokens.
 // Used by AuthController (issue) and AuthMiddleware (validate).
 // -----------------------------------------------------------------------
-class VEYON32API_EXPORT JwtAuth
+class HUB32API_EXPORT JwtAuth
 {
 public:
     explicit JwtAuth(const ServerConfig& cfg);
@@ -36,4 +36,4 @@ private:
     std::unique_ptr<Impl> m_impl;
 };
 
-} // namespace veyon32api::auth
+} // namespace hub32api::auth

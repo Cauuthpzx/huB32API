@@ -16,7 +16,7 @@
 #include "../../core/PrecompiledHeader.hpp"
 #include "JwtValidator.hpp"
 
-namespace veyon32api::auth::internal {
+namespace hub32api::auth::internal {
 
 // ---------------------------------------------------------------------------
 // Internal type alias
@@ -27,8 +27,8 @@ using JwtDecoded = jwt::decoded_jwt<jwt::traits::nlohmann_json>;
 // Constants
 // ---------------------------------------------------------------------------
 namespace {
-    constexpr const char* k_issuer   = "veyon32api";
-    constexpr const char* k_audience = "veyon32api-clients";
+    constexpr const char* k_issuer   = "hub32api";
+    constexpr const char* k_audience = "hub32api-clients";
 } // anonymous namespace
 
 // ---------------------------------------------------------------------------
@@ -197,4 +197,4 @@ Result<JwtToken> JwtValidator::validate(const std::string& rawToken) const
     return Result<JwtToken>::ok(std::move(token));
 }
 
-} // namespace veyon32api::auth::internal
+} // namespace hub32api::auth::internal

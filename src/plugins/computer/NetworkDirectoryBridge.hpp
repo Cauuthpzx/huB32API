@@ -1,25 +1,25 @@
 #pragma once
 
 #include <vector>
-#include "veyon32api/plugins/ComputerPluginInterface.hpp"
+#include "hub32api/plugins/ComputerPluginInterface.hpp"
 
-namespace veyon32api::core::internal { class VeyonCoreWrapper; }
+namespace hub32api::core::internal { class Hub32CoreWrapper; }
 
-namespace veyon32api::plugins {
+namespace hub32api::plugins {
 
 // -----------------------------------------------------------------------
-// NetworkDirectoryBridge — translates Veyon's NetworkObjectDirectory
+// NetworkDirectoryBridge — translates Hub32's NetworkObjectDirectory
 // into the flat ComputerInfo list used by the API.
 // -----------------------------------------------------------------------
 class NetworkDirectoryBridge
 {
 public:
-    explicit NetworkDirectoryBridge(core::internal::VeyonCoreWrapper& core);
+    explicit NetworkDirectoryBridge(core::internal::Hub32CoreWrapper& core);
 
     std::vector<ComputerInfo> enumerate() const;
 
 private:
-    core::internal::VeyonCoreWrapper& m_core;
+    core::internal::Hub32CoreWrapper& m_core;
 };
 
-} // namespace veyon32api::plugins
+} // namespace hub32api::plugins

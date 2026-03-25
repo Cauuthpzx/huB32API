@@ -4,7 +4,7 @@
 #include <cmath>
 #include <ctime>
 
-namespace veyon32api::api::v1::middleware {
+namespace hub32api::api::v1::middleware {
 
 /**
  * @brief Constructs a RateLimitMiddleware with the given configuration.
@@ -120,4 +120,4 @@ bool RateLimitMiddleware::process(const httplib::Request& req, httplib::Response
     return true;
 }
 
-} // namespace veyon32api::api::v1::middleware
+} // namespace hub32api::api::v1::middleware

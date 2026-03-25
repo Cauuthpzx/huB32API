@@ -1,8 +1,8 @@
 #include "../core/PrecompiledHeader.hpp"
-#include "veyon32api/config/ServerConfig.hpp"
+#include "hub32api/config/ServerConfig.hpp"
 #include "internal/ConfigValidator.hpp"
 
-namespace veyon32api {
+namespace hub32api {
 
 ServerConfig ServerConfig::defaults()
 {
@@ -18,9 +18,9 @@ ServerConfig ServerConfig::from_file(const std::string& path)
 
 ServerConfig ServerConfig::from_registry()
 {
-    // TODO: read from Windows Registry under HKLM\SOFTWARE\veyon32api
+    // TODO: read from Windows Registry under HKLM\SOFTWARE\hub32api
     spdlog::info("[ServerConfig] loading from Windows Registry");
     return defaults();
 }
 
-} // namespace veyon32api
+} // namespace hub32api

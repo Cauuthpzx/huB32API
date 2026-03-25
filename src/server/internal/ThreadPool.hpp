@@ -8,7 +8,7 @@
 #include <condition_variable>
 #include <atomic>
 
-namespace veyon32api::server::internal {
+namespace hub32api::server::internal {
 
 // -----------------------------------------------------------------------
 // ThreadPool — fixed-size thread pool for HTTP request handling.
@@ -36,4 +36,4 @@ private:
     std::atomic<int>                  m_active{0};
 };
 
-} // namespace veyon32api::server::internal
+} // namespace hub32api::server::internal

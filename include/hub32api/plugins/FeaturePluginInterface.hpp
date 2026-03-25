@@ -2,16 +2,16 @@
 
 #include <vector>
 #include <map>
-#include "veyon32api/plugins/PluginInterface.hpp"
-#include "veyon32api/core/Types.hpp"
-#include "veyon32api/core/Result.hpp"
+#include "hub32api/plugins/PluginInterface.hpp"
+#include "hub32api/core/Types.hpp"
+#include "hub32api/core/Result.hpp"
 
-namespace veyon32api {
+namespace hub32api {
 
 // -----------------------------------------------------------------------
-// FeatureDescriptor — metadata for a Veyon feature exposed via API
+// FeatureDescriptor — metadata for a Hub32 feature exposed via API
 // -----------------------------------------------------------------------
-struct VEYON32API_EXPORT FeatureDescriptor
+struct HUB32API_EXPORT FeatureDescriptor
 {
     Uid         uid;
     std::string name;
@@ -25,9 +25,9 @@ struct VEYON32API_EXPORT FeatureDescriptor
 using FeatureArgs = std::map<std::string, std::string>;
 
 // -----------------------------------------------------------------------
-// FeaturePluginInterface — wraps Veyon FeatureManager / FeatureProviderInterface
+// FeaturePluginInterface — wraps Hub32 FeatureManager / FeatureProviderInterface
 // -----------------------------------------------------------------------
-class VEYON32API_EXPORT FeaturePluginInterface : public PluginInterface
+class HUB32API_EXPORT FeaturePluginInterface : public PluginInterface
 {
 public:
     virtual Result<std::vector<FeatureDescriptor>> listFeatures(
@@ -49,4 +49,4 @@ public:
         const FeatureArgs& args = {}) = 0;
 };
 
-} // namespace veyon32api
+} // namespace hub32api

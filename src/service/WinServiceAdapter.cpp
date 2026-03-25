@@ -1,7 +1,7 @@
 #include "../core/PrecompiledHeader.hpp"
 #include "WinServiceAdapter.hpp"
 
-namespace veyon32api {
+namespace hub32api {
 
 SERVICE_STATUS_HANDLE WinServiceAdapter::s_statusHandle = nullptr;
 DWORD                 WinServiceAdapter::s_currentState = SERVICE_STOPPED;
@@ -82,4 +82,4 @@ bool WinServiceAdapter::uninstall()
     return false;
 }
 
-} // namespace veyon32api
+} // namespace hub32api

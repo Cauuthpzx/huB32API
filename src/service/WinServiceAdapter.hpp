@@ -4,14 +4,14 @@
 #include <functional>
 
 // Windows service infrastructure wrapper.
-// Mirrors Veyon's service wrapper pattern.
-namespace veyon32api {
+// Mirrors Hub32's service wrapper pattern.
+namespace hub32api {
 
 class WinServiceAdapter
 {
 public:
-    static constexpr const wchar_t* ServiceName = L"veyon32api";
-    static constexpr const wchar_t* DisplayName = L"Veyon32 API Server";
+    static constexpr const wchar_t* ServiceName = L"hub32api";
+    static constexpr const wchar_t* DisplayName = L"Hub3232 API Server";
 
     using WorkFn = std::function<int()>;
 
@@ -34,4 +34,4 @@ private:
     static WorkFn                s_work;
 };
 
-} // namespace veyon32api
+} // namespace hub32api

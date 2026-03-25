@@ -1,7 +1,7 @@
 #include "../core/PrecompiledHeader.hpp"
 #include "internal/ThreadPool.hpp"
 
-namespace veyon32api::server::internal {
+namespace hub32api::server::internal {
 
 ThreadPool::ThreadPool(int threadCount)
 {
@@ -53,4 +53,4 @@ void ThreadPool::workerLoop()
     }
 }
 
-} // namespace veyon32api::server::internal
+} // namespace hub32api::server::internal

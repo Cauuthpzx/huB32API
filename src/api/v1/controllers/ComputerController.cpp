@@ -30,7 +30,7 @@ void sendError(httplib::Response& res,
 
 } // anonymous namespace
 
-namespace veyon32api::api::v1 {
+namespace hub32api::api::v1 {
 
 /**
  * @brief Constructs the ComputerController.
@@ -241,4 +241,4 @@ void ComputerController::handleInfo(const httplib::Request& req, httplib::Respon
     res.set_content(j.dump(), "application/json");
 }
 
-} // namespace veyon32api::api::v1
+} // namespace hub32api::api::v1

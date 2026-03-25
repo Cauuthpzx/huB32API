@@ -2,7 +2,7 @@
 #include "LoggingMiddleware.hpp"
 #include <httplib.h>
 
-namespace veyon32api::api::v1::middleware {
+namespace hub32api::api::v1::middleware {
 
 void LoggingMiddleware::logRequest(const httplib::Request& req)
 {
@@ -16,4 +16,4 @@ void LoggingMiddleware::logResponse(const httplib::Request& req, const httplib::
     spdlog::info("[RES] {} {} → {}", req.method, req.path, res.status);
 }
 
-} // namespace veyon32api::api::v1::middleware
+} // namespace hub32api::api::v1::middleware

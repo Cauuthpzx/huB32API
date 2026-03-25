@@ -30,7 +30,7 @@ void sendError(httplib::Response& res,
 
 } // anonymous namespace
 
-namespace veyon32api::api::v1 {
+namespace hub32api::api::v1 {
 
 /**
  * @brief Constructs the FeatureController.
@@ -198,4 +198,4 @@ void FeatureController::handleControl(const httplib::Request& req, httplib::Resp
     res.set_content(j.dump(), "application/json");
 }
 
-} // namespace veyon32api::api::v1
+} // namespace hub32api::api::v1

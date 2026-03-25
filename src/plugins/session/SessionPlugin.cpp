@@ -1,10 +1,10 @@
 #include "core/PrecompiledHeader.hpp"
 #include "SessionPlugin.hpp"
-#include "core/internal/VeyonCoreWrapper.hpp"
+#include "core/internal/Hub32CoreWrapper.hpp"
 
-namespace veyon32api::plugins {
+namespace hub32api::plugins {
 
-SessionPlugin::SessionPlugin(core::internal::VeyonCoreWrapper& core)
+SessionPlugin::SessionPlugin(core::internal::Hub32CoreWrapper& core)
     : m_core(core) {}
 
 Result<SessionInfo> SessionPlugin::getSession(const Uid& /*computerUid*/)
@@ -25,4 +25,4 @@ Result<std::vector<ScreenRect>> SessionPlugin::getScreens(const Uid& /*computerU
     return Result<std::vector<ScreenRect>>::ok({});
 }
 
-} // namespace veyon32api::plugins
+} // namespace hub32api::plugins

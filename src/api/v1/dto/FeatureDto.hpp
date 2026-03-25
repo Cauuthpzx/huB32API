@@ -4,12 +4,12 @@
 #include <map>
 #include <vector>
 #include <nlohmann/json.hpp>
-#include "veyon32api/plugins/FeaturePluginInterface.hpp"
+#include "hub32api/plugins/FeaturePluginInterface.hpp"
 
-namespace veyon32api::api::v1::dto {
+namespace hub32api::api::v1::dto {
 
 /**
- * @brief Data Transfer Object representing a single Veyon feature.
+ * @brief Data Transfer Object representing a single Hub32 feature.
  *
  * Carries metadata and runtime state for one feature exposed to API consumers.
  */
@@ -52,4 +52,4 @@ struct FeatureControlRequest
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(FeatureControlRequest, active, arguments)
 
-} // namespace veyon32api::api::v1::dto
+} // namespace hub32api::api::v1::dto

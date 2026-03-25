@@ -6,7 +6,7 @@ add_subdirectory(server)
 add_subdirectory(service)
 
 # Plugin subdirectories — only build as standalone DLLs when explicitly enabled
-# By default, plugin sources are compiled into veyon32api-server
+# By default, plugin sources are compiled into hub32api-server
 if(BUILD_PLUGINS AND BUILD_PLUGINS_STANDALONE)
     add_subdirectory(plugins)
 endif()

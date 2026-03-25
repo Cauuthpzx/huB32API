@@ -2,7 +2,7 @@
 #include "CorsMiddleware.hpp"
 #include <httplib.h>
 
-namespace veyon32api::api::v1::middleware {
+namespace hub32api::api::v1::middleware {
 
 /**
  * @brief Constructs a CorsMiddleware with the given configuration.
@@ -97,4 +97,4 @@ bool CorsMiddleware::process(const httplib::Request& req, httplib::Response& res
     return true; // Continue to the actual request handler
 }
 
-} // namespace veyon32api::api::v1::middleware
+} // namespace hub32api::api::v1::middleware

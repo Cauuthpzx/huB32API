@@ -1,2 +1,2 @@
-# Config sources are compiled into veyon32api-core.
+# Config sources are compiled into hub32api-core.
 # See src/core/CMakeLists.txt.

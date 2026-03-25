@@ -3,11 +3,11 @@
 #include <string>
 #include <nlohmann/json.hpp>
 
-namespace veyon32api::api::v1::dto {
+namespace hub32api::api::v1::dto {
 
 struct AuthRequest
 {
-    std::string method;       // "veyon-key" | "logon"
+    std::string method;       // "hub32-key" | "logon"
     std::string username;
     std::string password;
     std::string keyName;
@@ -32,4 +32,4 @@ struct LogoutRequest
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LogoutRequest, jti)
 
-} // namespace veyon32api::api::v1::dto
+} // namespace hub32api::api::v1::dto

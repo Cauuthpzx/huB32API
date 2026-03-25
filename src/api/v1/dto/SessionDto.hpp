@@ -3,9 +3,9 @@
 #include <string>
 #include <vector>
 #include <nlohmann/json.hpp>
-#include "veyon32api/plugins/SessionPluginInterface.hpp"
+#include "hub32api/plugins/SessionPluginInterface.hpp"
 
-namespace veyon32api::api::v1::dto {
+namespace hub32api::api::v1::dto {
 
 /**
  * @brief Data Transfer Object representing the currently logged-in user.
@@ -63,4 +63,4 @@ struct ScreenDto
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ScreenDto, x, y, width, height)
 
-} // namespace veyon32api::api::v1::dto
+} // namespace hub32api::api::v1::dto

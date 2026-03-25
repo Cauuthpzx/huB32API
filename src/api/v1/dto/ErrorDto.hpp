@@ -2,9 +2,9 @@
 
 #include <string>
 #include <nlohmann/json.hpp>
-#include "veyon32api/core/Error.hpp"
+#include "hub32api/core/Error.hpp"
 
-namespace veyon32api::api::v1::dto {
+namespace hub32api::api::v1::dto {
 
 /**
  * @brief RFC 7807 "Problem Details" compatible error response DTO.
@@ -59,4 +59,4 @@ struct ErrorDto
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ErrorDto, status, type, title, detail, instance)
 
-} // namespace veyon32api::api::v1::dto
+} // namespace hub32api::api::v1::dto

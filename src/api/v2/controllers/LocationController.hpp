@@ -1,9 +1,9 @@
 #pragma once
 
 namespace httplib { class Request; class Response; }
-namespace veyon32api::core::internal { class PluginRegistry; }
+namespace hub32api::core::internal { class PluginRegistry; }
 
-namespace veyon32api::api::v2 {
+namespace hub32api::api::v2 {
 
 // GET /api/v2/locations       → LocationListDto
 // GET /api/v2/locations/:id   → LocationDto with computerIds
@@ -19,4 +19,4 @@ private:
     core::internal::PluginRegistry& m_registry;
 };
 
-} // namespace veyon32api::api::v2
+} // namespace hub32api::api::v2

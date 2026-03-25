@@ -1,10 +1,10 @@
 #pragma once
 
 #include <string>
-#include "veyon32api/auth/JwtToken.hpp"
-#include "veyon32api/core/Result.hpp"
+#include "hub32api/auth/JwtToken.hpp"
+#include "hub32api/core/Result.hpp"
 
-namespace veyon32api::auth::internal {
+namespace hub32api::auth::internal {
 
 // -----------------------------------------------------------------------
 // JwtValidator — validates JWT signature and claims.
@@ -21,4 +21,4 @@ private:
     std::string m_secret;
 };
 
-} // namespace veyon32api::auth::internal
+} // namespace hub32api::auth::internal

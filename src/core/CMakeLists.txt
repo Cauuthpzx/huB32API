@@ -1,24 +1,24 @@
 include(PchHelpers)
 include(GenerateExportHeader)
 
-add_library(veyon32api-core SHARED
-    VeyonCoreWrapper.cpp
+add_library(hub32api-core SHARED
+    Hub32CoreWrapper.cpp
     PluginRegistry.cpp
     ConnectionPool.cpp
     ApiContext.cpp
     ../auth/JwtAuth.cpp
     ../auth/internal/JwtValidator.cpp
     ../auth/internal/TokenStore.cpp
-    ../auth/VeyonKeyAuth.cpp
+    ../auth/Hub32KeyAuth.cpp
     ../config/ServerConfig.cpp
 )
 
-generate_export_header(veyon32api-core
-    BASE_NAME VEYON32API
-    EXPORT_FILE_NAME "${CMAKE_BINARY_DIR}/include/veyon32api/export_generated.h"
+generate_export_header(hub32api-core
+    BASE_NAME HUB32API
+    EXPORT_FILE_NAME "${CMAKE_BINARY_DIR}/include/hub32api/export_generated.h"
 )
 
-target_include_directories(veyon32api-core
+target_include_directories(hub32api-core
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
         $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
@@ -28,7 +28,7 @@ target_include_directories(veyon32api-core
         ${CMAKE_SOURCE_DIR}/src
 )
 
-target_link_libraries(veyon32api-core
+target_link_libraries(hub32api-core
     PUBLIC
         nlohmann_json::nlohmann_json
         spdlog::spdlog
@@ -40,14 +40,14 @@ target_link_libraries(veyon32api-core
         crypto
 )
 
-target_include_directories(veyon32api-core
+target_include_directories(hub32api-core
     PRIVATE
         ${CMAKE_BINARY_DIR}/_deps/jwt-cpp-src/include
 )
 
-add_pch(veyon32api-core "${CMAKE_CURRENT_SOURCE_DIR}/PrecompiledHeader.hpp")
+add_pch(hub32api-core "${CMAKE_CURRENT_SOURCE_DIR}/PrecompiledHeader.hpp")
 
-install(TARGETS veyon32api-core
+install(TARGETS hub32api-core
     LIBRARY  DESTINATION lib
     RUNTIME  DESTINATION bin
     ARCHIVE  DESTINATION lib

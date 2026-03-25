@@ -2,19 +2,19 @@
 
 #include <cstdint>
 #include <string>
-#include "veyon32api/export.h"
+#include "hub32api/export.h"
 
-namespace veyon32api {
+namespace hub32api {
 
 // -----------------------------------------------------------------------
 // ServerConfig — public configuration struct loaded at startup.
-// Mirrors Veyon's VeyonConfiguration property pattern.
+// Mirrors Hub32's Hub32Configuration property pattern.
 // -----------------------------------------------------------------------
-struct VEYON32API_EXPORT ServerConfig
+struct HUB32API_EXPORT ServerConfig
 {
     // HTTP server
     bool        httpEnabled        = true;
-    uint16_t    httpPort           = 11081;   // distinct from Veyon WebAPI (11080)
+    uint16_t    httpPort           = 11081;   // distinct from Hub32 WebAPI (11080)
     std::string bindAddress        = "127.0.0.1";
 
     // TLS / HTTPS
@@ -36,8 +36,8 @@ struct VEYON32API_EXPORT ServerConfig
     std::string jwtSecret;
     int         jwtExpirySeconds   = 3600;
 
-    // Veyon integration
-    std::string veyonPluginDir;   // path to veyon plugin directory
+    // Hub32 integration
+    std::string hub32PluginDir;   // path to hub32 plugin directory
 
     // Logging
     std::string logLevel           = "info";  // trace|debug|info|warn|error
@@ -48,9 +48,9 @@ struct VEYON32API_EXPORT ServerConfig
     uint16_t metricsPort           = 9091;
 
     // Load from JSON file; returns false on parse error
-    VEYON32API_EXPORT static ServerConfig from_file(const std::string& path);
-    VEYON32API_EXPORT static ServerConfig from_registry();  // Windows Registry
-    VEYON32API_EXPORT static ServerConfig defaults();
+    HUB32API_EXPORT static ServerConfig from_file(const std::string& path);
+    HUB32API_EXPORT static ServerConfig from_registry();  // Windows Registry
+    HUB32API_EXPORT static ServerConfig defaults();
 };
 
-} // namespace veyon32api
+} // namespace hub32api

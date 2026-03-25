@@ -2,7 +2,7 @@
 #include "MetricsPlugin.hpp"
 #include <sstream>
 
-namespace veyon32api::plugins {
+namespace hub32api::plugins {
 
 void MetricsPlugin::recordRequest(int httpStatus)
 {
@@ -23,16 +23,16 @@ int MetricsPlugin::activeConnections() const noexcept { return m_activeConnectio
 std::string MetricsPlugin::prometheusText() const
 {
     std::ostringstream oss;
-    oss << "# HELP veyon32api_requests_total Total HTTP requests\n"
-        << "# TYPE veyon32api_requests_total counter\n"
-        << "veyon32api_requests_total " << m_totalRequests.load() << "\n"
-        << "# HELP veyon32api_requests_failed_total Failed HTTP requests (5xx)\n"
-        << "# TYPE veyon32api_requests_failed_total counter\n"
-        << "veyon32api_requests_failed_total " << m_failedRequests.load() << "\n"
-        << "# HELP veyon32api_connections_active Active VNC connections\n"
-        << "# TYPE veyon32api_connections_active gauge\n"
-        << "veyon32api_connections_active " << m_activeConnections.load() << "\n";
+    oss << "# HELP hub32api_requests_total Total HTTP requests\n"
+        << "# TYPE hub32api_requests_total counter\n"
+        << "hub32api_requests_total " << m_totalRequests.load() << "\n"
+        << "# HELP hub32api_requests_failed_total Failed HTTP requests (5xx)\n"
+        << "# TYPE hub32api_requests_failed_total counter\n"
+        << "hub32api_requests_failed_total " << m_failedRequests.load() << "\n"
+        << "# HELP hub32api_connections_active Active VNC connections\n"
+        << "# TYPE hub32api_connections_active gauge\n"
+        << "hub32api_connections_active " << m_activeConnections.load() << "\n";
     return oss.str();
 }
 
-} // namespace veyon32api::plugins
+} // namespace hub32api::plugins

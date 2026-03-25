@@ -14,7 +14,7 @@
 
 #include <httplib.h>
 
-namespace veyon32api::api::v1::middleware {
+namespace hub32api::api::v1::middleware {
 
 namespace {
 
@@ -128,4 +128,4 @@ bool AuthMiddleware::process(
     return true;
 }
 
-} // namespace veyon32api::api::v1::middleware
+} // namespace hub32api::api::v1::middleware

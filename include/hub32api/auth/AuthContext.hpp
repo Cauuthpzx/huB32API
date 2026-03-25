@@ -1,10 +1,10 @@
 #pragma once
 
 #include <optional>
-#include "veyon32api/auth/JwtToken.hpp"
-#include "veyon32api/export.h"
+#include "hub32api/auth/JwtToken.hpp"
+#include "hub32api/export.h"
 
-namespace veyon32api {
+namespace hub32api {
 
 /**
  * @brief Per-request authentication context bound to every HTTP request.
@@ -13,7 +13,7 @@ namespace veyon32api {
  * Controllers receive this via ApiContext and use the role-check helpers
  * to enforce access control without touching raw JWT claims directly.
  */
-struct VEYON32API_EXPORT AuthContext
+struct HUB32API_EXPORT AuthContext
 {
     /** @brief True when the request carries a valid, non-expired, non-revoked JWT. */
     bool authenticated = false;
@@ -59,4 +59,4 @@ struct VEYON32API_EXPORT AuthContext
     static AuthContext anonymous() noexcept { return AuthContext{}; }
 };
 
-} // namespace veyon32api
+} // namespace hub32api

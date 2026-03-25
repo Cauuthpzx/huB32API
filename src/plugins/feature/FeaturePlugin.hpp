@@ -1,20 +1,20 @@
 #pragma once
 
-#include "veyon32api/plugins/FeaturePluginInterface.hpp"
+#include "hub32api/plugins/FeaturePluginInterface.hpp"
 
-namespace veyon32api::core::internal { class VeyonCoreWrapper; }
+namespace hub32api::core::internal { class Hub32CoreWrapper; }
 
-namespace veyon32api::plugins {
+namespace hub32api::plugins {
 
 class FeaturePlugin final : public FeaturePluginInterface
 {
 public:
-    explicit FeaturePlugin(core::internal::VeyonCoreWrapper& core);
+    explicit FeaturePlugin(core::internal::Hub32CoreWrapper& core);
 
-    VEYON32API_PLUGIN_METADATA(
+    HUB32API_PLUGIN_METADATA(
         "a1b2c3d4-0002-0002-0002-000000000002",
         "FeaturePlugin",
-        "Bridges Veyon FeatureManager",
+        "Bridges Hub32 FeatureManager",
         "1.0.0"
     )
 
@@ -29,7 +29,7 @@ public:
         FeatureOperation op, const FeatureArgs& args) override;
 
 private:
-    core::internal::VeyonCoreWrapper& m_core;
+    core::internal::Hub32CoreWrapper& m_core;
 };
 
-} // namespace veyon32api::plugins
+} // namespace hub32api::plugins

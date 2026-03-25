@@ -1,6 +1,6 @@
 function(add_unit_test name)
     add_executable(${name} ${ARGN})
-    target_link_libraries(${name} PRIVATE veyon32api-core GTest::gtest_main GTest::gmock)
+    target_link_libraries(${name} PRIVATE hub32api-core GTest::gtest_main GTest::gmock)
     target_include_directories(${name} PRIVATE
         ${CMAKE_SOURCE_DIR}/src
         ${CMAKE_SOURCE_DIR}/include

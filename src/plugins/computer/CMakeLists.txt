@@ -1,6 +1,6 @@
-build_veyon32_plugin(
+build_hub3232_plugin(
     NAME        "computer"
-    DESCRIPTION "Veyon Computer Control Plugin"
+    DESCRIPTION "Hub32 Computer Control Plugin"
     SOURCES
         ComputerPlugin.cpp
         NetworkDirectoryBridge.cpp

@@ -1,13 +1,13 @@
 """
-veyon32api Python client SDK.
-Mirrors the Python client in Veyon's WebAPI plugin but for veyon32api v1/v2.
+hub32api Python client SDK.
+Mirrors the Python client in Hub32's WebAPI plugin but for hub32api v1/v2.
 """
 
 import requests
 from typing import Optional, List, Dict, Any
 
 
-class Veyon32ApiClient:
+class Hub32ApiClient:
     def __init__(self, host: str = "127.0.0.1", port: int = 11081, tls: bool = False):
         scheme = "https" if tls else "http"
         self._base = f"{scheme}://{host}:{port}"
@@ -19,7 +19,7 @@ class Veyon32ApiClient:
     # ------------------------------------------------------------------
     def authenticate_with_key(self, key_name: str, key_data: str) -> str:
         resp = self._session.post(f"{self._base}/api/v1/auth", json={
-            "method": "veyon-key",
+            "method": "hub32-key",
             "keyName": key_name,
             "keyData": key_data,
         })

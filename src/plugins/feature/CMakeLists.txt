@@ -1,6 +1,6 @@
-build_veyon32_plugin(
+build_hub3232_plugin(
     NAME        "feature"
-    DESCRIPTION "Veyon Feature Control Plugin"
+    DESCRIPTION "Hub32 Feature Control Plugin"
     SOURCES
         FeaturePlugin.cpp
         FeatureRegistry.cpp

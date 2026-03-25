@@ -7,7 +7,7 @@
 
 namespace httplib { class Request; class Response; }
 
-namespace veyon32api::api::v1::middleware {
+namespace hub32api::api::v1::middleware {
 
 struct RateLimitConfig {
     int requestsPerMinute = 120;
@@ -31,4 +31,4 @@ private:
     std::unordered_map<std::string, Bucket> m_buckets;
 };
 
-} // namespace veyon32api::api::v1::middleware
+} // namespace hub32api::api::v1::middleware

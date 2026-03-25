@@ -3,10 +3,10 @@
 #include <string>
 #include <vector>
 #include <nlohmann/json.hpp>
-#include "veyon32api/core/Types.hpp"
-#include "veyon32api/plugins/ComputerPluginInterface.hpp"
+#include "hub32api/core/Types.hpp"
+#include "hub32api/plugins/ComputerPluginInterface.hpp"
 
-namespace veyon32api::api::v1::dto {
+namespace hub32api::api::v1::dto {
 
 // -----------------------------------------------------------------------
 // ComputerDto — JSON schema for computer resources in v1 API responses.
@@ -57,4 +57,4 @@ struct ComputerListDto
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ComputerListDto, computers, total)
 
-} // namespace veyon32api::api::v1::dto
+} // namespace hub32api::api::v1::dto

@@ -4,7 +4,7 @@
 #include "core/internal/PluginRegistry.hpp"
 #include <httplib.h>
 
-namespace veyon32api::api::v2 {
+namespace hub32api::api::v2 {
 
 /**
  * @brief Constructs a LocationController.
@@ -158,4 +158,4 @@ void LocationController::handleGetOne(const httplib::Request& req, httplib::Resp
     res.set_content(nlohmann::json(locDto).dump(), "application/json");
 }
 
-} // namespace veyon32api::api::v2
+} // namespace hub32api::api::v2

@@ -2,16 +2,16 @@
 
 #include <string>
 #include <memory>
-#include "veyon32api/auth/AuthContext.hpp"
-#include "veyon32api/core/Types.hpp"
+#include "hub32api/auth/AuthContext.hpp"
+#include "hub32api/core/Types.hpp"
 
-namespace veyon32api::core::internal {
+namespace hub32api::core::internal {
 
 // -----------------------------------------------------------------------
 // ApiContext — per-request context object.
 // Binds together: auth token, target computer, connection token, request ID.
 // Controllers receive this (not raw HTTP request params) to avoid coupling.
-// Mirrors Veyon's per-connection LockingPointer pattern.
+// Mirrors Hub32's per-connection LockingPointer pattern.
 // -----------------------------------------------------------------------
 struct ApiContext
 {
@@ -24,4 +24,4 @@ struct ApiContext
     bool isAuthenticated() const noexcept { return auth.authenticated; }
 };
 
-} // namespace veyon32api::core::internal
+} // namespace hub32api::core::internal

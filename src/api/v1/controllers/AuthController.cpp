@@ -3,7 +3,7 @@
 #include "../dto/AuthDto.hpp"
 #include "../dto/ErrorDto.hpp"
 #include "auth/JwtAuth.hpp"
-#include "auth/VeyonKeyAuth.hpp"
+#include "auth/Hub32KeyAuth.hpp"
 
 // cpp-httplib
 #include <httplib.h>
@@ -32,16 +32,16 @@ void sendError(httplib::Response& res,
 
 } // anonymous namespace
 
-namespace veyon32api::api::v1 {
+namespace hub32api::api::v1 {
 
 /**
  * @brief Constructs the AuthController with the required auth services.
  * @param jwtAuth  Service used to issue and revoke JWT tokens.
- * @param keyAuth  Service used for Veyon public-key authentication.
+ * @param keyAuth  Service used for Hub32 public-key authentication.
  */
 AuthController::AuthController(
     auth::JwtAuth&      jwtAuth,
-    auth::VeyonKeyAuth& keyAuth)
+    auth::Hub32KeyAuth& keyAuth)
     : m_jwtAuth(jwtAuth)
     , m_keyAuth(keyAuth)
 {}
@@ -50,7 +50,7 @@ AuthController::AuthController(
  * @brief Handles POST /api/v1/auth — authenticates a client and issues a JWT.
  *
  * Expects a JSON body conforming to @ref dto::AuthRequest.
- * Supported @c method values: @c "veyon-key" and @c "logon".
+ * Supported @c method values: @c "hub32-key" and @c "logon".
  * On success returns HTTP 200 with a @ref dto::AuthResponse JSON body.
  * On failure returns HTTP 400 (bad request / unsupported method) or 401.
  *
@@ -71,9 +71,9 @@ void AuthController::handleLogin(const httplib::Request& req, httplib::Response&
     }
 
     // --- Validate method ---
-    if (req_dto.method != "veyon-key" && req_dto.method != "logon") {
+    if (req_dto.method != "hub32-key" && req_dto.method != "logon") {
         sendError(res, 400, "Unsupported auth method",
-                  "Supported methods: veyon-key, logon");
+                  "Supported methods: hub32-key, logon");
         return;
     }
 
@@ -130,4 +130,4 @@ void AuthController::handleLogout(const httplib::Request& req, httplib::Response
     res.status = 204;
 }
 
-} // namespace veyon32api::api::v1
+} // namespace hub32api::api::v1

@@ -4,18 +4,18 @@
 #include <mutex>
 #include <unordered_map>
 #include <chrono>
-#include "veyon32api/export.h"
-#include "veyon32api/core/Types.hpp"
-#include "veyon32api/core/Result.hpp"
+#include "hub32api/export.h"
+#include "hub32api/core/Types.hpp"
+#include "hub32api/core/Result.hpp"
 
-namespace veyon32api::core::internal {
+namespace hub32api::core::internal {
 
 // -----------------------------------------------------------------------
-// ConnectionPool — manages pooled VNC connections to Veyon servers.
+// ConnectionPool — manages pooled VNC connections to Hub32 servers.
 // Thread-safe; enforces per-host and global connection limits.
-// Mirrors the connection management in Veyon's WebApiConnection.
+// Mirrors the connection management in Hub32's WebApiConnection.
 // -----------------------------------------------------------------------
-class VEYON32API_EXPORT ConnectionPool
+class HUB32API_EXPORT ConnectionPool
 {
 public:
     struct Limits
@@ -49,4 +49,4 @@ private:
     Limits m_limits;
 };
 
-} // namespace veyon32api::core::internal
+} // namespace hub32api::core::internal

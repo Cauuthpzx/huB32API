@@ -1,16 +1,16 @@
 #pragma once
 
 #include <string>
-#include "veyon32api/plugins/PluginInterface.hpp"
-#include "veyon32api/core/Types.hpp"
-#include "veyon32api/core/Result.hpp"
+#include "hub32api/plugins/PluginInterface.hpp"
+#include "hub32api/core/Types.hpp"
+#include "hub32api/core/Result.hpp"
 
-namespace veyon32api {
+namespace hub32api {
 
 // -----------------------------------------------------------------------
-// SessionInfo — mirrors Veyon's PlatformSessionFunctions::SessionInfo
+// SessionInfo — mirrors Hub32's PlatformSessionFunctions::SessionInfo
 // -----------------------------------------------------------------------
-struct VEYON32API_EXPORT SessionInfo
+struct HUB32API_EXPORT SessionInfo
 {
     int         sessionId       = -1;
     std::string userLogin;
@@ -21,9 +21,9 @@ struct VEYON32API_EXPORT SessionInfo
 };
 
 // -----------------------------------------------------------------------
-// UserInfo — resolved from Veyon's user group backend
+// UserInfo — resolved from Hub32's user group backend
 // -----------------------------------------------------------------------
-struct VEYON32API_EXPORT UserInfo
+struct HUB32API_EXPORT UserInfo
 {
     std::string login;
     std::string fullName;
@@ -32,9 +32,9 @@ struct VEYON32API_EXPORT UserInfo
 };
 
 // -----------------------------------------------------------------------
-// SessionPluginInterface — wraps Veyon session/user introspection
+// SessionPluginInterface — wraps Hub32 session/user introspection
 // -----------------------------------------------------------------------
-class VEYON32API_EXPORT SessionPluginInterface : public PluginInterface
+class HUB32API_EXPORT SessionPluginInterface : public PluginInterface
 {
 public:
     virtual Result<SessionInfo> getSession(const Uid& computerUid) = 0;
@@ -42,4 +42,4 @@ public:
     virtual Result<std::vector<ScreenRect>> getScreens(const Uid& computerUid) = 0;
 };
 
-} // namespace veyon32api
+} // namespace hub32api

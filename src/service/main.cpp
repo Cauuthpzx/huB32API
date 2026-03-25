@@ -1,14 +1,14 @@
 #include "../core/PrecompiledHeader.hpp"
 #include "WinServiceAdapter.hpp"
 #include "../server/HttpServer.hpp"
-#include "veyon32api/config/ServerConfig.hpp"
+#include "hub32api/config/ServerConfig.hpp"
 
 #include <csignal>
 #include <iostream>
 
 namespace {
 
-veyon32api::HttpServer* g_server = nullptr;
+hub32api::HttpServer* g_server = nullptr;
 
 void signalHandler(int sig)
 {
@@ -16,9 +16,9 @@ void signalHandler(int sig)
     if (g_server) g_server->stop();
 }
 
-int runServer(const veyon32api::ServerConfig& cfg)
+int runServer(const hub32api::ServerConfig& cfg)
 {
-    veyon32api::HttpServer server(cfg);
+    hub32api::HttpServer server(cfg);
     g_server = &server;
     std::signal(SIGINT,  signalHandler);
     std::signal(SIGTERM, signalHandler);
@@ -50,16 +50,16 @@ int main(int argc, char* argv[])
             configPath = argv[++i];
     }
 
-    if (doInstall)   return veyon32api::WinServiceAdapter::install(configPath)   ? 0 : 1;
-    if (doUninstall) return veyon32api::WinServiceAdapter::uninstall()            ? 0 : 1;
+    if (doInstall)   return hub32api::WinServiceAdapter::install(configPath)   ? 0 : 1;
+    if (doUninstall) return hub32api::WinServiceAdapter::uninstall()            ? 0 : 1;
 
     // Load configuration
     auto cfg = configPath.empty()
-        ? veyon32api::ServerConfig::from_registry()
-        : veyon32api::ServerConfig::from_file(configPath);
+        ? hub32api::ServerConfig::from_registry()
+        : hub32api::ServerConfig::from_file(configPath);
 
     if (asService) {
-        return veyon32api::WinServiceAdapter::runAsService([&cfg]{ return runServer(cfg); });
+        return hub32api::WinServiceAdapter::runAsService([&cfg]{ return runServer(cfg); });
     }
 
     // Console mode (--console)

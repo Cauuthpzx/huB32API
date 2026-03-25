@@ -3,19 +3,19 @@
 #include <memory>
 #include <unordered_map>
 #include <vector>
-#include "veyon32api/export.h"
-#include "veyon32api/plugins/PluginInterface.hpp"
-#include "veyon32api/plugins/ComputerPluginInterface.hpp"
-#include "veyon32api/plugins/FeaturePluginInterface.hpp"
-#include "veyon32api/plugins/SessionPluginInterface.hpp"
+#include "hub32api/export.h"
+#include "hub32api/plugins/PluginInterface.hpp"
+#include "hub32api/plugins/ComputerPluginInterface.hpp"
+#include "hub32api/plugins/FeaturePluginInterface.hpp"
+#include "hub32api/plugins/SessionPluginInterface.hpp"
 
-namespace veyon32api::core::internal {
+namespace hub32api::core::internal {
 
 // -----------------------------------------------------------------------
 // PluginRegistry — owns all plugin instances and provides typed lookups.
 // Populated at startup; immutable after initialization.
 // -----------------------------------------------------------------------
-class VEYON32API_EXPORT PluginRegistry
+class HUB32API_EXPORT PluginRegistry
 {
 public:
     PluginRegistry() = default;
@@ -39,4 +39,4 @@ private:
     SessionPluginInterface*  m_sessionPlugin  = nullptr;
 };
 
-} // namespace veyon32api::core::internal
+} // namespace hub32api::core::internal

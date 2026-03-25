@@ -2,11 +2,11 @@
 
 #include <vector>
 #include <string>
-#include "veyon32api/plugins/PluginInterface.hpp"
-#include "veyon32api/core/Types.hpp"
-#include "veyon32api/core/Result.hpp"
+#include "hub32api/plugins/PluginInterface.hpp"
+#include "hub32api/core/Types.hpp"
+#include "hub32api/core/Result.hpp"
 
-namespace veyon32api {
+namespace hub32api {
 
 // Forward declarations
 struct ComputerInfo;
@@ -15,7 +15,7 @@ struct FramebufferImage;
 // -----------------------------------------------------------------------
 // ComputerInfo — data returned by computer discovery
 // -----------------------------------------------------------------------
-struct VEYON32API_EXPORT ComputerInfo
+struct HUB32API_EXPORT ComputerInfo
 {
     Uid         uid;
     std::string name;
@@ -27,7 +27,7 @@ struct VEYON32API_EXPORT ComputerInfo
 // -----------------------------------------------------------------------
 // FramebufferImage — raw image bytes from screen capture
 // -----------------------------------------------------------------------
-struct VEYON32API_EXPORT FramebufferImage
+struct HUB32API_EXPORT FramebufferImage
 {
     std::vector<uint8_t> data;
     ImageFormat          format = ImageFormat::Png;
@@ -36,9 +36,9 @@ struct VEYON32API_EXPORT FramebufferImage
 };
 
 // -----------------------------------------------------------------------
-// ComputerPluginInterface — wraps Veyon ComputerControlInterface
+// ComputerPluginInterface — wraps Hub32 ComputerControlInterface
 // -----------------------------------------------------------------------
-class VEYON32API_EXPORT ComputerPluginInterface : public PluginInterface
+class HUB32API_EXPORT ComputerPluginInterface : public PluginInterface
 {
 public:
     virtual Result<std::vector<ComputerInfo>> listComputers() = 0;
@@ -48,4 +48,4 @@ public:
         const Uid& uid, int width, int height, ImageFormat fmt) = 0;
 };
 
-} // namespace veyon32api
+} // namespace hub32api

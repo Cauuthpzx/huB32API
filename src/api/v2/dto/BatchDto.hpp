@@ -4,9 +4,9 @@
 #include <vector>
 #include <map>
 #include <nlohmann/json.hpp>
-#include "veyon32api/core/Types.hpp"
+#include "hub32api/core/Types.hpp"
 
-namespace veyon32api::api::v2::dto {
+namespace hub32api::api::v2::dto {
 
 // -----------------------------------------------------------------------
 // Batch operation request — v2 exclusive
@@ -42,4 +42,4 @@ struct BatchFeatureResponse
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(BatchFeatureResponse, total, succeeded, failed, results)
 
-} // namespace veyon32api::api::v2::dto
+} // namespace hub32api::api::v2::dto

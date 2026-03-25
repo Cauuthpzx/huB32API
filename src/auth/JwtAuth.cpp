@@ -23,14 +23,14 @@
 #include <sstream>
 #include <iomanip>
 
-namespace veyon32api::auth {
+namespace hub32api::auth {
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 namespace {
-    constexpr const char* k_issuer   = "veyon32api";
-    constexpr const char* k_audience = "veyon32api-clients";
+    constexpr const char* k_issuer   = "hub32api";
+    constexpr const char* k_audience = "hub32api-clients";
 
     /**
      * @brief Generates a UUID v4 string using std::mt19937_64.
@@ -122,8 +122,8 @@ JwtAuth::~JwtAuth() = default;
  * @brief Issues a signed HS256 JWT for the given subject and role.
  *
  * The generated token contains the following claims:
- *  - iss  "veyon32api"
- *  - aud  "veyon32api-clients"
+ *  - iss  "hub32api"
+ *  - aud  "hub32api-clients"
  *  - sub  @p subject
  *  - role @p role  (custom claim)
  *  - jti  UUID v4 (for revocation)
@@ -226,4 +226,4 @@ void JwtAuth::revokeToken(const std::string& jti)
     spdlog::debug("[JwtAuth] revokeToken: jti={}", jti);
 }
 
-} // namespace veyon32api::auth
+} // namespace hub32api::auth

@@ -1,22 +1,22 @@
 #include "core/PrecompiledHeader.hpp"
 #include "FeaturePlugin.hpp"
-#include "core/internal/VeyonCoreWrapper.hpp"
+#include "core/internal/Hub32CoreWrapper.hpp"
 
-namespace veyon32api::plugins {
+namespace hub32api::plugins {
 
-FeaturePlugin::FeaturePlugin(core::internal::VeyonCoreWrapper& core)
+FeaturePlugin::FeaturePlugin(core::internal::Hub32CoreWrapper& core)
     : m_core(core) {}
 
 bool FeaturePlugin::initialize()
 {
-    // TODO: Cache VeyonCore::featureManager().features() for quick lookup
+    // TODO: Cache Hub32Core::featureManager().features() for quick lookup
     spdlog::info("[FeaturePlugin] initialized (stub)");
     return true;
 }
 
 Result<std::vector<FeatureDescriptor>> FeaturePlugin::listFeatures(const Uid& /*computerUid*/)
 {
-    // TODO: VeyonCore::featureManager().features() → map to FeatureDescriptor
+    // TODO: Hub32Core::featureManager().features() → map to FeatureDescriptor
     return Result<std::vector<FeatureDescriptor>>::fail(ApiError{
         ErrorCode::NotImplemented, "FeaturePlugin::listFeatures"
     });
@@ -32,7 +32,7 @@ Result<void> FeaturePlugin::controlFeature(
     const Uid& /*computerUid*/, const Uid& /*featureUid*/,
     FeatureOperation /*op*/, const FeatureArgs& /*args*/)
 {
-    // TODO: VeyonCore::featureManager().controlFeature(...)
+    // TODO: Hub32Core::featureManager().controlFeature(...)
     return Result<void>::fail(ApiError{ErrorCode::NotImplemented, "controlFeature"});
 }
 
@@ -44,4 +44,4 @@ Result<std::vector<Uid>> FeaturePlugin::controlFeatureBatch(
     return Result<std::vector<Uid>>::ok({});
 }
 
-} // namespace veyon32api::plugins
+} // namespace hub32api::plugins

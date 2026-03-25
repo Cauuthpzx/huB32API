@@ -3,9 +3,9 @@
 #include <memory>
 
 namespace httplib { class Request; class Response; }
-namespace veyon32api::core::internal { class PluginRegistry; }
+namespace hub32api::core::internal { class PluginRegistry; }
 
-namespace veyon32api::api::v1 {
+namespace hub32api::api::v1 {
 
 // -----------------------------------------------------------------------
 // ComputerController — handles /api/v1/computers endpoints
@@ -27,4 +27,4 @@ private:
     core::internal::PluginRegistry& m_registry;
 };
 
-} // namespace veyon32api::api::v1
+} // namespace hub32api::api::v1

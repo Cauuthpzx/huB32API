@@ -5,7 +5,7 @@
 #include "core/internal/ConnectionPool.hpp"
 #include <httplib.h>
 
-namespace veyon32api::api::v2 {
+namespace hub32api::api::v2 {
 
 namespace {
 
@@ -75,7 +75,7 @@ void MetricsController::handleHealth(const httplib::Request& /*req*/, httplib::R
  * - Otherwise a JSON object (`dto::MetricsDto`) is returned.
  *
  * Metrics exposed: active connections, plugin count, uptime in seconds,
- * server version, and placeholder Veyon version.
+ * server version, and placeholder Hub32 version.
  *
  * @param req  Incoming HTTP request (inspected for `Accept` header).
  * @param res  Outgoing HTTP response.
@@ -96,7 +96,7 @@ void MetricsController::handleMetrics(const httplib::Request& req, httplib::Resp
     dto.pluginCount       = static_cast<int>(m_registry.all().size());
     dto.uptimeSeconds     = uptimeSec;
     dto.serverVersion     = "1.0.0";
-    dto.veyonVersion      = "4.x";  // populated from Veyon core at runtime
+    dto.hub32Version      = "4.x";  // populated from Hub32 core at runtime
     dto.totalRequests     = 0;      // reserved for future counter instrumentation
     dto.failedRequests    = 0;
 
@@ -112,29 +112,29 @@ void MetricsController::handleMetrics(const httplib::Request& req, httplib::Resp
         std::string body;
         body.reserve(512);
 
-        body += "# HELP veyon32api_active_connections Number of currently active VNC connections\n";
-        body += "# TYPE veyon32api_active_connections gauge\n";
-        body += "veyon32api_active_connections " +
+        body += "# HELP hub32api_active_connections Number of currently active VNC connections\n";
+        body += "# TYPE hub32api_active_connections gauge\n";
+        body += "hub32api_active_connections " +
                 std::to_string(dto.activeConnections) + "\n";
 
-        body += "# HELP veyon32api_plugin_count Number of loaded plugins\n";
-        body += "# TYPE veyon32api_plugin_count gauge\n";
-        body += "veyon32api_plugin_count " +
+        body += "# HELP hub32api_plugin_count Number of loaded plugins\n";
+        body += "# TYPE hub32api_plugin_count gauge\n";
+        body += "hub32api_plugin_count " +
                 std::to_string(dto.pluginCount) + "\n";
 
-        body += "# HELP veyon32api_uptime_seconds Total process uptime in seconds\n";
-        body += "# TYPE veyon32api_uptime_seconds counter\n";
-        body += "veyon32api_uptime_seconds " +
+        body += "# HELP hub32api_uptime_seconds Total process uptime in seconds\n";
+        body += "# TYPE hub32api_uptime_seconds counter\n";
+        body += "hub32api_uptime_seconds " +
                 std::to_string(dto.uptimeSeconds) + "\n";
 
-        body += "# HELP veyon32api_total_requests Total number of HTTP requests handled\n";
-        body += "# TYPE veyon32api_total_requests counter\n";
-        body += "veyon32api_total_requests " +
+        body += "# HELP hub32api_total_requests Total number of HTTP requests handled\n";
+        body += "# TYPE hub32api_total_requests counter\n";
+        body += "hub32api_total_requests " +
                 std::to_string(dto.totalRequests) + "\n";
 
-        body += "# HELP veyon32api_failed_requests Total number of failed HTTP requests\n";
-        body += "# TYPE veyon32api_failed_requests counter\n";
-        body += "veyon32api_failed_requests " +
+        body += "# HELP hub32api_failed_requests Total number of failed HTTP requests\n";
+        body += "# TYPE hub32api_failed_requests counter\n";
+        body += "hub32api_failed_requests " +
                 std::to_string(dto.failedRequests) + "\n";
 
         res.status = 200;
@@ -149,4 +149,4 @@ void MetricsController::handleMetrics(const httplib::Request& req, httplib::Resp
     }
 }
 
-} // namespace veyon32api::api::v2
+} // namespace hub32api::api::v2

@@ -2,7 +2,7 @@
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
   <assemblyIdentity
     type="win32"
-    name="veyon32api.@RC_FILENAME@"
+    name="hub32api.@RC_FILENAME@"
     version="@RC_VERSION_MAJOR@.@RC_VERSION_MINOR@.@RC_VERSION_PATCH@.0"
     processorArchitecture="amd64"
   />

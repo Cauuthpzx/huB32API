@@ -1,6 +1,6 @@
 /**
  * @file Router.cpp
- * @brief Binds all veyon32api REST routes to the cpp-httplib server instance.
+ * @brief Binds all hub32api REST routes to the cpp-httplib server instance.
  *
  * Full route table:
  *
@@ -70,7 +70,7 @@
 
 // Auth
 #include "../auth/JwtAuth.hpp"
-#include "../auth/VeyonKeyAuth.hpp"
+#include "../auth/Hub32KeyAuth.hpp"
 
 #include <httplib.h>
 
@@ -79,7 +79,7 @@
 #  include <ws2tcpip.h>
 #endif
 
-namespace veyon32api::server::internal {
+namespace hub32api::server::internal {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal helpers
@@ -157,8 +157,8 @@ nlohmann::json buildOpenApiSpec()
     json spec;
     spec["openapi"] = "3.1.0";
     spec["info"] = {
-        {"title",       "veyon32api"},
-        {"description", "Modern REST API for Veyon classroom management. "
+        {"title",       "hub32api"},
+        {"description", "Modern REST API for Hub32 classroom management. "
                         "Surpasses the original WebAPI plugin with JWT auth, "
                         "batch operations, location management, and Prometheus metrics."},
         {"version",     "1.0.0"},
@@ -207,7 +207,7 @@ nlohmann::json buildOpenApiSpec()
         {"type","object"},
         {"required", json::array({"method","username"})},
         {"properties", {
-            {"method",   {{"type","string"},{"enum",json::array({"veyon-key","logon"})}}},
+            {"method",   {{"type","string"},{"enum",json::array({"hub32-key","logon"})}}},
             {"username", {{"type","string"}}},
             {"password", {{"type","string"}}},
             {"keyName",  {{"type","string"}}},
@@ -366,9 +366,9 @@ nlohmann::json buildOpenApiSpec()
     {
         json op;
         op["summary"]     = "Check host reachability via TCP ping";
-        op["description"] = "Non-blocking TCP connect to the Veyon service port. "
+        op["description"] = "Non-blocking TCP connect to the Hub32 service port. "
                             "Returns online status and round-trip latency in ms. "
-                            "Unique to veyon32api — not present in original WebAPI plugin.";
+                            "Unique to hub32api — not present in original WebAPI plugin.";
         op["tags"]        = json::array({"Computers","v2"});
         op["security"]    = bearerSec;
         op["parameters"]  = json::array({idParam});
@@ -518,7 +518,7 @@ void Router::registerV1()
     publicRoute("GET", "/api/v1/auth/methods",
         [](const httplib::Request&, httplib::Response& res) {
             nlohmann::json j;
-            j["methods"] = nlohmann::json::array({"veyon-key", "logon"});
+            j["methods"] = nlohmann::json::array({"hub32-key", "logon"});
             res.status = 200;
             res.set_content(j.dump(), "application/json");
         });
@@ -743,4 +743,4 @@ void Router::registerOpenApi()
     spdlog::debug("[Router] OpenAPI 3.1 spec registered at /openapi.json");
 }
 
-} // namespace veyon32api::server::internal
+} // namespace hub32api::server::internal

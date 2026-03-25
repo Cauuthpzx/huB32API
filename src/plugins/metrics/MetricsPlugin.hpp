@@ -2,9 +2,9 @@
 
 #include <atomic>
 #include <string>
-#include "veyon32api/plugins/PluginInterface.hpp"
+#include "hub32api/plugins/PluginInterface.hpp"
 
-namespace veyon32api::plugins {
+namespace hub32api::plugins {
 
 // -----------------------------------------------------------------------
 // MetricsPlugin — collects and exposes server metrics.
@@ -13,7 +13,7 @@ namespace veyon32api::plugins {
 class MetricsPlugin final : public PluginInterface
 {
 public:
-    VEYON32API_PLUGIN_METADATA(
+    HUB32API_PLUGIN_METADATA(
         "a1b2c3d4-0004-0004-0004-000000000004",
         "MetricsPlugin",
         "Prometheus-compatible metrics collector",
@@ -36,4 +36,4 @@ private:
     std::atomic<int> m_activeConnections{0};
 };
 
-} // namespace veyon32api::plugins
+} // namespace hub32api::plugins

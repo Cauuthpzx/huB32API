@@ -1,7 +1,7 @@
 #include "core/PrecompiledHeader.hpp"
 #include "FeatureRegistry.hpp"
 
-namespace veyon32api::plugins {
+namespace hub32api::plugins {
 
 void FeatureRegistry::populate(const std::vector<FeatureDescriptor>& features)
 {
@@ -23,4 +23,4 @@ const std::vector<FeatureDescriptor>& FeatureRegistry::all() const
     return m_features;
 }
 
-} // namespace veyon32api::plugins
+} // namespace hub32api::plugins

@@ -1,11 +1,11 @@
 # BuildPlugin.cmake
-# build_veyon32_plugin() macro — mirrors Veyon's build_veyon_plugin() pattern.
+# build_hub3232_plugin() macro — mirrors Hub32's build_hub32_plugin() pattern.
 
 include(PchHelpers)
 include(WindowsBuildHelpers)
 include(GenerateExportHeader)
 
-macro(build_veyon32_plugin)
+macro(build_hub3232_plugin)
     cmake_parse_arguments(PLUGIN
         ""
         "NAME;DESCRIPTION"
@@ -13,7 +13,7 @@ macro(build_veyon32_plugin)
         ${ARGN}
     )
 
-    set(_target "veyon32api-${PLUGIN_NAME}")
+    set(_target "hub32api-${PLUGIN_NAME}")
 
     add_library(${_target} SHARED
         ${PLUGIN_SOURCES}
@@ -36,7 +36,7 @@ macro(build_veyon32_plugin)
 
     target_link_libraries(${_target}
         PRIVATE
-            veyon32api-core
+            hub32api-core
             ${PLUGIN_LINK_LIBRARIES}
     )
 
@@ -48,7 +48,7 @@ macro(build_veyon32_plugin)
     add_pch(${_target} "${CMAKE_SOURCE_DIR}/src/core/PrecompiledHeader.hpp")
 
     install(TARGETS ${_target}
-        LIBRARY DESTINATION lib/veyon32api/plugins
-        RUNTIME DESTINATION bin/veyon32api/plugins
+        LIBRARY DESTINATION lib/hub32api/plugins
+        RUNTIME DESTINATION bin/hub32api/plugins
     )
 endmacro()

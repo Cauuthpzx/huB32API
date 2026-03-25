@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(veyon32api
+project(hub32api
     VERSION 1.0.0
-    DESCRIPTION "REST API server for Veyon educational monitoring system"
-    HOMEPAGE_URL "https://github.com/veyon/veyon32api"
+    DESCRIPTION "REST API server for Hub32 educational monitoring system"
+    HOMEPAGE_URL "https://github.com/hub32/hub32api"
     LANGUAGES CXX
 )
 
@@ -36,7 +36,7 @@ option(BUILD_DOCS         "Build Doxygen documentation"         OFF)
 option(BUILD_PLUGINS      "Build optional plugin targets"       ON)
 option(WITH_PCH           "Use precompiled headers"             ON)
 option(WITH_SANITIZERS    "Enable address/UB sanitizers"        OFF)
-option(VEYON32API_SHARED  "Build as shared library (DLL)"       ON)
+option(HUB32API_SHARED  "Build as shared library (DLL)"       ON)
 
 # -----------------------------------------------------------------------
 # Dependencies (FetchContent or Find)
@@ -47,8 +47,8 @@ include(FindOrFetchDeps)
 # Generate version header
 # -----------------------------------------------------------------------
 configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/veyon32api/version.h.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/include/veyon32api/version.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/hub32api/version.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/include/hub32api/version.h"
     @ONLY
 )
 
@@ -82,10 +82,10 @@ endif()
 # Install rules
 # -----------------------------------------------------------------------
 install(
-    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/veyon32api"
+    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/hub32api"
     DESTINATION include
 )
 install(
-    DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/include/veyon32api"
+    DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/include/hub32api"
     DESTINATION include
 )

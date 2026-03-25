@@ -28,7 +28,7 @@ void sendError(httplib::Response& res,
 
 } // anonymous namespace
 
-namespace veyon32api::api::v1 {
+namespace hub32api::api::v1 {
 
 /**
  * @brief Constructs the FramebufferController.
@@ -125,4 +125,4 @@ void FramebufferController::handleGetFramebuffer(
     res.status = 200;
 }
 
-} // namespace veyon32api::api::v1
+} // namespace hub32api::api::v1

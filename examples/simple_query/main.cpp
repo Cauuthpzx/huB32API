@@ -1,4 +1,4 @@
-// Example: authenticate and list computers via veyon32api v1
+// Example: authenticate and list computers via hub32api v1
 //
 // Usage: example-simple-query <host> <port> <keyName> <keyFile>
 
@@ -15,7 +15,7 @@ int main(int argc, char* argv[])
 
     // 1. Authenticate (placeholder until auth is implemented)
     auto authRes = cli.Post("/api/v1/auth",
-        R"({"method":"veyon-key","keyName":"default","keyData":""})",
+        R"({"method":"hub32-key","keyName":"default","keyData":""})",
         "application/json");
 
     if (!authRes || authRes->status != 200) {

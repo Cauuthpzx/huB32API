@@ -2,9 +2,9 @@
 
 #include <variant>
 #include <functional>
-#include "veyon32api/core/Error.hpp"
+#include "hub32api/core/Error.hpp"
 
-namespace veyon32api {
+namespace hub32api {
 
 // -----------------------------------------------------------------------
 // Result<T> — value-or-error return type used throughout the API
@@ -58,4 +58,4 @@ private:
     ApiError m_error{ ErrorCode::None };
 };
 
-} // namespace veyon32api
+} // namespace hub32api

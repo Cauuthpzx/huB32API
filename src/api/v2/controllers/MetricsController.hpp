@@ -1,9 +1,9 @@
 #pragma once
 
 namespace httplib { class Request; class Response; }
-namespace veyon32api::core::internal { class PluginRegistry; class ConnectionPool; }
+namespace hub32api::core::internal { class PluginRegistry; class ConnectionPool; }
 
-namespace veyon32api::api::v2 {
+namespace hub32api::api::v2 {
 
 // GET /api/v2/metrics          → JSON or Prometheus text format
 // GET /api/v2/health           → 200 OK or 503
@@ -22,4 +22,4 @@ private:
     core::internal::ConnectionPool& m_pool;
 };
 
-} // namespace veyon32api::api::v2
+} // namespace hub32api::api::v2

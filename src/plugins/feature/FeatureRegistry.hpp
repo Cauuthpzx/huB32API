@@ -1,11 +1,11 @@
 #pragma once
 
 #include <unordered_map>
-#include "veyon32api/plugins/FeaturePluginInterface.hpp"
+#include "hub32api/plugins/FeaturePluginInterface.hpp"
 
-namespace veyon32api::plugins {
+namespace hub32api::plugins {
 
-// Maps Veyon feature UIDs to FeatureDescriptor (avoids re-querying Veyon on each request)
+// Maps Hub32 feature UIDs to FeatureDescriptor (avoids re-querying Hub32 on each request)
 class FeatureRegistry
 {
 public:
@@ -18,4 +18,4 @@ private:
     std::unordered_map<Uid, size_t>            m_index;
 };
 
-} // namespace veyon32api::plugins
+} // namespace hub32api::plugins

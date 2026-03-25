@@ -2,12 +2,12 @@
 #include "core/internal/PluginRegistry.hpp"
 #include "MockComputerPlugin.hpp"
 
-using namespace veyon32api::core::internal;
+using namespace hub32api::core::internal;
 
 TEST(PluginRegistryTest, RegisterAndFind)
 {
     PluginRegistry reg;
-    auto mock = std::make_unique<veyon32api::MockComputerPlugin>();
+    auto mock = std::make_unique<hub32api::MockComputerPlugin>();
     auto* rawPtr = mock.get();
     reg.registerPlugin(std::move(mock));
 

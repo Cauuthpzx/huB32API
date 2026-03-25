@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 // Integration tests for v1 API.
-// These spin up a real HttpServer (with mock VeyonCore) and send HTTP requests via cpp-httplib.
+// These spin up a real HttpServer (with mock Hub32Core) and send HTTP requests via cpp-httplib.
 
 // TODO: Implement after core plugin stubs are wired in.
 // Pattern:

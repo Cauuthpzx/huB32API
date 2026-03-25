@@ -26,5 +26,5 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 
 # Install prefix default
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-    set(CMAKE_INSTALL_PREFIX "C:/Program Files/veyon32api" CACHE PATH "" FORCE)
+    set(CMAKE_INSTALL_PREFIX "C:/Program Files/hub32api" CACHE PATH "" FORCE)
 endif()

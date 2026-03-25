@@ -4,7 +4,7 @@
 #include <unordered_set>
 #include <string>
 
-namespace veyon32api::auth::internal {
+namespace hub32api::auth::internal {
 
 // -----------------------------------------------------------------------
 // TokenStore — tracks revoked tokens (denylist).
@@ -22,4 +22,4 @@ private:
     std::unordered_set<std::string> m_revoked;
 };
 
-} // namespace veyon32api::auth::internal
+} // namespace hub32api::auth::internal

@@ -1,7 +1,7 @@
 #include "../../core/PrecompiledHeader.hpp"
 #include "TokenStore.hpp"
 
-namespace veyon32api::auth::internal {
+namespace hub32api::auth::internal {
 
 void TokenStore::revoke(const std::string& jti)
 {
@@ -22,4 +22,4 @@ void TokenStore::purgeExpired()
     m_revoked.clear();
 }
 
-} // namespace veyon32api::auth::internal
+} // namespace hub32api::auth::internal

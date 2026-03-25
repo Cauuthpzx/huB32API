@@ -4,7 +4,7 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 
-namespace veyon32api::api::v2::dto {
+namespace hub32api::api::v2::dto {
 
 struct LocationDto
 {
@@ -24,4 +24,4 @@ struct LocationListDto
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LocationListDto, locations, total)
 
-} // namespace veyon32api::api::v2::dto
+} // namespace hub32api::api::v2::dto

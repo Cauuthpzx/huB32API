@@ -2,27 +2,27 @@
 #include "HttpServer.hpp"
 #include "internal/Router.hpp"
 #include "internal/ThreadPool.hpp"
-#include "../core/internal/VeyonCoreWrapper.hpp"
+#include "../core/internal/Hub32CoreWrapper.hpp"
 #include "../core/internal/PluginRegistry.hpp"
 #include "../core/internal/ConnectionPool.hpp"
 #include "../auth/JwtAuth.hpp"
-#include "../auth/VeyonKeyAuth.hpp"
+#include "../auth/Hub32KeyAuth.hpp"
 #include "../plugins/computer/ComputerPlugin.hpp"
 #include "../plugins/feature/FeaturePlugin.hpp"
 #include "../plugins/session/SessionPlugin.hpp"
 
 #include <httplib.h>
 
-namespace veyon32api {
+namespace hub32api {
 
 struct HttpServer::Impl
 {
     ServerConfig                                    cfg;
-    std::unique_ptr<core::internal::VeyonCoreWrapper> veyonCore;
+    std::unique_ptr<core::internal::Hub32CoreWrapper> hub32Core;
     std::unique_ptr<core::internal::PluginRegistry>   registry;
     std::unique_ptr<core::internal::ConnectionPool>   pool;
     std::unique_ptr<auth::JwtAuth>                    jwtAuth;
-    std::unique_ptr<auth::VeyonKeyAuth>               keyAuth;
+    std::unique_ptr<auth::Hub32KeyAuth>               keyAuth;
     std::unique_ptr<server::internal::ThreadPool>     threadPool;
     std::unique_ptr<httplib::Server>                  httpServer;
     std::unique_ptr<server::internal::Router>         router;
@@ -34,14 +34,14 @@ HttpServer::HttpServer(const ServerConfig& cfg)
 {
     m_impl->cfg = cfg;
 
-    // 1. Boot Veyon core
-    m_impl->veyonCore = std::make_unique<core::internal::VeyonCoreWrapper>(cfg);
+    // 1. Boot Hub32 core
+    m_impl->hub32Core = std::make_unique<core::internal::Hub32CoreWrapper>(cfg);
 
     // 2. Init plugin registry and register built-in plugins
     m_impl->registry = std::make_unique<core::internal::PluginRegistry>();
-    m_impl->registry->registerPlugin(std::make_unique<plugins::ComputerPlugin>(*m_impl->veyonCore));
-    m_impl->registry->registerPlugin(std::make_unique<plugins::FeaturePlugin>(*m_impl->veyonCore));
-    m_impl->registry->registerPlugin(std::make_unique<plugins::SessionPlugin>(*m_impl->veyonCore));
+    m_impl->registry->registerPlugin(std::make_unique<plugins::ComputerPlugin>(*m_impl->hub32Core));
+    m_impl->registry->registerPlugin(std::make_unique<plugins::FeaturePlugin>(*m_impl->hub32Core));
+    m_impl->registry->registerPlugin(std::make_unique<plugins::SessionPlugin>(*m_impl->hub32Core));
     m_impl->registry->initializeAll();
 
     // 3. Connection pool
@@ -54,7 +54,7 @@ HttpServer::HttpServer(const ServerConfig& cfg)
 
     // 4. Auth
     m_impl->jwtAuth = std::make_unique<auth::JwtAuth>(cfg);
-    m_impl->keyAuth = std::make_unique<auth::VeyonKeyAuth>();
+    m_impl->keyAuth = std::make_unique<auth::Hub32KeyAuth>();
 
     // 5. HTTP server + router
     m_impl->httpServer = std::make_unique<httplib::Server>();
@@ -104,4 +104,4 @@ bool HttpServer::isRunning() const noexcept
     return m_impl->running;
 }
 
-} // namespace veyon32api
+} // namespace hub32api

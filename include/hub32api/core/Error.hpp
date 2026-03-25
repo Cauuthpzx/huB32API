@@ -2,14 +2,14 @@
 
 #include <string>
 #include <stdexcept>
-#include "veyon32api/export.h"
+#include "hub32api/export.h"
 
-namespace veyon32api {
+namespace hub32api {
 
 // -----------------------------------------------------------------------
 // Error codes (maps to HTTP status codes in the API layer)
 // -----------------------------------------------------------------------
-enum class VEYON32API_EXPORT ErrorCode
+enum class HUB32API_EXPORT ErrorCode
 {
     None                          = 0,
     // 400
@@ -62,7 +62,7 @@ inline int http_status_for(ErrorCode code)
 // -----------------------------------------------------------------------
 // ApiError — thrown internally, caught by the HTTP layer
 // -----------------------------------------------------------------------
-struct VEYON32API_EXPORT ApiError : std::exception
+struct HUB32API_EXPORT ApiError : std::exception
 {
     ErrorCode   code;
     std::string message;
@@ -73,4 +73,4 @@ struct VEYON32API_EXPORT ApiError : std::exception
     const char* what() const noexcept override { return message.c_str(); }
 };
 
-} // namespace veyon32api
+} // namespace hub32api

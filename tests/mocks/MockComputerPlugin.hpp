@@ -1,14 +1,14 @@
 #pragma once
 
 #include <gmock/gmock.h>
-#include "veyon32api/plugins/ComputerPluginInterface.hpp"
+#include "hub32api/plugins/ComputerPluginInterface.hpp"
 
-namespace veyon32api {
+namespace hub32api {
 
 class MockComputerPlugin : public ComputerPluginInterface
 {
 public:
-    VEYON32API_PLUGIN_METADATA(
+    HUB32API_PLUGIN_METADATA(
         "a1b2c3d4-0001-0001-0001-000000000001",
         "MockComputerPlugin", "Test mock", "0.0.1"
     )
@@ -20,4 +20,4 @@ public:
                 (const Uid&, int, int, ImageFormat), (override));
 };
 
-} // namespace veyon32api
+} // namespace hub32api

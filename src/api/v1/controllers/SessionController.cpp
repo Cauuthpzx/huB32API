@@ -30,7 +30,7 @@ void sendError(httplib::Response& res,
 
 } // anonymous namespace
 
-namespace veyon32api::api::v1 {
+namespace hub32api::api::v1 {
 
 /**
  * @brief Constructs the SessionController.
@@ -174,4 +174,4 @@ void SessionController::handleGetScreens(const httplib::Request& req, httplib::R
     res.set_content(arr.dump(), "application/json");
 }
 
-} // namespace veyon32api::api::v1
+} // namespace hub32api::api::v1

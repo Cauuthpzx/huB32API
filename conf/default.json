@@ -23,7 +23,7 @@
     "secret": "CHANGE_ME_IN_PRODUCTION",
     "expirySeconds": 3600
   },
-  "veyon": {
+  "hub32": {
     "pluginDir": ""
   },
   "logging": {

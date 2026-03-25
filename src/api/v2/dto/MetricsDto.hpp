@@ -3,7 +3,7 @@
 #include <string>
 #include <nlohmann/json.hpp>
 
-namespace veyon32api::api::v2::dto {
+namespace hub32api::api::v2::dto {
 
 // Prometheus-compatible text format is generated in MetricsController.
 // This DTO is for the JSON variant of GET /api/v2/metrics.
@@ -15,11 +15,11 @@ struct MetricsDto
     int pluginCount         = 0;
     int uptimeSeconds       = 0;
     std::string serverVersion;
-    std::string veyonVersion;
+    std::string hub32Version;
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(MetricsDto,
     activeConnections, totalRequests, failedRequests,
-    pluginCount, uptimeSeconds, serverVersion, veyonVersion)
+    pluginCount, uptimeSeconds, serverVersion, hub32Version)
 
-} // namespace veyon32api::api::v2::dto
+} // namespace hub32api::api::v2::dto

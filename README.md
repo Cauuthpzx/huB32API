@@ -1,6 +1,6 @@
-# veyon32api
+# hub32api
 
-A production-grade REST API server exposing [Veyon](https://veyon.io/) educational monitoring capabilities via HTTP.
+A production-grade REST API server exposing [Hub32](https://hub32.io/) educational monitoring capabilities via HTTP.
 
 ## Architecture
 
@@ -17,7 +17,7 @@ See [docs/architecture/overview.md](docs/architecture/overview.md).
 
 - Windows 10/11
 - MSYS2 MinGW64 (CMake 3.20+, Ninja, GCC 12+)
-- Veyon installed at `C:\Program Files\Veyon\`
+- Hub32 installed at `C:\Program Files\Hub32\`
 
 ### Configure and Build
 
@@ -34,19 +34,19 @@ cmake --build --preset release
 ### Run (console mode)
 
 ```bash
-./build/release/bin/veyon32api-service.exe --console --config conf/development.json
+./build/release/bin/hub32api-service.exe --console --config conf/development.json
 ```
 
 ### Install as Windows Service
 
 ```bash
-./veyon32api-service.exe --install --config "C:\ProgramData\veyon32api\config.json"
+./hub32api-service.exe --install --config "C:\ProgramData\hub32api\config.json"
 ```
 
 ## Client SDKs
 
-- Python: [clients/python/veyon32api_client.py](clients/python/veyon32api_client.py)
+- Python: [clients/python/hub32api_client.py](clients/python/hub32api_client.py)
 
 ## License
 
-GPL-2.0 (same as Veyon)
+GPL-2.0 (same as Hub32)

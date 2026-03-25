@@ -1,7 +1,7 @@
 #include "PrecompiledHeader.hpp"
 #include "internal/PluginRegistry.hpp"
 
-namespace veyon32api::core::internal {
+namespace hub32api::core::internal {
 
 void PluginRegistry::registerPlugin(std::unique_ptr<PluginInterface> plugin)
 {
@@ -54,4 +54,4 @@ const std::vector<PluginInterface*> PluginRegistry::all() const
     return result;
 }
 
-} // namespace veyon32api::core::internal
+} // namespace hub32api::core::internal

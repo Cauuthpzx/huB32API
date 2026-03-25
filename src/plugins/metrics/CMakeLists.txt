@@ -1,4 +1,4 @@
-build_veyon32_plugin(
+build_hub3232_plugin(
     NAME        "metrics"
     DESCRIPTION "Prometheus Metrics Plugin"
     SOURCES     MetricsPlugin.cpp

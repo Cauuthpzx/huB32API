@@ -1,15 +1,15 @@
 #include "core/PrecompiledHeader.hpp"
 #include "ComputerPlugin.hpp"
-#include "core/internal/VeyonCoreWrapper.hpp"
+#include "core/internal/Hub32CoreWrapper.hpp"
 
-namespace veyon32api::plugins {
+namespace hub32api::plugins {
 
-ComputerPlugin::ComputerPlugin(core::internal::VeyonCoreWrapper& core)
+ComputerPlugin::ComputerPlugin(core::internal::Hub32CoreWrapper& core)
     : m_core(core) {}
 
 bool ComputerPlugin::initialize()
 {
-    // TODO: Access VeyonCore::networkObjectDirectoryManager() to enumerate computers
+    // TODO: Access Hub32Core::networkObjectDirectoryManager() to enumerate computers
     spdlog::info("[ComputerPlugin] initialized (stub)");
     return true;
 }
@@ -21,7 +21,7 @@ void ComputerPlugin::shutdown()
 
 Result<std::vector<ComputerInfo>> ComputerPlugin::listComputers()
 {
-    // TODO: VeyonCore::networkObjectDirectoryManager().objects() → ComputerInfo list
+    // TODO: Hub32Core::networkObjectDirectoryManager().objects() → ComputerInfo list
     return Result<std::vector<ComputerInfo>>::fail(ApiError{
         ErrorCode::NotImplemented, "ComputerPlugin::listComputers not implemented"
     });
@@ -48,4 +48,4 @@ Result<FramebufferImage> ComputerPlugin::getFramebuffer(
     });
 }
 
-} // namespace veyon32api::plugins
+} // namespace hub32api::plugins

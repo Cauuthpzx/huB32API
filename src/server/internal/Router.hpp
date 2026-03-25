@@ -4,10 +4,10 @@
 
 // Forward declarations
 namespace httplib { class Server; }
-namespace veyon32api::core::internal { class PluginRegistry; class ConnectionPool; }
-namespace veyon32api::auth { class JwtAuth; class VeyonKeyAuth; }
+namespace hub32api::core::internal { class PluginRegistry; class ConnectionPool; }
+namespace hub32api::auth { class JwtAuth; class Hub32KeyAuth; }
 
-namespace veyon32api::server::internal {
+namespace hub32api::server::internal {
 
 // -----------------------------------------------------------------------
 // Router — registers all API routes on the httplib::Server instance.
@@ -21,7 +21,7 @@ public:
         core::internal::PluginRegistry& registry;
         core::internal::ConnectionPool& pool;
         auth::JwtAuth&                  jwtAuth;
-        auth::VeyonKeyAuth&             keyAuth;
+        auth::Hub32KeyAuth&             keyAuth;
     };
 
     explicit Router(httplib::Server& server, Services svcs);
@@ -38,4 +38,4 @@ private:
     Services         m_svcs;
 };
 
-} // namespace veyon32api::server::internal
+} // namespace hub32api::server::internal

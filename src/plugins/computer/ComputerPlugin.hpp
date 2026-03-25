@@ -1,25 +1,25 @@
 #pragma once
 
-#include "veyon32api/plugins/ComputerPluginInterface.hpp"
+#include "hub32api/plugins/ComputerPluginInterface.hpp"
 
-namespace veyon32api::core::internal { class VeyonCoreWrapper; }
+namespace hub32api::core::internal { class Hub32CoreWrapper; }
 
-namespace veyon32api::plugins {
+namespace hub32api::plugins {
 
 // -----------------------------------------------------------------------
-// ComputerPlugin — bridges Veyon's ComputerControlInterface and
+// ComputerPlugin — bridges Hub32's ComputerControlInterface and
 // NetworkObjectDirectoryManager to the ComputerPluginInterface API.
 // -----------------------------------------------------------------------
 class ComputerPlugin final : public ComputerPluginInterface
 {
 public:
-    explicit ComputerPlugin(core::internal::VeyonCoreWrapper& core);
+    explicit ComputerPlugin(core::internal::Hub32CoreWrapper& core);
     ~ComputerPlugin() override = default;
 
-    VEYON32API_PLUGIN_METADATA(
+    HUB32API_PLUGIN_METADATA(
         "a1b2c3d4-0001-0001-0001-000000000001",
         "ComputerPlugin",
-        "Bridges Veyon ComputerControlInterface",
+        "Bridges Hub32 ComputerControlInterface",
         "1.0.0"
     )
 
@@ -33,7 +33,7 @@ public:
         const Uid& uid, int width, int height, ImageFormat fmt) override;
 
 private:
-    core::internal::VeyonCoreWrapper& m_core;
+    core::internal::Hub32CoreWrapper& m_core;
 };
 
-} // namespace veyon32api::plugins
+} // namespace hub32api::plugins

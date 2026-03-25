@@ -1,9 +1,9 @@
 #pragma once
 
 #include <memory>
-#include "veyon32api/config/ServerConfig.hpp"
+#include "hub32api/config/ServerConfig.hpp"
 
-namespace veyon32api {
+namespace hub32api {
 
 // -----------------------------------------------------------------------
 // HttpServer — top-level HTTP server orchestrator.
@@ -27,4 +27,4 @@ private:
     std::unique_ptr<Impl> m_impl;
 };
 
-} // namespace veyon32api
+} // namespace hub32api

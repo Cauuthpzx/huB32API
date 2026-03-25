@@ -5,8 +5,8 @@ add_executable(test_api_integration
 )
 
 target_link_libraries(test_api_integration PRIVATE
-    veyon32api-core
-    veyon32api-server
+    hub32api-core
+    hub32api-server
     GTest::gtest_main
     GTest::gmock
 )

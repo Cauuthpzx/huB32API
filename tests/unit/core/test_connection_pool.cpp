@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include "core/internal/ConnectionPool.hpp"
 
-using namespace veyon32api::core::internal;
+using namespace hub32api::core::internal;
 
 TEST(ConnectionPoolTest, InitialActiveCountIsZero)
 {

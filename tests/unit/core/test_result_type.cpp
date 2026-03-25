@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
-#include "veyon32api/core/Result.hpp"
+#include "hub32api/core/Result.hpp"
 
-using namespace veyon32api;
+using namespace hub32api;
 
 TEST(ResultTest, OkHoldsValue)
 {

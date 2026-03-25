@@ -5,7 +5,7 @@
 
 namespace httplib { class Request; class Response; }
 
-namespace veyon32api::api::v1::middleware {
+namespace hub32api::api::v1::middleware {
 
 struct CorsConfig {
     std::vector<std::string> allowedOrigins = {"*"};
@@ -27,4 +27,4 @@ private:
     CorsConfig m_cfg;
 };
 
-} // namespace veyon32api::api::v1::middleware
+} // namespace hub32api::api::v1::middleware

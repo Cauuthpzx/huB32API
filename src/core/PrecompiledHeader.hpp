@@ -1,7 +1,7 @@
 #pragma once
 
 // -----------------------------------------------------------------------
-// Precompiled header for veyon32api.
+// Precompiled header for hub32api.
 // Includes stable, frequently-used headers to speed up compilation.
 // -----------------------------------------------------------------------
 
@@ -40,7 +40,7 @@
 #include <spdlog/fmt/ostr.h>
 
 // Project
-#include "veyon32api/export.h"
-#include "veyon32api/core/Types.hpp"
-#include "veyon32api/core/Error.hpp"
-#include "veyon32api/core/Result.hpp"
+#include "hub32api/export.h"
+#include "hub32api/core/Types.hpp"
+#include "hub32api/core/Error.hpp"
+#include "hub32api/core/Result.hpp"

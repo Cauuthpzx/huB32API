@@ -2,10 +2,10 @@
   "http": { "port": 11081, "bindAddress": "127.0.0.1" },
   "tls": {
     "enabled": true,
-    "certFile": "C:\\ProgramData\\veyon32api\\cert.pem",
-    "keyFile":  "C:\\ProgramData\\veyon32api\\key.pem"
+    "certFile": "C:\\ProgramData\\hub32api\\cert.pem",
+    "keyFile":  "C:\\ProgramData\\hub32api\\key.pem"
   },
   "jwt": { "secret": "a-very-long-random-secret-min-32-chars" },
-  "logging": { "level": "warn", "file": "C:\\ProgramData\\veyon32api\\veyon32api.log" },
+  "logging": { "level": "warn", "file": "C:\\ProgramData\\hub32api\\hub32api.log" },
   "metrics": { "enabled": true, "port": 9091 }
 }

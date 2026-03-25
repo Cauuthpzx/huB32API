@@ -4,7 +4,7 @@
 #include "core/internal/PluginRegistry.hpp"
 #include <httplib.h>
 
-namespace veyon32api::api::v2 {
+namespace hub32api::api::v2 {
 
 /**
  * @brief Constructs a BatchController.
@@ -165,4 +165,4 @@ void BatchController::handleBatchFeature(
     res.set_content(nlohmann::json(response).dump(), "application/json");
 }
 
-} // namespace veyon32api::api::v2
+} // namespace hub32api::api::v2

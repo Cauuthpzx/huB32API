@@ -2,9 +2,9 @@
 
 #include <string>
 #include <chrono>
-#include "veyon32api/export.h"
+#include "hub32api/export.h"
 
-namespace veyon32api {
+namespace hub32api {
 
 /**
  * @brief Parsed JWT payload for per-request authentication.
@@ -13,12 +13,12 @@ namespace veyon32api {
  * verification and claims extraction.  Carried inside AuthContext for
  * the lifetime of a single HTTP request.
  */
-struct VEYON32API_EXPORT JwtToken
+struct HUB32API_EXPORT JwtToken
 {
     /** @brief Subject claim ("sub") — typically the authenticated username. */
     std::string subject;
 
-    /** @brief Issuer claim ("iss") — expected to equal "veyon32api". */
+    /** @brief Issuer claim ("iss") — expected to equal "hub32api". */
     std::string issuer;
 
     /** @brief Custom role claim — one of "admin", "teacher", "readonly". */
@@ -51,4 +51,4 @@ struct VEYON32API_EXPORT JwtToken
     }
 };
 
-} // namespace veyon32api
+} // namespace hub32api

@@ -1,7 +1,7 @@
 include(PchHelpers)
 include(WindowsBuildHelpers)
 
-add_library(veyon32api-server SHARED
+add_library(hub32api-server SHARED
     HttpServer.cpp
     Router.cpp
     ThreadPool.cpp
@@ -33,7 +33,7 @@ add_library(veyon32api-server SHARED
     ../plugins/metrics/MetricsPlugin.cpp
 )
 
-target_include_directories(veyon32api-server
+target_include_directories(hub32api-server
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
         $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
@@ -43,22 +43,22 @@ target_include_directories(veyon32api-server
         ${CMAKE_SOURCE_DIR}/src
 )
 
-target_link_libraries(veyon32api-server
+target_link_libraries(hub32api-server
     PUBLIC
-        veyon32api-core
+        hub32api-core
     PRIVATE
         httplib::httplib
         ws2_32
 )
 
-add_pch(veyon32api-server "${CMAKE_SOURCE_DIR}/src/core/PrecompiledHeader.hpp")
+add_pch(hub32api-server "${CMAKE_SOURCE_DIR}/src/core/PrecompiledHeader.hpp")
 
-add_windows_resources(veyon32api-server
-    DESCRIPTION "veyon32api HTTP Server"
-    ORIGINAL_FILENAME "veyon32api-server.dll"
+add_windows_resources(hub32api-server
+    DESCRIPTION "hub32api HTTP Server"
+    ORIGINAL_FILENAME "hub32api-server.dll"
 )
 
-install(TARGETS veyon32api-server
+install(TARGETS hub32api-server
     LIBRARY DESTINATION lib
     RUNTIME DESTINATION bin
     ARCHIVE DESTINATION lib

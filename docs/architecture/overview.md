@@ -1,4 +1,4 @@
-# veyon32api Architecture Overview
+# hub32api Architecture Overview
 
 ## Layer Diagram
 
@@ -25,14 +25,14 @@
 └────────────────────────┬─────────────────────────────────────┘
                          │
 ┌────────────────────────▼─────────────────────────────────────┐
-│              Plugin Registry (veyon32api-core)               │
+│              Plugin Registry (hub32api-core)               │
 │  ┌──────────────────┐ ┌─────────────────┐ ┌──────────────┐  │
 │  │  ComputerPlugin  │ │  FeaturePlugin  │ │ SessionPlugin│  │
 │  └────────┬─────────┘ └────────┬────────┘ └──────┬───────┘  │
 └───────────┼──────────────────-─┼─────────────────┼──────────┘
             │                   │                  │
 ┌───────────▼───────────────────▼──────────────────▼──────────┐
-│              VeyonCoreWrapper (Qt singleton)                 │
+│              Hub32CoreWrapper (Qt singleton)                 │
 │  NetworkObjectDirectoryManager | FeatureManager             │
 │  ComputerControlInterface | PlatformPluginInterface         │
 └────────────────────────────────────────────────────────────-┘
@@ -40,7 +40,7 @@
 
 ## Key Design Decisions
 
-1. **No Qt in public API** — VeyonCoreWrapper hides Qt types behind Pimpl
+1. **No Qt in public API** — Hub32CoreWrapper hides Qt types behind Pimpl
 2. **Result<T> everywhere** — no exceptions cross controller boundaries
 3. **Stateless HTTP** — JWT Bearer tokens, no session cookies
 4. **Plugin isolation** — each plugin can be tested independently with mocks

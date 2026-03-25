@@ -3,10 +3,10 @@
 #include <functional>
 
 namespace httplib { class Request; class Response; }
-namespace veyon32api::auth { class JwtAuth; }
-namespace veyon32api::core::internal { struct ApiContext; }
+namespace hub32api::auth { class JwtAuth; }
+namespace hub32api::core::internal { struct ApiContext; }
 
-namespace veyon32api::api::v1::middleware {
+namespace hub32api::api::v1::middleware {
 
 // -----------------------------------------------------------------------
 // AuthMiddleware — validates Bearer token before controller dispatch.
@@ -25,4 +25,4 @@ private:
     auth::JwtAuth& m_jwtAuth;
 };
 
-} // namespace veyon32api::api::v1::middleware
+} // namespace hub32api::api::v1::middleware
