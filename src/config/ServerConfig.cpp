@@ -1,26 +1,298 @@
+/**
+ * @file ServerConfig.cpp
+ * @brief Implementation of ServerConfig loading from JSON file, Windows Registry,
+ *        and default construction.
+ *
+ * Supports three configuration sources:
+ *  - JSON file via from_file()
+ *  - Windows Registry via from_registry()
+ *  - Hardcoded defaults via defaults()
+ */
+
 #include "../core/PrecompiledHeader.hpp"
 #include "hub32api/config/ServerConfig.hpp"
 #include "internal/ConfigValidator.hpp"
 
+#include <fstream>
+#include <random>
+#include <sstream>
+#include <iomanip>
+
 namespace hub32api {
 
+namespace {
+
+/**
+ * @brief Generates a random 64-character hex string suitable for use as a JWT HMAC secret.
+ *
+ * Uses std::random_device and std::mt19937_64 to produce cryptographic-quality
+ * randomness. The resulting string contains 256 bits of entropy.
+ *
+ * @return A 64-character lowercase hexadecimal string.
+ */
+std::string generateRandomSecret()
+{
+    std::random_device rd;
+    std::mt19937_64 rng{rd()};
+    std::uniform_int_distribution<uint64_t> dist;
+
+    std::ostringstream oss;
+    oss << std::hex << std::setfill('0');
+    for (int i = 0; i < 4; ++i)
+    {
+        oss << std::setw(16) << dist(rng);
+    }
+    return oss.str();
+}
+
+/**
+ * @brief Helper to read a REG_DWORD value from an open registry key.
+ *
+ * @param hKey      Open registry key handle.
+ * @param valueName Name of the registry value to read.
+ * @param out       Output integer to populate on success.
+ * @return true if the value was read successfully, false otherwise.
+ */
+bool readRegistryDword(HKEY hKey, const char* valueName, int& out)
+{
+    DWORD data = 0;
+    DWORD dataSize = sizeof(data);
+    DWORD type = 0;
+    LONG result = RegQueryValueExA(hKey, valueName, nullptr, &type,
+                                   reinterpret_cast<LPBYTE>(&data), &dataSize);
+    if (result == ERROR_SUCCESS && type == REG_DWORD)
+    {
+        out = static_cast<int>(data);
+        return true;
+    }
+    return false;
+}
+
+/**
+ * @brief Helper to read a REG_DWORD value and store it as a uint16_t.
+ *
+ * @param hKey      Open registry key handle.
+ * @param valueName Name of the registry value to read.
+ * @param out       Output uint16_t to populate on success.
+ * @return true if the value was read successfully, false otherwise.
+ */
+bool readRegistryDword(HKEY hKey, const char* valueName, uint16_t& out)
+{
+    int temp = 0;
+    if (readRegistryDword(hKey, valueName, temp))
+    {
+        out = static_cast<uint16_t>(temp);
+        return true;
+    }
+    return false;
+}
+
+/**
+ * @brief Helper to read a REG_DWORD value and store it as a bool.
+ *
+ * A value of 0 maps to false; any non-zero value maps to true.
+ *
+ * @param hKey      Open registry key handle.
+ * @param valueName Name of the registry value to read.
+ * @param out       Output bool to populate on success.
+ * @return true if the value was read successfully, false otherwise.
+ */
+bool readRegistryBool(HKEY hKey, const char* valueName, bool& out)
+{
+    int temp = 0;
+    if (readRegistryDword(hKey, valueName, temp))
+    {
+        out = (temp != 0);
+        return true;
+    }
+    return false;
+}
+
+/**
+ * @brief Helper to read a REG_SZ (string) value from an open registry key.
+ *
+ * @param hKey      Open registry key handle.
+ * @param valueName Name of the registry value to read.
+ * @param out       Output string to populate on success.
+ * @return true if the value was read successfully, false otherwise.
+ */
+bool readRegistryString(HKEY hKey, const char* valueName, std::string& out)
+{
+    char buffer[1024] = {};
+    DWORD bufferSize = sizeof(buffer);
+    DWORD type = 0;
+    LONG result = RegQueryValueExA(hKey, valueName, nullptr, &type,
+                                   reinterpret_cast<LPBYTE>(buffer), &bufferSize);
+    if (result == ERROR_SUCCESS && type == REG_SZ)
+    {
+        out = std::string(buffer);
+        return true;
+    }
+    return false;
+}
+
+} // anonymous namespace
+
+/**
+ * @brief Returns a ServerConfig with all default values.
+ *
+ * If the jwtSecret field is empty (as it is by default), a random
+ * 256-bit secret is generated automatically.
+ *
+ * @return A ServerConfig populated with hardcoded default values.
+ */
 ServerConfig ServerConfig::defaults()
 {
-    return ServerConfig{};
+    ServerConfig cfg{};
+    if (cfg.jwtSecret.empty())
+    {
+        cfg.jwtSecret = generateRandomSecret();
+        spdlog::info("[ServerConfig] generated random JWT secret ({} chars)",
+                     cfg.jwtSecret.size());
+    }
+    return cfg;
 }
 
+/**
+ * @brief Loads configuration from a JSON file.
+ *
+ * Opens the file at the given path, reads its full content, and parses it
+ * as JSON using nlohmann::json. Each recognized key is mapped to the
+ * corresponding ServerConfig field using json::value() with a default fallback.
+ *
+ * On parse error or file-open failure, logs the error and returns defaults().
+ *
+ * @param path Filesystem path to the JSON configuration file.
+ * @return A populated ServerConfig, or defaults() on error.
+ */
 ServerConfig ServerConfig::from_file(const std::string& path)
 {
-    // TODO: open path, parse JSON with nlohmann::json, populate ServerConfig
     spdlog::info("[ServerConfig] loading from file: {}", path);
-    return defaults();
+
+    std::ifstream ifs(path);
+    if (!ifs.is_open())
+    {
+        spdlog::error("[ServerConfig] failed to open config file: {}", path);
+        return defaults();
+    }
+
+    std::string content((std::istreambuf_iterator<char>(ifs)),
+                         std::istreambuf_iterator<char>());
+
+    nlohmann::json j;
+    try
+    {
+        j = nlohmann::json::parse(content);
+    }
+    catch (const nlohmann::json::parse_error& e)
+    {
+        spdlog::error("[ServerConfig] JSON parse error in {}: {}", path, e.what());
+        return defaults();
+    }
+
+    ServerConfig cfg{};
+
+    cfg.httpEnabled           = j.value("httpEnabled", cfg.httpEnabled);
+    cfg.httpPort              = j.value("httpPort", cfg.httpPort);
+    cfg.bindAddress           = j.value("bindAddress", cfg.bindAddress);
+    cfg.tlsEnabled            = j.value("tlsEnabled", cfg.tlsEnabled);
+    cfg.tlsCertFile           = j.value("tlsCertFile", cfg.tlsCertFile);
+    cfg.tlsKeyFile            = j.value("tlsKeyFile", cfg.tlsKeyFile);
+    cfg.connectionLimitPerHost = j.value("connectionLimitPerHost", cfg.connectionLimitPerHost);
+    cfg.globalConnectionLimit = j.value("globalConnectionLimit", cfg.globalConnectionLimit);
+    cfg.connectionLifetimeSec = j.value("connectionLifetimeSec", cfg.connectionLifetimeSec);
+    cfg.connectionIdleTimeoutSec = j.value("connectionIdleTimeoutSec", cfg.connectionIdleTimeoutSec);
+    cfg.authTimeoutSec        = j.value("authTimeoutSec", cfg.authTimeoutSec);
+    cfg.workerThreads         = j.value("workerThreads", cfg.workerThreads);
+    cfg.jwtSecret             = j.value("jwtSecret", cfg.jwtSecret);
+    cfg.jwtExpirySeconds      = j.value("jwtExpirySeconds", cfg.jwtExpirySeconds);
+    cfg.hub32PluginDir        = j.value("hub32PluginDir", cfg.hub32PluginDir);
+    cfg.logLevel              = j.value("logLevel", cfg.logLevel);
+    cfg.logFile               = j.value("logFile", cfg.logFile);
+    cfg.metricsEnabled        = j.value("metricsEnabled", cfg.metricsEnabled);
+    cfg.metricsPort           = j.value("metricsPort", cfg.metricsPort);
+
+    // Generate a random secret if none was provided
+    if (cfg.jwtSecret.empty())
+    {
+        cfg.jwtSecret = generateRandomSecret();
+        spdlog::warn("[ServerConfig] no jwtSecret in config; generated random secret");
+    }
+
+    spdlog::info("[ServerConfig] loaded config from file: {} (httpPort={}, bindAddress={})",
+                 path, cfg.httpPort, cfg.bindAddress);
+    return cfg;
 }
 
+/**
+ * @brief Loads configuration from the Windows Registry.
+ *
+ * Reads values from HKEY_LOCAL_MACHINE\\SOFTWARE\\hub32api. Integer fields
+ * are read as REG_DWORD, string fields as REG_SZ. Boolean fields are
+ * stored as REG_DWORD (0 = false, non-zero = true).
+ *
+ * If the registry key does not exist, logs an informational message and
+ * returns defaults().
+ *
+ * @return A populated ServerConfig from registry values, or defaults() on failure.
+ */
 ServerConfig ServerConfig::from_registry()
 {
-    // TODO: read from Windows Registry under HKLM\SOFTWARE\hub32api
     spdlog::info("[ServerConfig] loading from Windows Registry");
-    return defaults();
+
+    HKEY hKey = nullptr;
+    LONG openResult = RegOpenKeyExA(HKEY_LOCAL_MACHINE,
+                                    "SOFTWARE\\hub32api",
+                                    0,
+                                    KEY_READ,
+                                    &hKey);
+
+    if (openResult != ERROR_SUCCESS)
+    {
+        spdlog::info("[ServerConfig] registry key HKLM\\SOFTWARE\\hub32api not found "
+                     "(error={}); using defaults", openResult);
+        return defaults();
+    }
+
+    ServerConfig cfg{};
+
+    // Boolean fields (stored as REG_DWORD)
+    readRegistryBool(hKey, "httpEnabled", cfg.httpEnabled);
+    readRegistryBool(hKey, "tlsEnabled", cfg.tlsEnabled);
+    readRegistryBool(hKey, "metricsEnabled", cfg.metricsEnabled);
+
+    // Integer fields (REG_DWORD)
+    readRegistryDword(hKey, "httpPort", cfg.httpPort);
+    readRegistryDword(hKey, "metricsPort", cfg.metricsPort);
+    readRegistryDword(hKey, "connectionLimitPerHost", cfg.connectionLimitPerHost);
+    readRegistryDword(hKey, "globalConnectionLimit", cfg.globalConnectionLimit);
+    readRegistryDword(hKey, "connectionLifetimeSec", cfg.connectionLifetimeSec);
+    readRegistryDword(hKey, "connectionIdleTimeoutSec", cfg.connectionIdleTimeoutSec);
+    readRegistryDword(hKey, "authTimeoutSec", cfg.authTimeoutSec);
+    readRegistryDword(hKey, "workerThreads", cfg.workerThreads);
+    readRegistryDword(hKey, "jwtExpirySeconds", cfg.jwtExpirySeconds);
+
+    // String fields (REG_SZ)
+    readRegistryString(hKey, "bindAddress", cfg.bindAddress);
+    readRegistryString(hKey, "tlsCertFile", cfg.tlsCertFile);
+    readRegistryString(hKey, "tlsKeyFile", cfg.tlsKeyFile);
+    readRegistryString(hKey, "jwtSecret", cfg.jwtSecret);
+    readRegistryString(hKey, "hub32PluginDir", cfg.hub32PluginDir);
+    readRegistryString(hKey, "logLevel", cfg.logLevel);
+    readRegistryString(hKey, "logFile", cfg.logFile);
+
+    RegCloseKey(hKey);
+
+    // Generate a random secret if none was provided
+    if (cfg.jwtSecret.empty())
+    {
+        cfg.jwtSecret = generateRandomSecret();
+        spdlog::warn("[ServerConfig] no jwtSecret in registry; generated random secret");
+    }
+
+    spdlog::info("[ServerConfig] loaded config from registry (httpPort={}, bindAddress={})",
+                 cfg.httpPort, cfg.bindAddress);
+    return cfg;
 }
 
 } // namespace hub32api
