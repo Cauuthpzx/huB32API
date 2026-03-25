@@ -10,6 +10,7 @@
 #include "agent/AgentRegistry.hpp"
 #include "hub32api/agent/AgentInfo.hpp"
 #include "hub32api/agent/AgentCommand.hpp"
+#include "core/internal/I18n.hpp"
 
 // cpp-httplib
 #include <httplib.h>
@@ -19,6 +20,12 @@
 #include <ctime>
 
 namespace {
+
+std::string getLocale(const httplib::Request& req) {
+    auto* i = hub32api::core::internal::I18n::instance();
+    if (!i) return "en";
+    return i->negotiate(req.get_header_value("Accept-Language"));
+}
 
 /**
  * @brief Sends an RFC-7807-style JSON error response.
@@ -123,6 +130,9 @@ AgentController::AgentController(agent::AgentRegistry& registry, auth::JwtAuth& 
  */
 void AgentController::handleRegister(const httplib::Request& req, httplib::Response& res)
 {
+    using hub32api::core::internal::tr;
+    const auto lang = getLocale(req);
+
     // --- Parse request body ---
     dto::AgentRegisterRequest reqDto;
     try {
@@ -130,14 +140,14 @@ void AgentController::handleRegister(const httplib::Request& req, httplib::Respo
         reqDto = j.get<dto::AgentRegisterRequest>();
     }
     catch (const std::exception& ex) {
-        sendError(res, 400, "Invalid request body", ex.what());
+        sendError(res, 400, tr(lang, "error.invalid_request_body"), ex.what());
         return;
     }
 
     // --- Validate agentKey against HUB32_AGENT_KEY env var ---
     const char* expectedKey = std::getenv("HUB32_AGENT_KEY");
     if (!expectedKey || reqDto.agentKey != expectedKey) {
-        sendError(res, 401, "Unauthorized", "Invalid or missing agent key");
+        sendError(res, 401, tr(lang, "error.unauthorized"), tr(lang, "error.invalid_agent_key"));
         return;
     }
 
@@ -156,14 +166,14 @@ void AgentController::handleRegister(const httplib::Request& req, httplib::Respo
     // --- Register in AgentRegistry ---
     auto regResult = m_registry.registerAgent(info);
     if (regResult.is_err()) {
-        sendError(res, 500, "Registration failed", regResult.error().message);
+        sendError(res, 500, tr(lang, "error.registration_failed"), regResult.error().message);
         return;
     }
 
     // --- Issue JWT with subject=agentId, role="agent" ---
     auto tokenResult = m_jwtAuth.issueToken(agentId, "agent");
     if (tokenResult.is_err()) {
-        sendError(res, 500, "Token generation failed", tokenResult.error().message);
+        sendError(res, 500, tr(lang, "error.token_generation_failed"), tokenResult.error().message);
         return;
     }
 
@@ -185,9 +195,11 @@ void AgentController::handleRegister(const httplib::Request& req, httplib::Respo
  */
 void AgentController::handleUnregister(const httplib::Request& req, httplib::Response& res)
 {
+    using hub32api::core::internal::tr;
+    const auto lang = getLocale(req);
     const std::string id = req.matches.size() > 1 ? req.matches[1].str() : "";
     if (id.empty()) {
-        sendError(res, 400, "Missing agent id");
+        sendError(res, 400, tr(lang, "error.missing_agent_id"));
         return;
     }
 
@@ -229,15 +241,17 @@ void AgentController::handleList(const httplib::Request& /*req*/, httplib::Respo
  */
 void AgentController::handleStatus(const httplib::Request& req, httplib::Response& res)
 {
+    using hub32api::core::internal::tr;
+    const auto lang = getLocale(req);
     const std::string id = req.matches.size() > 1 ? req.matches[1].str() : "";
     if (id.empty()) {
-        sendError(res, 400, "Missing agent id");
+        sendError(res, 400, tr(lang, "error.missing_agent_id"));
         return;
     }
 
     auto result = m_registry.findAgent(id);
     if (result.is_err()) {
-        sendError(res, 404, "Agent not found", result.error().message);
+        sendError(res, 404, tr(lang, "error.agent_not_found"), result.error().message);
         return;
     }
 
@@ -257,9 +271,11 @@ void AgentController::handleStatus(const httplib::Request& req, httplib::Respons
  */
 void AgentController::handlePushCommand(const httplib::Request& req, httplib::Response& res)
 {
+    using hub32api::core::internal::tr;
+    const auto lang = getLocale(req);
     const std::string agentId = req.matches.size() > 1 ? req.matches[1].str() : "";
     if (agentId.empty()) {
-        sendError(res, 400, "Missing agent id");
+        sendError(res, 400, tr(lang, "error.missing_agent_id"));
         return;
     }
 
@@ -270,7 +286,7 @@ void AgentController::handlePushCommand(const httplib::Request& req, httplib::Re
         reqDto = j.get<dto::AgentCommandRequest>();
     }
     catch (const std::exception& ex) {
-        sendError(res, 400, "Invalid request body", ex.what());
+        sendError(res, 400, tr(lang, "error.invalid_request_body"), ex.what());
         return;
     }
 
@@ -306,9 +322,11 @@ void AgentController::handlePushCommand(const httplib::Request& req, httplib::Re
  */
 void AgentController::handlePollCommands(const httplib::Request& req, httplib::Response& res)
 {
+    using hub32api::core::internal::tr;
+    const auto lang = getLocale(req);
     const std::string agentId = req.matches.size() > 1 ? req.matches[1].str() : "";
     if (agentId.empty()) {
-        sendError(res, 400, "Missing agent id");
+        sendError(res, 400, tr(lang, "error.missing_agent_id"));
         return;
     }
 
@@ -340,10 +358,12 @@ void AgentController::handlePollCommands(const httplib::Request& req, httplib::R
  */
 void AgentController::handleReportResult(const httplib::Request& req, httplib::Response& res)
 {
+    using hub32api::core::internal::tr;
+    const auto lang = getLocale(req);
     const std::string agentId   = req.matches.size() > 1 ? req.matches[1].str() : "";
     const std::string commandId = req.matches.size() > 2 ? req.matches[2].str() : "";
     if (agentId.empty() || commandId.empty()) {
-        sendError(res, 400, "Missing agent id or command id");
+        sendError(res, 400, tr(lang, "error.missing_agent_or_command_id"));
         return;
     }
 
@@ -354,7 +374,7 @@ void AgentController::handleReportResult(const httplib::Request& req, httplib::R
         reqDto = j.get<dto::AgentCommandResultRequest>();
     }
     catch (const std::exception& ex) {
-        sendError(res, 400, "Invalid request body", ex.what());
+        sendError(res, 400, tr(lang, "error.invalid_request_body"), ex.what());
         return;
     }
 
@@ -380,9 +400,11 @@ void AgentController::handleReportResult(const httplib::Request& req, httplib::R
  */
 void AgentController::handleHeartbeat(const httplib::Request& req, httplib::Response& res)
 {
+    using hub32api::core::internal::tr;
+    const auto lang = getLocale(req);
     const std::string id = req.matches.size() > 1 ? req.matches[1].str() : "";
     if (id.empty()) {
-        sendError(res, 400, "Missing agent id");
+        sendError(res, 400, tr(lang, "error.missing_agent_id"));
         return;
     }
 

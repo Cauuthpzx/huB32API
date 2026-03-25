@@ -3,10 +3,17 @@
 #include "../dto/ComputerDto.hpp"
 #include "../dto/ErrorDto.hpp"
 #include "core/internal/PluginRegistry.hpp"
+#include "core/internal/I18n.hpp"
 
 #include <httplib.h>
 
 namespace {
+
+std::string getLocale(const httplib::Request& req) {
+    auto* i = hub32api::core::internal::I18n::instance();
+    if (!i) return "en";
+    return i->negotiate(req.get_header_value("Accept-Language"));
+}
 
 /**
  * @brief Sends an RFC-7807-style JSON error response.
@@ -63,15 +70,18 @@ ComputerController::ComputerController(core::internal::PluginRegistry& registry)
  */
 void ComputerController::handleList(const httplib::Request& req, httplib::Response& res)
 {
+    using hub32api::core::internal::tr;
+    const auto lang = getLocale(req);
+
     auto* plugin = m_registry.computerPlugin();
     if (!plugin) {
-        sendError(res, 503, "Computer plugin unavailable");
+        sendError(res, 503, tr(lang, "error.computer_plugin_unavailable"));
         return;
     }
 
     const auto result = plugin->listComputers();
     if (result.is_err()) {
-        sendError(res, 503, "Failed to list computers", result.error().message);
+        sendError(res, 503, tr(lang, "error.failed_list_computers"), result.error().message);
         return;
     }
 
@@ -150,11 +160,13 @@ void ComputerController::handleList(const httplib::Request& req, httplib::Respon
  */
 void ComputerController::handleGetOne(const httplib::Request& req, httplib::Response& res)
 {
+    using hub32api::core::internal::tr;
+    const auto lang = getLocale(req);
     const std::string id = req.matches[1].str();
 
     auto* plugin = m_registry.computerPlugin();
     if (!plugin) {
-        sendError(res, 503, "Computer plugin unavailable");
+        sendError(res, 503, tr(lang, "error.computer_plugin_unavailable"));
         return;
     }
 
@@ -164,10 +176,10 @@ void ComputerController::handleGetOne(const httplib::Request& req, httplib::Resp
         const bool notFound = (err.code == ErrorCode::ComputerNotFound ||
                                err.code == ErrorCode::NotFound);
         if (notFound) {
-            sendError(res, 404, "Computer not found",
-                      "No computer with id: " + id);
+            sendError(res, 404, tr(lang, "error.computer_not_found"),
+                      tr(lang, "error.no_computer_with_id", {id}));
         } else {
-            sendError(res, 503, "Failed to retrieve computer", err.message);
+            sendError(res, 503, tr(lang, "error.failed_retrieve_computer"), err.message);
         }
         return;
     }
@@ -193,11 +205,13 @@ void ComputerController::handleGetOne(const httplib::Request& req, httplib::Resp
  */
 void ComputerController::handleInfo(const httplib::Request& req, httplib::Response& res)
 {
+    using hub32api::core::internal::tr;
+    const auto lang = getLocale(req);
     const std::string id = req.matches[1].str();
 
     auto* plugin = m_registry.computerPlugin();
     if (!plugin) {
-        sendError(res, 503, "Computer plugin unavailable");
+        sendError(res, 503, tr(lang, "error.computer_plugin_unavailable"));
         return;
     }
 
@@ -208,10 +222,10 @@ void ComputerController::handleInfo(const httplib::Request& req, httplib::Respon
         const bool notFound = (err.code == ErrorCode::ComputerNotFound ||
                                err.code == ErrorCode::NotFound);
         if (notFound) {
-            sendError(res, 404, "Computer not found",
-                      "No computer with id: " + id);
+            sendError(res, 404, tr(lang, "error.computer_not_found"),
+                      tr(lang, "error.no_computer_with_id", {id}));
         } else {
-            sendError(res, 503, "Failed to retrieve computer", err.message);
+            sendError(res, 503, tr(lang, "error.failed_retrieve_computer"), err.message);
         }
         return;
     }

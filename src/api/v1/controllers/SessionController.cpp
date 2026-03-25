@@ -3,10 +3,17 @@
 #include "../dto/SessionDto.hpp"
 #include "../dto/ErrorDto.hpp"
 #include "core/internal/PluginRegistry.hpp"
+#include "core/internal/I18n.hpp"
 
 #include <httplib.h>
 
 namespace {
+
+std::string getLocale(const httplib::Request& req) {
+    auto* i = hub32api::core::internal::I18n::instance();
+    if (!i) return "en";
+    return i->negotiate(req.get_header_value("Accept-Language"));
+}
 
 /**
  * @brief Sends an RFC-7807-style JSON error response.
@@ -54,11 +61,13 @@ SessionController::SessionController(core::internal::PluginRegistry& registry)
  */
 void SessionController::handleGetSession(const httplib::Request& req, httplib::Response& res)
 {
+    using hub32api::core::internal::tr;
+    const auto lang = getLocale(req);
     const std::string id = req.matches[1].str();
 
     auto* plugin = m_registry.sessionPlugin();
     if (!plugin) {
-        sendError(res, 503, "Session plugin unavailable");
+        sendError(res, 503, tr(lang, "error.session_plugin_unavailable"));
         return;
     }
 
@@ -68,10 +77,10 @@ void SessionController::handleGetSession(const httplib::Request& req, httplib::R
         const bool notFound = (err.code == ErrorCode::ComputerNotFound ||
                                err.code == ErrorCode::NotFound);
         if (notFound) {
-            sendError(res, 404, "Computer not found",
-                      "No computer with id: " + id);
+            sendError(res, 404, tr(lang, "error.computer_not_found"),
+                      tr(lang, "error.no_computer_with_id", {id}));
         } else {
-            sendError(res, 503, "Failed to retrieve session", err.message);
+            sendError(res, 503, tr(lang, "error.failed_retrieve_session"), err.message);
         }
         return;
     }
@@ -96,11 +105,13 @@ void SessionController::handleGetSession(const httplib::Request& req, httplib::R
  */
 void SessionController::handleGetUser(const httplib::Request& req, httplib::Response& res)
 {
+    using hub32api::core::internal::tr;
+    const auto lang = getLocale(req);
     const std::string id = req.matches[1].str();
 
     auto* plugin = m_registry.sessionPlugin();
     if (!plugin) {
-        sendError(res, 503, "Session plugin unavailable");
+        sendError(res, 503, tr(lang, "error.session_plugin_unavailable"));
         return;
     }
 
@@ -110,10 +121,10 @@ void SessionController::handleGetUser(const httplib::Request& req, httplib::Resp
         const bool notFound = (err.code == ErrorCode::ComputerNotFound ||
                                err.code == ErrorCode::NotFound);
         if (notFound) {
-            sendError(res, 404, "Computer not found",
-                      "No computer with id: " + id);
+            sendError(res, 404, tr(lang, "error.computer_not_found"),
+                      tr(lang, "error.no_computer_with_id", {id}));
         } else {
-            sendError(res, 503, "Failed to retrieve user", err.message);
+            sendError(res, 503, tr(lang, "error.failed_retrieve_user"), err.message);
         }
         return;
     }
@@ -138,11 +149,13 @@ void SessionController::handleGetUser(const httplib::Request& req, httplib::Resp
  */
 void SessionController::handleGetScreens(const httplib::Request& req, httplib::Response& res)
 {
+    using hub32api::core::internal::tr;
+    const auto lang = getLocale(req);
     const std::string id = req.matches[1].str();
 
     auto* plugin = m_registry.sessionPlugin();
     if (!plugin) {
-        sendError(res, 503, "Session plugin unavailable");
+        sendError(res, 503, tr(lang, "error.session_plugin_unavailable"));
         return;
     }
 
@@ -152,10 +165,10 @@ void SessionController::handleGetScreens(const httplib::Request& req, httplib::R
         const bool notFound = (err.code == ErrorCode::ComputerNotFound ||
                                err.code == ErrorCode::NotFound);
         if (notFound) {
-            sendError(res, 404, "Computer not found",
-                      "No computer with id: " + id);
+            sendError(res, 404, tr(lang, "error.computer_not_found"),
+                      tr(lang, "error.no_computer_with_id", {id}));
         } else {
-            sendError(res, 503, "Failed to retrieve screens", err.message);
+            sendError(res, 503, tr(lang, "error.failed_retrieve_screens"), err.message);
         }
         return;
     }

@@ -2,7 +2,18 @@
 #include "BatchController.hpp"
 #include "../dto/BatchDto.hpp"
 #include "core/internal/PluginRegistry.hpp"
+#include "core/internal/I18n.hpp"
 #include <httplib.h>
+
+namespace {
+
+std::string getLocale(const httplib::Request& req) {
+    auto* i = hub32api::core::internal::I18n::instance();
+    if (!i) return "en";
+    return i->negotiate(req.get_header_value("Accept-Language"));
+}
+
+} // anonymous namespace
 
 namespace hub32api::api::v2 {
 
@@ -38,6 +49,9 @@ BatchController::BatchController(core::internal::PluginRegistry& registry)
 void BatchController::handleBatchFeature(
     const httplib::Request& req, httplib::Response& res)
 {
+    using hub32api::core::internal::tr;
+    const auto lang = getLocale(req);
+
     // -----------------------------------------------------------------------
     // Parse and validate request body
     // -----------------------------------------------------------------------
@@ -48,8 +62,8 @@ void BatchController::handleBatchFeature(
     } catch (const nlohmann::json::exception& ex) {
         nlohmann::json err;
         err["status"] = 400;
-        err["title"]  = "Bad Request";
-        err["detail"] = std::string("Failed to parse request body: ") + ex.what();
+        err["title"]  = tr(lang, "error.invalid_request_body");
+        err["detail"] = std::string(ex.what());
         res.status = 400;
         res.set_content(err.dump(), "application/json");
         return;
@@ -59,8 +73,8 @@ void BatchController::handleBatchFeature(
     if (batchReq.computerIds.empty()) {
         nlohmann::json err;
         err["status"] = 400;
-        err["title"]  = "Bad Request";
-        err["detail"] = "Field 'computerIds' must not be empty";
+        err["title"]  = tr(lang, "error.invalid_request_body");
+        err["detail"] = tr(lang, "error.missing_computer_ids");
         res.status = 400;
         res.set_content(err.dump(), "application/json");
         return;
@@ -70,8 +84,8 @@ void BatchController::handleBatchFeature(
     if (batchReq.featureUid.empty()) {
         nlohmann::json err;
         err["status"] = 400;
-        err["title"]  = "Bad Request";
-        err["detail"] = "Field 'featureUid' must not be empty";
+        err["title"]  = tr(lang, "error.invalid_request_body");
+        err["detail"] = tr(lang, "error.missing_feature_uid");
         res.status = 400;
         res.set_content(err.dump(), "application/json");
         return;
@@ -86,9 +100,8 @@ void BatchController::handleBatchFeature(
     } else {
         nlohmann::json err;
         err["status"] = 400;
-        err["title"]  = "Bad Request";
-        err["detail"] = "Field 'operation' must be \"start\" or \"stop\", got: \"" +
-                        batchReq.operation + "\"";
+        err["title"]  = tr(lang, "error.invalid_request_body");
+        err["detail"] = tr(lang, "error.invalid_operation", {batchReq.operation});
         res.status = 400;
         res.set_content(err.dump(), "application/json");
         return;
@@ -101,8 +114,8 @@ void BatchController::handleBatchFeature(
     if (!featurePlugin) {
         nlohmann::json err;
         err["status"] = 503;
-        err["title"]  = "Service Unavailable";
-        err["detail"] = "Feature plugin not loaded";
+        err["title"]  = tr(lang, "error.feature_plugin_unavailable");
+        err["detail"] = tr(lang, "error.feature_plugin_unavailable");
         res.status = 503;
         res.set_content(err.dump(), "application/json");
         return;

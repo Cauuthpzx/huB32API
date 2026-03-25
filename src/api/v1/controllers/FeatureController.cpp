@@ -3,10 +3,17 @@
 #include "../dto/FeatureDto.hpp"
 #include "../dto/ErrorDto.hpp"
 #include "core/internal/PluginRegistry.hpp"
+#include "core/internal/I18n.hpp"
 
 #include <httplib.h>
 
 namespace {
+
+std::string getLocale(const httplib::Request& req) {
+    auto* i = hub32api::core::internal::I18n::instance();
+    if (!i) return "en";
+    return i->negotiate(req.get_header_value("Accept-Language"));
+}
 
 /**
  * @brief Sends an RFC-7807-style JSON error response.
@@ -55,17 +62,19 @@ FeatureController::FeatureController(core::internal::PluginRegistry& registry)
  */
 void FeatureController::handleList(const httplib::Request& req, httplib::Response& res)
 {
+    using hub32api::core::internal::tr;
+    const auto lang = getLocale(req);
     const std::string computerId = req.matches[1].str();
 
     auto* plugin = m_registry.featurePlugin();
     if (!plugin) {
-        sendError(res, 503, "Feature plugin unavailable");
+        sendError(res, 503, tr(lang, "error.feature_plugin_unavailable"));
         return;
     }
 
     const auto result = plugin->listFeatures(computerId);
     if (result.is_err()) {
-        sendError(res, 503, "Failed to list features", result.error().message);
+        sendError(res, 503, tr(lang, "error.failed_list_features"), result.error().message);
         return;
     }
 
@@ -94,19 +103,21 @@ void FeatureController::handleList(const httplib::Request& req, httplib::Respons
  */
 void FeatureController::handleGetOne(const httplib::Request& req, httplib::Response& res)
 {
+    using hub32api::core::internal::tr;
+    const auto lang = getLocale(req);
     const std::string computerId = req.matches[1].str();
     const std::string featureUid = req.matches[2].str();
 
     auto* plugin = m_registry.featurePlugin();
     if (!plugin) {
-        sendError(res, 503, "Feature plugin unavailable");
+        sendError(res, 503, tr(lang, "error.feature_plugin_unavailable"));
         return;
     }
 
     // Retrieve the full feature list to find the descriptor
     const auto listResult = plugin->listFeatures(computerId);
     if (listResult.is_err()) {
-        sendError(res, 503, "Failed to list features", listResult.error().message);
+        sendError(res, 503, tr(lang, "error.failed_list_features"), listResult.error().message);
         return;
     }
 
@@ -118,8 +129,8 @@ void FeatureController::handleGetOne(const httplib::Request& req, httplib::Respo
                                  });
 
     if (it == features.end()) {
-        sendError(res, 404, "Feature not found",
-                  "No feature with uid: " + featureUid);
+        sendError(res, 404, tr(lang, "error.feature_not_found"),
+                  tr(lang, "error.missing_feature_uid"));
         return;
     }
 
@@ -156,6 +167,8 @@ void FeatureController::handleGetOne(const httplib::Request& req, httplib::Respo
  */
 void FeatureController::handleControl(const httplib::Request& req, httplib::Response& res)
 {
+    using hub32api::core::internal::tr;
+    const auto lang = getLocale(req);
     const std::string computerId = req.matches[1].str();
     const std::string featureUid = req.matches[2].str();
 
@@ -166,13 +179,13 @@ void FeatureController::handleControl(const httplib::Request& req, httplib::Resp
         ctrl = j.get<dto::FeatureControlRequest>();
     }
     catch (const std::exception& ex) {
-        sendError(res, 400, "Invalid request body", ex.what());
+        sendError(res, 400, tr(lang, "error.invalid_request_body"), ex.what());
         return;
     }
 
     auto* plugin = m_registry.featurePlugin();
     if (!plugin) {
-        sendError(res, 503, "Feature plugin unavailable");
+        sendError(res, 503, tr(lang, "error.feature_plugin_unavailable"));
         return;
     }
 
@@ -188,7 +201,7 @@ void FeatureController::handleControl(const httplib::Request& req, httplib::Resp
     if (result.is_err()) {
         const auto& err = result.error();
         const int status = http_status_for(err.code);
-        sendError(res, status, "Feature control failed", err.message);
+        sendError(res, status, tr(lang, "error.feature_control_failed"), err.message);
         return;
     }
 

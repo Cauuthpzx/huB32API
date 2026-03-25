@@ -8,6 +8,7 @@
 #include "../auth/JwtAuth.hpp"
 #include "../auth/Hub32KeyAuth.hpp"
 #include "../agent/AgentRegistry.hpp"
+#include "../core/internal/I18n.hpp"
 #include "../plugins/computer/ComputerPlugin.hpp"
 #include "../plugins/feature/FeaturePlugin.hpp"
 #include "../plugins/session/SessionPlugin.hpp"
@@ -60,6 +61,9 @@ HttpServer::HttpServer(const ServerConfig& cfg)
     m_impl->jwtAuth = std::make_unique<auth::JwtAuth>(cfg);
     m_impl->keyAuth = std::make_unique<auth::Hub32KeyAuth>();
     m_impl->agentRegistry = std::make_unique<agent::AgentRegistry>();
+
+    // 4b. Initialize i18n
+    core::internal::I18n::init(cfg.localesDir, cfg.defaultLocale);
 
     // 5. HTTP/HTTPS server + router
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT

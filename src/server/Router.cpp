@@ -75,6 +75,7 @@
 #include "../api/v1/middleware/RateLimitMiddleware.hpp"
 
 // Core
+#include "../core/internal/I18n.hpp"
 #include "../core/internal/ApiContext.hpp"
 #include "../core/internal/PluginRegistry.hpp"
 #include "../core/internal/ConnectionPool.hpp"
@@ -109,6 +110,19 @@ namespace hub32api::server::internal {
 // ─────────────────────────────────────────────────────────────────────────────
 
 namespace {
+
+/**
+ * @brief Resolves the client's preferred locale from the Accept-Language header.
+ * @param req The incoming HTTP request.
+ * @return The best matching locale code.
+ */
+std::string resolveLocale(const httplib::Request& req)
+{
+    auto* i18n = hub32api::core::internal::I18n::instance();
+    if (!i18n) return "en";
+    const std::string acceptLang = req.get_header_value("Accept-Language");
+    return i18n->negotiate(acceptLang);
+}
 
 /**
  * @brief Sends an RFC-7807 Problem Details JSON error response.

@@ -1,11 +1,18 @@
 #include "core/PrecompiledHeader.hpp"
 #include "FramebufferController.hpp"
 #include "core/internal/PluginRegistry.hpp"
+#include "core/internal/I18n.hpp"
 
 #include <httplib.h>
 #include <algorithm>
 
 namespace {
+
+std::string getLocale(const httplib::Request& req) {
+    auto* i = hub32api::core::internal::I18n::instance();
+    if (!i) return "en";
+    return i->negotiate(req.get_header_value("Accept-Language"));
+}
 
 /**
  * @brief Sends an RFC-7807-style JSON error response.
@@ -63,11 +70,13 @@ FramebufferController::FramebufferController(core::internal::PluginRegistry& reg
 void FramebufferController::handleGetFramebuffer(
     const httplib::Request& req, httplib::Response& res)
 {
+    using hub32api::core::internal::tr;
+    const auto lang = getLocale(req);
     const std::string id = req.matches[1].str();
 
     auto* plugin = m_registry.computerPlugin();
     if (!plugin) {
-        sendError(res, 503, "Computer plugin unavailable");
+        sendError(res, 503, tr(lang, "error.computer_plugin_unavailable"));
         return;
     }
 
@@ -111,11 +120,11 @@ void FramebufferController::handleGetFramebuffer(
         const bool notFound = (err.code == ErrorCode::ComputerNotFound ||
                                err.code == ErrorCode::NotFound);
         if (notFound) {
-            sendError(res, 404, "Computer not found",
-                      "No computer with id: " + id);
+            sendError(res, 404, tr(lang, "error.computer_not_found"),
+                      tr(lang, "error.no_computer_with_id", {id}));
         } else {
             const int status = http_status_for(err.code);
-            sendError(res, status, "Framebuffer capture failed", err.message);
+            sendError(res, status, tr(lang, "error.framebuffer_capture_failed"), err.message);
         }
         return;
     }

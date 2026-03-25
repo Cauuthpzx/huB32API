@@ -35,6 +35,10 @@
     "file": "",
     "auditLogFile": ""
   },
+  "i18n": {
+    "localesDir": "locales",
+    "defaultLocale": "en"
+  },
   "metrics": {
     "enabled": false,
     "port": 9091

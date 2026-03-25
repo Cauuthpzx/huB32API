@@ -4,11 +4,18 @@
 #include "../dto/ErrorDto.hpp"
 #include "auth/JwtAuth.hpp"
 #include "auth/Hub32KeyAuth.hpp"
+#include "core/internal/I18n.hpp"
 
 // cpp-httplib
 #include <httplib.h>
 
 namespace {
+
+std::string getLocale(const httplib::Request& req) {
+    auto* i = hub32api::core::internal::I18n::instance();
+    if (!i) return "en";
+    return i->negotiate(req.get_header_value("Accept-Language"));
+}
 
 /**
  * @brief Sends an RFC-7807-style JSON error response.
@@ -68,6 +75,9 @@ AuthController::AuthController(
  */
 void AuthController::handleLogin(const httplib::Request& req, httplib::Response& res)
 {
+    using hub32api::core::internal::tr;
+    const auto lang = getLocale(req);
+
     // --- Parse request body ---
     dto::AuthRequest req_dto;
     try {
@@ -75,7 +85,7 @@ void AuthController::handleLogin(const httplib::Request& req, httplib::Response&
         req_dto = j.get<dto::AuthRequest>();
     }
     catch (const std::exception& ex) {
-        sendError(res, 400, "Invalid request body", ex.what());
+        sendError(res, 400, tr(lang, "error.invalid_request_body"), ex.what());
         return;
     }
 
@@ -83,8 +93,8 @@ void AuthController::handleLogin(const httplib::Request& req, httplib::Response&
 
     // --- Validate method ---
     if (req_dto.method != "hub32-key" && req_dto.method != "logon") {
-        sendError(res, 400, "Unsupported auth method",
-                  "Supported methods: hub32-key, logon");
+        sendError(res, 400, tr(lang, "error.unsupported_auth_method"),
+                  tr(lang, "error.supported_methods"));
         return;
     }
 
@@ -96,7 +106,7 @@ void AuthController::handleLogin(const httplib::Request& req, httplib::Response&
     // --- Issue JWT ---
     const auto tokenResult = m_jwtAuth.issueToken(req_dto.username, role);
     if (tokenResult.is_err()) {
-        sendError(res, 401, "Authentication failed",
+        sendError(res, 401, tr(lang, "error.auth_failed"),
                   tokenResult.error().message);
         return;
     }
@@ -124,17 +134,21 @@ void AuthController::handleLogin(const httplib::Request& req, httplib::Response&
  */
 void AuthController::handleLogout(const httplib::Request& req, httplib::Response& res)
 {
+    using hub32api::core::internal::tr;
+    const auto lang = getLocale(req);
+
     // --- Extract Bearer token from Authorization header ---
     const std::string authHeader = req.get_header_value("Authorization");
     if (authHeader.empty() || authHeader.rfind("Bearer ", 0) != 0) {
-        sendError(res, 401, "Unauthorized",
-                  "Missing or malformed Authorization header");
+        sendError(res, 401, tr(lang, "error.unauthorized"),
+                  tr(lang, "error.missing_auth_header"));
         return;
     }
 
     const std::string token = authHeader.substr(7); // strip "Bearer "
     if (token.empty()) {
-        sendError(res, 401, "Unauthorized", "Empty bearer token");
+        sendError(res, 401, tr(lang, "error.unauthorized"),
+                  tr(lang, "error.empty_bearer_token"));
         return;
     }
 

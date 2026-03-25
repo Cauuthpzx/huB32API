@@ -1,8 +1,19 @@
 #include "core/PrecompiledHeader.hpp"
 #include "RateLimitMiddleware.hpp"
+#include "core/internal/I18n.hpp"
 #include <httplib.h>
 #include <cmath>
 #include <ctime>
+
+namespace {
+
+std::string getLocale(const httplib::Request& req) {
+    auto* i = hub32api::core::internal::I18n::instance();
+    if (!i) return "en";
+    return i->negotiate(req.get_header_value("Accept-Language"));
+}
+
+} // anonymous namespace
 
 namespace hub32api::api::v1::middleware {
 
@@ -112,6 +123,9 @@ bool RateLimitMiddleware::process(const httplib::Request& req, httplib::Response
     // Consume one token (or reject if the bucket is empty)
     // -----------------------------------------------------------------------
     if (bucket.tokens < 1) {
+        using hub32api::core::internal::tr;
+        const auto lang = getLocale(req);
+
         // Seconds until at least one token is available
         const double retryAfter =
             std::ceil((1.0 - static_cast<double>(bucket.tokens)) / ratePerSecond);
@@ -119,9 +133,11 @@ bool RateLimitMiddleware::process(const httplib::Request& req, httplib::Response
         res.set_header("Retry-After",
                        std::to_string(static_cast<int>(retryAfter)));
         res.status = 429;
-        res.set_content(
-            R"({"status":429,"title":"Too Many Requests","detail":"Rate limit exceeded"})",
-            "application/json");
+        nlohmann::json body;
+        body["status"] = 429;
+        body["title"]  = tr(lang, "error.too_many_requests");
+        body["detail"] = tr(lang, "error.rate_limit_exceeded");
+        res.set_content(body.dump(), "application/json");
         return false;
     }
 

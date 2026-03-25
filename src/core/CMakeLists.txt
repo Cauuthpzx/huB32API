@@ -7,6 +7,7 @@ add_library(hub32api-core SHARED
     ConnectionPool.cpp
     ApiContext.cpp
     AuditLog.cpp
+    I18n.cpp
     ../auth/JwtAuth.cpp
     ../auth/internal/JwtValidator.cpp
     ../auth/internal/TokenStore.cpp

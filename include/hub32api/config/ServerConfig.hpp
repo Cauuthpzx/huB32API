@@ -48,6 +48,10 @@ struct HUB32API_EXPORT ServerConfig
     std::string logFile;                      // empty = stdout
     std::string auditLogFile;                 // path to SQLite audit log (empty = disabled)
 
+    // i18n
+    std::string localesDir;               // path to locale JSON catalogs
+    std::string defaultLocale    = "en";  // fallback locale
+
     // Metrics
     bool metricsEnabled            = false;
     uint16_t metricsPort           = 9091;

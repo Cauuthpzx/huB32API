@@ -234,6 +234,13 @@ ServerConfig ServerConfig::from_file(const std::string& path)
         cfg.auditLogFile = logObj.value("auditLogFile", cfg.auditLogFile);
     }
 
+    // Support nested "i18n" object from default.json format
+    if (j.contains("i18n") && j["i18n"].is_object()) {
+        auto& i18nObj = j["i18n"];
+        cfg.localesDir     = i18nObj.value("localesDir", cfg.localesDir);
+        cfg.defaultLocale  = i18nObj.value("defaultLocale", cfg.defaultLocale);
+    }
+
     cfg.metricsEnabled        = j.value("metricsEnabled", cfg.metricsEnabled);
     cfg.metricsPort           = j.value("metricsPort", cfg.metricsPort);
 

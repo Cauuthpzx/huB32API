@@ -3,12 +3,19 @@
 #include "../dto/MetricsDto.hpp"
 #include "core/internal/PluginRegistry.hpp"
 #include "core/internal/ConnectionPool.hpp"
+#include "core/internal/I18n.hpp"
 #include "plugins/metrics/MetricsPlugin.hpp"
 #include <httplib.h>
 
 namespace hub32api::api::v2 {
 
 namespace {
+
+std::string getLocale(const httplib::Request& req) {
+    auto* i = hub32api::core::internal::I18n::instance();
+    if (!i) return "en";
+    return i->negotiate(req.get_header_value("Accept-Language"));
+}
 
 /// @brief Returns the steady-clock time point when the process started.
 /// Initialised once on first call and reused thereafter.
@@ -46,22 +53,25 @@ MetricsController::MetricsController(
  * @param req  Incoming HTTP request (unused).
  * @param res  Outgoing HTTP response.
  */
-void MetricsController::handleHealth(const httplib::Request& /*req*/, httplib::Response& res)
+void MetricsController::handleHealth(const httplib::Request& req, httplib::Response& res)
 {
+    using hub32api::core::internal::tr;
+    const auto lang = getLocale(req);
+
     const std::size_t pluginCount = m_registry.all().size();
     const bool healthy = (pluginCount > 0);
 
     if (healthy) {
         nlohmann::json body;
-        body["status"]  = "ok";
+        body["status"]  = tr(lang, "health.status_ok");
         body["version"] = "1.0.0";
         body["plugins"] = static_cast<int>(pluginCount);
         res.status = 200;
         res.set_content(body.dump(), "application/json");
     } else {
         nlohmann::json body;
-        body["status"] = "degraded";
-        body["reason"] = "no plugins loaded";
+        body["status"] = tr(lang, "health.status_degraded");
+        body["reason"] = tr(lang, "health.no_plugins");
         res.status = 503;
         res.set_content(body.dump(), "application/json");
     }

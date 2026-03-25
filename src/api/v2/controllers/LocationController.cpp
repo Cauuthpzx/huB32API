@@ -2,7 +2,18 @@
 #include "LocationController.hpp"
 #include "../dto/LocationDto.hpp"
 #include "core/internal/PluginRegistry.hpp"
+#include "core/internal/I18n.hpp"
 #include <httplib.h>
+
+namespace {
+
+std::string getLocale(const httplib::Request& req) {
+    auto* i = hub32api::core::internal::I18n::instance();
+    if (!i) return "en";
+    return i->negotiate(req.get_header_value("Accept-Language"));
+}
+
+} // anonymous namespace
 
 namespace hub32api::api::v2 {
 
@@ -27,14 +38,17 @@ LocationController::LocationController(core::internal::PluginRegistry& registry)
  * @param req  Incoming HTTP request (unused).
  * @param res  Outgoing HTTP response.
  */
-void LocationController::handleList(const httplib::Request& /*req*/, httplib::Response& res)
+void LocationController::handleList(const httplib::Request& req, httplib::Response& res)
 {
+    using hub32api::core::internal::tr;
+    const auto lang = getLocale(req);
+
     auto* computerPlugin = m_registry.computerPlugin();
     if (!computerPlugin) {
         nlohmann::json err;
         err["status"] = 503;
-        err["title"]  = "Service Unavailable";
-        err["detail"] = "Computer plugin not loaded";
+        err["title"]  = tr(lang, "error.computer_plugin_unavailable");
+        err["detail"] = tr(lang, "error.computer_plugin_unavailable");
         res.status = 503;
         res.set_content(err.dump(), "application/json");
         return;
@@ -44,7 +58,7 @@ void LocationController::handleList(const httplib::Request& /*req*/, httplib::Re
     if (result.is_err()) {
         nlohmann::json err;
         err["status"] = 503;
-        err["title"]  = "Service Unavailable";
+        err["title"]  = tr(lang, "error.computer_plugin_unavailable");
         err["detail"] = result.error().message;
         res.status = 503;
         res.set_content(err.dump(), "application/json");
@@ -100,6 +114,9 @@ void LocationController::handleList(const httplib::Request& /*req*/, httplib::Re
  */
 void LocationController::handleGetOne(const httplib::Request& req, httplib::Response& res)
 {
+    using hub32api::core::internal::tr;
+    const auto lang = getLocale(req);
+
     // Extract the location id captured by the route regex
     const std::string locationId = req.matches[1].str();
 
@@ -107,8 +124,8 @@ void LocationController::handleGetOne(const httplib::Request& req, httplib::Resp
     if (!computerPlugin) {
         nlohmann::json err;
         err["status"] = 503;
-        err["title"]  = "Service Unavailable";
-        err["detail"] = "Computer plugin not loaded";
+        err["title"]  = tr(lang, "error.computer_plugin_unavailable");
+        err["detail"] = tr(lang, "error.computer_plugin_unavailable");
         res.status = 503;
         res.set_content(err.dump(), "application/json");
         return;
@@ -118,7 +135,7 @@ void LocationController::handleGetOne(const httplib::Request& req, httplib::Resp
     if (result.is_err()) {
         nlohmann::json err;
         err["status"] = 503;
-        err["title"]  = "Service Unavailable";
+        err["title"]  = tr(lang, "error.computer_plugin_unavailable");
         err["detail"] = result.error().message;
         res.status = 503;
         res.set_content(err.dump(), "application/json");
@@ -141,8 +158,8 @@ void LocationController::handleGetOne(const httplib::Request& req, httplib::Resp
     if (matchedIds.empty()) {
         nlohmann::json err;
         err["status"] = 404;
-        err["title"]  = "Not Found";
-        err["detail"] = "No computers found for location: " + locationId;
+        err["title"]  = tr(lang, "error.computer_not_found");
+        err["detail"] = tr(lang, "error.computer_not_found");
         res.status = 404;
         res.set_content(err.dump(), "application/json");
         return;

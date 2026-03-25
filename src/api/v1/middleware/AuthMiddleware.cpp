@@ -11,12 +11,19 @@
 #include "AuthMiddleware.hpp"
 #include "auth/JwtAuth.hpp"
 #include "core/internal/ApiContext.hpp"
+#include "core/internal/I18n.hpp"
 
 #include <httplib.h>
 
 namespace hub32api::api::v1::middleware {
 
 namespace {
+
+std::string getLocale(const httplib::Request& req) {
+    auto* i = hub32api::core::internal::I18n::instance();
+    if (!i) return "en";
+    return i->negotiate(req.get_header_value("Accept-Language"));
+}
 
 /**
  * @brief Sends an RFC-7807 Problem Details JSON error response.
@@ -85,6 +92,9 @@ bool AuthMiddleware::process(
     httplib::Response&             res,
     core::internal::ApiContext&    ctx)
 {
+    using hub32api::core::internal::tr;
+    const auto lang = getLocale(req);
+
     // ------------------------------------------------------------------
     // 1. Extract the Authorization header
     // ------------------------------------------------------------------
@@ -92,8 +102,8 @@ bool AuthMiddleware::process(
 
     if (authHeader.empty()) {
         spdlog::debug("[AuthMiddleware] missing Authorization header");
-        sendError(res, 401, "Unauthorized",
-                  "Missing Authorization header");
+        sendError(res, 401, tr(lang, "error.unauthorized"),
+                  tr(lang, "error.missing_auth_header"));
         return false;
     }
 
@@ -102,8 +112,8 @@ bool AuthMiddleware::process(
     // ------------------------------------------------------------------
     if (authHeader.rfind("Bearer ", 0) != 0) {
         spdlog::debug("[AuthMiddleware] Authorization header does not use Bearer scheme");
-        sendError(res, 401, "Unauthorized",
-                  "Authorization header must use Bearer scheme");
+        sendError(res, 401, tr(lang, "error.unauthorized"),
+                  tr(lang, "error.bearer_scheme_required"));
         return false;
     }
 
@@ -115,7 +125,7 @@ bool AuthMiddleware::process(
     if (result.is_err()) {
         spdlog::debug("[AuthMiddleware] authentication failed: {}",
                       result.error().message);
-        sendError(res, 401, "Unauthorized", result.error().message);
+        sendError(res, 401, tr(lang, "error.unauthorized"), result.error().message);
         return false;
     }
 
