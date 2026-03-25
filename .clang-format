@@ -1,0 +1,17 @@
+BasedOnStyle: Google
+IndentWidth: 4
+ColumnLimit: 100
+PointerAlignment: Left
+BreakBeforeBraces: Allman
+AllowShortFunctionsOnASingleLine: Inline
+SortIncludes: true
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^"(veyon32api|PrecompiledHeader)'
+    Priority: 1
+  - Regex: '^<(httplib|nlohmann|spdlog|jwt)'
+    Priority: 2
+  - Regex: '^<(windows|winsvc)'
+    Priority: 3
+  - Regex: '^<'
+    Priority: 4

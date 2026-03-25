@@ -1,0 +1,37 @@
+{
+  "http": {
+    "enabled": true,
+    "port": 11081,
+    "bindAddress": "127.0.0.1"
+  },
+  "tls": {
+    "enabled": false,
+    "certFile": "",
+    "keyFile": ""
+  },
+  "connections": {
+    "limitPerHost": 4,
+    "globalLimit": 64,
+    "lifetimeSec": 180,
+    "idleTimeoutSec": 60,
+    "authTimeoutSec": 15
+  },
+  "threads": {
+    "workerCount": 8
+  },
+  "jwt": {
+    "secret": "CHANGE_ME_IN_PRODUCTION",
+    "expirySeconds": 3600
+  },
+  "veyon": {
+    "pluginDir": ""
+  },
+  "logging": {
+    "level": "info",
+    "file": ""
+  },
+  "metrics": {
+    "enabled": false,
+    "port": 9091
+  }
+}

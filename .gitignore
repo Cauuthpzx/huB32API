@@ -1,0 +1,7 @@
+build/
+.cache/
+*.user
+*.suo
+.vs/
+CMakeUserPresets.json
+conf/production.json

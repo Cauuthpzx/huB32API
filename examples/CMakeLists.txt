@@ -1,0 +1,2 @@
+add_subdirectory(simple_query)
+add_subdirectory(batch_control)
