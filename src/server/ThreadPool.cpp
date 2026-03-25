@@ -48,7 +48,13 @@ void ThreadPool::workerLoop()
             m_tasks.pop();
         }
         ++m_active;
-        task();
+        try {
+            task();
+        } catch (const std::exception& ex) {
+            spdlog::error("[ThreadPool] task threw exception: {}", ex.what());
+        } catch (...) {
+            spdlog::error("[ThreadPool] task threw unknown exception");
+        }
         --m_active;
     }
 }

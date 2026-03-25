@@ -113,8 +113,13 @@ void sendError(httplib::Response& res,
 bool tcpPing(const std::string& host, int port = 11100, int timeoutMs = 1500)
 {
 #ifdef _WIN32
-    WSADATA wsa{};
-    WSAStartup(MAKEWORD(2, 2), &wsa);
+    // WSAStartup is reference-counted; we init once and never cleanup
+    // because httplib also calls it. A process-wide singleton is fine.
+    static const bool wsaReady = [] {
+        WSADATA wsa{};
+        return WSAStartup(MAKEWORD(2, 2), &wsa) == 0;
+    }();
+    if (!wsaReady) return false;
 
     addrinfo hints{}, *result = nullptr;
     hints.ai_family   = AF_UNSPEC;

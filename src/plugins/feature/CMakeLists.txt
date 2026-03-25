@@ -1,4 +1,4 @@
-build_hub3232_plugin(
+build_hub32_plugin(
     NAME        "feature"
     DESCRIPTION "Hub32 Feature Control Plugin"
     SOURCES

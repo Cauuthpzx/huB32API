@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <variant>
 #include <functional>
 #include "hub32api/core/Error.hpp"
@@ -19,9 +20,12 @@ public:
     bool is_ok()  const noexcept { return std::holds_alternative<T>(m_data); }
     bool is_err() const noexcept { return !is_ok(); }
 
-    const T&        value() const { return std::get<T>(m_data); }
-    T&&             take()        { return std::move(std::get<T>(m_data)); }
-    const ApiError& error() const { return std::get<ApiError>(m_data); }
+    /// @brief Returns the contained value; asserts is_ok() in debug builds.
+    const T&        value() const { assert(is_ok() && "Result::value() called on error result"); return std::get<T>(m_data); }
+    /// @brief Moves the contained value out; asserts is_ok() in debug builds.
+    T&&             take()        { assert(is_ok() && "Result::take() called on error result"); return std::move(std::get<T>(m_data)); }
+    /// @brief Returns the contained error; asserts is_err() in debug builds.
+    const ApiError& error() const { assert(is_err() && "Result::error() called on ok result"); return std::get<ApiError>(m_data); }
 
     // Map value if ok, propagate error otherwise
     template<typename U, typename F>

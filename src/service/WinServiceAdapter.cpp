@@ -8,6 +8,8 @@
 
 #include "../core/PrecompiledHeader.hpp"
 #include "WinServiceAdapter.hpp"
+#include <csignal>
+#include <functional>
 
 namespace hub32api {
 
@@ -17,6 +19,14 @@ namespace hub32api {
 SERVICE_STATUS_HANDLE WinServiceAdapter::s_statusHandle = nullptr;
 DWORD                 WinServiceAdapter::s_currentState = SERVICE_STOPPED;
 WinServiceAdapter::WorkFn WinServiceAdapter::s_work;
+
+/**
+ * @brief Static stop callback invoked by ServiceCtrlHandler to stop the server.
+ *
+ * Set by runAsService() before dispatching; called on SERVICE_CONTROL_STOP
+ * and SERVICE_CONTROL_SHUTDOWN to trigger graceful server shutdown.
+ */
+static std::function<void()> s_stopFn;
 
 /// @brief ANSI service name used for SCM registration and install/uninstall.
 static constexpr const char* k_serviceNameA   = "hub32api";
@@ -45,6 +55,11 @@ static constexpr const char* k_descriptionStr = "Hub32 API REST server for remot
 int WinServiceAdapter::runAsService(WorkFn work)
 {
     s_work = std::move(work);
+
+    // Register a stop callback that raises SIGTERM.  The signal handler
+    // in main.cpp sets g_stopRequested, and the watcher thread calls
+    // HttpServer::stop() to unblock the listen() loop.
+    s_stopFn = [] { std::raise(SIGTERM); };
 
     SERVICE_TABLE_ENTRYA table[] = {
         { const_cast<LPSTR>(k_serviceNameA), ServiceMain },
@@ -98,7 +113,10 @@ void WINAPI WinServiceAdapter::ServiceMain(DWORD /*argc*/, LPSTR* /*argv*/)
 /**
  * @brief Handles control requests from the SCM (stop, shutdown, etc.).
  *
- * On SERVICE_CONTROL_STOP: transitions to STOP_PENDING then STOPPED.
+ * On SERVICE_CONTROL_STOP or SERVICE_CONTROL_SHUTDOWN: reports
+ * STOP_PENDING and invokes the registered stop callback to trigger
+ * graceful server shutdown.  The actual SERVICE_STOPPED report is
+ * deferred to ServiceMain after the work callback returns.
  *
  * @param ctrl       Control code sent by the SCM.
  * @param eventType  Event type (unused).
@@ -113,7 +131,11 @@ DWORD WINAPI WinServiceAdapter::ServiceCtrlHandler(
     case SERVICE_CONTROL_STOP:
     case SERVICE_CONTROL_SHUTDOWN:
         reportStatus(SERVICE_STOP_PENDING, NO_ERROR, 5000);
-        reportStatus(SERVICE_STOPPED);
+        // Invoke the stop callback to trigger graceful server shutdown.
+        // SERVICE_STOPPED is reported in ServiceMain after s_work returns.
+        if (s_stopFn) {
+            s_stopFn();
+        }
         return NO_ERROR;
 
     case SERVICE_CONTROL_INTERROGATE:

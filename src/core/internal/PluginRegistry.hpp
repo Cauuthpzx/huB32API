@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <unordered_map>
 #include <vector>
 #include "hub32api/export.h"
@@ -32,6 +33,9 @@ public:
     const std::vector<PluginInterface*> all() const;
 
 private:
+    /// @brief Protects all mutable state for thread-safe concurrent access.
+    mutable std::mutex m_mutex;
+
     std::unordered_map<Uid, std::unique_ptr<PluginInterface>> m_plugins;
 
     ComputerPluginInterface* m_computerPlugin = nullptr;

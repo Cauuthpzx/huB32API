@@ -1,11 +1,11 @@
 # BuildPlugin.cmake
-# build_hub3232_plugin() macro — mirrors Hub32's build_hub32_plugin() pattern.
+# build_hub32_plugin() macro — mirrors Hub32's build_hub32_plugin() pattern.
 
 include(PchHelpers)
 include(WindowsBuildHelpers)
 include(GenerateExportHeader)
 
-macro(build_hub3232_plugin)
+macro(build_hub32_plugin)
     cmake_parse_arguments(PLUGIN
         ""
         "NAME;DESCRIPTION"

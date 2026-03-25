@@ -77,8 +77,13 @@ void AuthController::handleLogin(const httplib::Request& req, httplib::Response&
         return;
     }
 
-    // --- Issue JWT (both methods use the same issuer path for now) ---
-    const auto tokenResult = m_jwtAuth.issueToken(req_dto.username, "teacher");
+    // --- Determine role based on auth method + credentials ---
+    // TODO: Replace with proper role resolution from a user/role store.
+    const std::string role =
+        (req_dto.method == "logon" && req_dto.username == "admin") ? "admin" : "teacher";
+
+    // --- Issue JWT ---
+    const auto tokenResult = m_jwtAuth.issueToken(req_dto.username, role);
     if (tokenResult.is_err()) {
         sendError(res, 401, "Authentication failed",
                   tokenResult.error().message);
@@ -122,9 +127,15 @@ void AuthController::handleLogout(const httplib::Request& req, httplib::Response
         return;
     }
 
-    // Revoke: pass raw token as jti (the JwtAuth implementation resolves
-    // the actual jti claim internally).
-    m_jwtAuth.revokeToken(token);
+    // Extract the jti claim from the token for proper revocation.
+    // TokenStore indexes by jti, not raw JWT string.
+    auto authResult = m_jwtAuth.authenticate(token);
+    if (authResult.is_ok() && authResult.value().token) {
+        m_jwtAuth.revokeToken(authResult.value().token->jti);
+    } else {
+        // Even if token is invalid/expired, try to revoke by raw token as fallback
+        m_jwtAuth.revokeToken(token);
+    }
 
     // 204 No Content — no body, no Content-Type
     res.status = 204;

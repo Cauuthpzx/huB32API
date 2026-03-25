@@ -219,6 +219,13 @@ ServerConfig ServerConfig::from_file(const std::string& path)
         spdlog::warn("[ServerConfig] no jwtSecret in config; generated random secret");
     }
 
+    // Validate the loaded configuration
+    config::internal::ConfigValidator validator;
+    const auto errors = validator.validate(cfg);
+    for (const auto& err : errors) {
+        spdlog::warn("[ServerConfig] validation: {}", err);
+    }
+
     spdlog::info("[ServerConfig] loaded config from file: {} (httpPort={}, bindAddress={})",
                  path, cfg.httpPort, cfg.bindAddress);
     return cfg;
@@ -288,6 +295,13 @@ ServerConfig ServerConfig::from_registry()
     {
         cfg.jwtSecret = generateRandomSecret();
         spdlog::warn("[ServerConfig] no jwtSecret in registry; generated random secret");
+    }
+
+    // Validate the loaded configuration
+    config::internal::ConfigValidator validator;
+    const auto errors = validator.validate(cfg);
+    for (const auto& err : errors) {
+        spdlog::warn("[ServerConfig] validation: {}", err);
     }
 
     spdlog::info("[ServerConfig] loaded config from registry (httpPort={}, bindAddress={})",

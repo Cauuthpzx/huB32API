@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutex>
 #include <set>
 #include "hub32api/plugins/FeaturePluginInterface.hpp"
 
@@ -46,6 +47,10 @@ public:
 
 private:
     core::internal::Hub32CoreWrapper& m_core;
+
+    /// @brief Protects @c m_activeFeatures for thread-safe concurrent access.
+    /// Recursive because controlFeatureBatch() calls controlFeature() while holding the lock.
+    mutable std::recursive_mutex m_mutex;
 
     /**
      * @brief Tracks which features are active on each computer.

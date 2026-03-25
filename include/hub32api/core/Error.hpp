@@ -54,7 +54,7 @@ enum class HUB32API_EXPORT ErrorCode
 inline int http_status_for(ErrorCode code)
 {
     int c = static_cast<int>(code);
-    if (c >= 4000 && c < 5000) return c / 10;  // e.g. 4001→400, 4011→401, 4041→404
+    if (c >= 4000 && c < 6000) return c / 10;  // packed: 4001→400, 4011→401, 5001→500, 5031→503
     if (c >= 400  && c < 600)  return c;        // exact HTTP codes (400, 401, 404, 500…)
     return 500;
 }

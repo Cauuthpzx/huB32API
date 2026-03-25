@@ -5,25 +5,53 @@
 
 #include <csignal>
 #include <iostream>
+#include <thread>
 
 namespace {
 
-hub32api::HttpServer* g_server = nullptr;
+/// @brief Async-signal-safe stop flag set by the signal handler.
+static volatile sig_atomic_t g_stopRequested = 0;
 
-void signalHandler(int sig)
+/**
+ * @brief Async-signal-safe signal handler.
+ *
+ * Sets a flag instead of calling non-signal-safe functions like spdlog
+ * or mutex-protected methods.  A watcher thread polls this flag and
+ * performs the actual graceful shutdown.
+ *
+ * @param sig The signal number (unused).
+ */
+void signalHandler(int /*sig*/)
 {
-    spdlog::info("[main] signal {} received, stopping server", sig);
-    if (g_server) g_server->stop();
+    g_stopRequested = 1;
 }
 
+/**
+ * @brief Creates and runs the HttpServer, with a watcher thread that
+ *        polls @c g_stopRequested and calls server.stop() when set.
+ *
+ * @param cfg The server configuration.
+ * @return 0 on success, 1 on failure.
+ */
 int runServer(const hub32api::ServerConfig& cfg)
 {
     hub32api::HttpServer server(cfg);
-    g_server = &server;
+
     std::signal(SIGINT,  signalHandler);
     std::signal(SIGTERM, signalHandler);
+
+    // Watcher thread: polls g_stopRequested and stops server gracefully
+    std::thread watcher([&server] {
+        while (!g_stopRequested) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        }
+        spdlog::info("[main] stop requested, shutting down server");
+        server.stop();
+    });
+
     bool ok = server.start();
-    g_server = nullptr;
+    g_stopRequested = 1; // ensure watcher exits if server returns on its own
+    watcher.join();
     return ok ? 0 : 1;
 }
 

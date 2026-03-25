@@ -19,6 +19,7 @@
 #include "internal/JwtValidator.hpp"
 #include "internal/TokenStore.hpp"
 
+#include <atomic>
 #include <random>
 #include <sstream>
 #include <iomanip>
@@ -185,6 +186,14 @@ Result<std::string> JwtAuth::issueToken(
  */
 Result<AuthContext> JwtAuth::authenticate(const std::string& bearerToken) const
 {
+    // Periodically purge expired entries from the token denylist to prevent
+    // unbounded memory growth.  Every 100 authenticate() calls the store is
+    // swept for entries whose expiry time has passed.
+    static std::atomic<int> authCount{0};
+    if (++authCount % 100 == 0) {
+        m_impl->store->purgeExpired();
+    }
+
     // 1. Validate signature, expiry, issuer, audience, and extract claims
     auto validationResult = m_impl->validator->validate(bearerToken);
     if (validationResult.is_err()) {

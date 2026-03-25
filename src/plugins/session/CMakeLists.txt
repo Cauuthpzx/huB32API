@@ -1,4 +1,4 @@
-build_hub3232_plugin(
+build_hub32_plugin(
     NAME        "session"
     DESCRIPTION "Hub32 Session Info Plugin"
     SOURCES     SessionPlugin.cpp

@@ -1,4 +1,4 @@
-build_hub3232_plugin(
+build_hub32_plugin(
     NAME        "computer"
     DESCRIPTION "Hub32 Computer Control Plugin"
     SOURCES

@@ -37,6 +37,7 @@ bool FeaturePlugin::initialize()
  */
 Result<std::vector<FeatureDescriptor>> FeaturePlugin::listFeatures(const Uid& computerUid)
 {
+    std::lock_guard lock(m_mutex);
     // Build the static feature catalog
     std::vector<FeatureDescriptor> features = {
         FeatureDescriptor{
@@ -114,6 +115,7 @@ Result<std::vector<FeatureDescriptor>> FeaturePlugin::listFeatures(const Uid& co
  */
 Result<bool> FeaturePlugin::isFeatureActive(const Uid& computerUid, const Uid& featureUid)
 {
+    std::lock_guard lock(m_mutex);
     auto compIt = m_activeFeatures.find(computerUid);
     if (compIt == m_activeFeatures.end())
     {
@@ -144,6 +146,7 @@ Result<void> FeaturePlugin::controlFeature(
     const Uid& computerUid, const Uid& featureUid,
     FeatureOperation op, const FeatureArgs& args)
 {
+    std::lock_guard lock(m_mutex);
     switch (op)
     {
     case FeatureOperation::Start:
@@ -194,6 +197,7 @@ Result<std::vector<Uid>> FeaturePlugin::controlFeatureBatch(
     const std::vector<Uid>& computerUids, const Uid& featureUid,
     FeatureOperation op, const FeatureArgs& args)
 {
+    std::lock_guard lock(m_mutex);
     std::vector<Uid> succeeded;
     succeeded.reserve(computerUids.size());
 

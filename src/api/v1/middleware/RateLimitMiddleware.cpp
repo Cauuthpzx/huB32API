@@ -46,6 +46,20 @@ bool RateLimitMiddleware::process(const httplib::Request& req, httplib::Response
 
     std::lock_guard<std::mutex> lock(m_mutex);
 
+    // -----------------------------------------------------------------
+    // Periodically prune stale buckets to prevent unbounded map growth.
+    // Every 1000 requests, remove buckets that have not been accessed
+    // in the last 10 minutes.
+    // -----------------------------------------------------------------
+    static int callCount = 0;
+    if (++callCount % 1000 == 0) {
+        const auto cutoff = Clock::now() - std::chrono::minutes(10);
+        for (auto bit = m_buckets.begin(); bit != m_buckets.end(); ) {
+            if (bit->second.lastRefill < cutoff) bit = m_buckets.erase(bit);
+            else ++bit;
+        }
+    }
+
     auto it = m_buckets.find(key);
     if (it == m_buckets.end()) {
         // First request from this address — start with a full bucket

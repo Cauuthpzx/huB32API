@@ -26,7 +26,7 @@ struct HttpServer::Impl
     std::unique_ptr<server::internal::ThreadPool>     threadPool;
     std::unique_ptr<httplib::Server>                  httpServer;
     std::unique_ptr<server::internal::Router>         router;
-    bool running = false;
+    std::atomic<bool> running{false};
 };
 
 HttpServer::HttpServer(const ServerConfig& cfg)
@@ -80,7 +80,7 @@ HttpServer::~HttpServer()
 
 bool HttpServer::start()
 {
-    m_impl->running = true;
+    m_impl->running.store(true);
     spdlog::info("[HttpServer] listening on {}:{}", m_impl->cfg.bindAddress, m_impl->cfg.httpPort);
 
     // Blocks until stop() or error
@@ -88,20 +88,20 @@ bool HttpServer::start()
         m_impl->cfg.bindAddress.c_str(),
         m_impl->cfg.httpPort);
 
-    m_impl->running = false;
+    m_impl->running.store(false);
     return ok;
 }
 
 void HttpServer::stop()
 {
-    if (m_impl->running && m_impl->httpServer) {
+    if (m_impl->running.load() && m_impl->httpServer) {
         m_impl->httpServer->stop();
     }
 }
 
 bool HttpServer::isRunning() const noexcept
 {
-    return m_impl->running;
+    return m_impl->running.load();
 }
 
 } // namespace hub32api

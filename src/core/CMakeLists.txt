@@ -11,6 +11,7 @@ add_library(hub32api-core SHARED
     ../auth/internal/TokenStore.cpp
     ../auth/Hub32KeyAuth.cpp
     ../config/ServerConfig.cpp
+    ../config/internal/ConfigValidator.cpp
 )
 
 generate_export_header(hub32api-core
@@ -36,8 +37,8 @@ target_link_libraries(hub32api-core
         jwt-cpp::jwt-cpp
         ws2_32
         crypt32
-        ssl
-        crypto
+        $<IF:$<TARGET_EXISTS:OpenSSL::SSL>,OpenSSL::SSL,ssl>
+        $<IF:$<TARGET_EXISTS:OpenSSL::Crypto>,OpenSSL::Crypto,crypto>
 )
 
 target_include_directories(hub32api-core
