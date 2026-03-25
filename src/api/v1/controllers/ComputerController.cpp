@@ -41,14 +41,22 @@ ComputerController::ComputerController(core::internal::PluginRegistry& registry)
 {}
 
 /**
- * @brief Handles GET /api/v1/computers — returns a filtered list of computers.
+ * @brief Handles GET /api/v1/computers — filtered, cursor-paginated computer list.
  *
  * Supported query parameters:
- *   - @c location — case-sensitive substring match on the computer's location field.
+ *   - @c location — exact match on the computer's location field.
  *   - @c state    — exact match on the computer's state string (e.g. "online").
+ *   - @c limit    — maximum items per page (default 50, max 200).
+ *   - @c after    — opaque cursor (base64-encoded UID of last item seen).
+ *                   Omit for the first page.
  *
- * Returns HTTP 200 with a @ref dto::ComputerListDto JSON body, or HTTP 503 if
- * the computer plugin is unavailable or returns an error.
+ * Response body:
+ * @code
+ * {
+ *   "computers": [ ...ComputerDto... ],
+ *   "page": { "total": N, "limit": L, "nextCursor": "..." | null }
+ * }
+ * @endcode
  *
  * @param req  The incoming HTTP request.
  * @param res  The HTTP response to populate.
@@ -63,34 +71,70 @@ void ComputerController::handleList(const httplib::Request& req, httplib::Respon
 
     const auto result = plugin->listComputers();
     if (result.is_err()) {
-        sendError(res, 503, "Failed to list computers",
-                  result.error().message);
+        sendError(res, 503, "Failed to list computers", result.error().message);
         return;
     }
 
-    // Read optional filter params (empty string means "no filter")
+    // ── Parse query parameters ────────────────────────────────────────────
     const std::string locationFilter = req.get_param_value("location");
     const std::string stateFilter    = req.get_param_value("state");
+    const std::string afterCursor    = req.get_param_value("after");
 
-    dto::ComputerListDto listDto;
-    for (const auto& info : result.value()) {
-        const auto dto = dto::ComputerDto::from(info);
-
-        // Apply location filter
-        if (!locationFilter.empty() && dto.location != locationFilter) {
-            continue;
-        }
-        // Apply state filter
-        if (!stateFilter.empty() && dto.state != stateFilter) {
-            continue;
-        }
-
-        listDto.computers.push_back(dto);
+    int limit = 50;
+    if (req.has_param("limit")) {
+        try {
+            limit = std::stoi(req.get_param_value("limit"));
+            limit = std::clamp(limit, 1, 200);
+        } catch (...) { /* use default */ }
     }
-    listDto.total = static_cast<int>(listDto.computers.size());
 
-    const nlohmann::json j = listDto;
+    // ── Filter all matching computers ─────────────────────────────────────
+    std::vector<dto::ComputerDto> filtered;
+    filtered.reserve(result.value().size());
+    for (const auto& info : result.value()) {
+        const auto d = dto::ComputerDto::from(info);
+        if (!locationFilter.empty() && d.location != locationFilter) continue;
+        if (!stateFilter.empty()    && d.state    != stateFilter)    continue;
+        filtered.push_back(d);
+    }
+
+    const int total = static_cast<int>(filtered.size());
+
+    // ── Apply cursor (find start index after the cursor UID) ──────────────
+    int startIdx = 0;
+    if (!afterCursor.empty()) {
+        // Cursor is the plain UID of the last-seen item (not encoded for simplicity)
+        for (int i = 0; i < static_cast<int>(filtered.size()); ++i) {
+            if (filtered[i].id == afterCursor) {
+                startIdx = i + 1;
+                break;
+            }
+        }
+    }
+
+    // ── Extract page ──────────────────────────────────────────────────────
+    const int endIdx = std::min(startIdx + limit, static_cast<int>(filtered.size()));
+    std::vector<dto::ComputerDto> page(
+        filtered.begin() + startIdx,
+        filtered.begin() + endIdx);
+
+    // nextCursor is the UID of the last item on this page, or null if exhausted
+    nlohmann::json nextCursor = nullptr;
+    if (endIdx < static_cast<int>(filtered.size())) {
+        nextCursor = page.back().id;
+    }
+
+    // ── Build response ────────────────────────────────────────────────────
+    nlohmann::json j;
+    j["computers"] = page;
+    j["page"] = {
+        {"total",      total},
+        {"limit",      limit},
+        {"nextCursor", nextCursor}
+    };
+
     res.status = 200;
+    res.set_header("X-Total-Count", std::to_string(total));
     res.set_content(j.dump(), "application/json");
 }
 

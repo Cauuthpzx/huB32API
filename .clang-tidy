@@ -10,5 +10,5 @@ Checks: >
   -cppcoreguidelines-avoid-magic-numbers
 
 WarningsAsErrors: ''
-HeaderFilterRegex: '(include|src)/veyon32api/.*'
+HeaderFilterRegex: '(include|src)/hub32api/.*'
 FormatStyle: file

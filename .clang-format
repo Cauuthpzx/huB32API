@@ -7,7 +7,7 @@ AllowShortFunctionsOnASingleLine: Inline
 SortIncludes: true
 IncludeBlocks: Regroup
 IncludeCategories:
-  - Regex: '^"(veyon32api|PrecompiledHeader)'
+  - Regex: '^"(hub32api|PrecompiledHeader)'
     Priority: 1
   - Regex: '^<(httplib|nlohmann|spdlog|jwt)'
     Priority: 2

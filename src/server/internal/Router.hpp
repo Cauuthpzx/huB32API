@@ -32,6 +32,7 @@ private:
     void registerV1();
     void registerV2();
     void registerHealthAndMetrics();
+    void registerOpenApi();
 
     httplib::Server& m_server;
     Services         m_svcs;
