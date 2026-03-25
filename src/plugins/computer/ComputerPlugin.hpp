@@ -3,13 +3,18 @@
 #include "hub32api/plugins/ComputerPluginInterface.hpp"
 
 namespace hub32api::core::internal { class Hub32CoreWrapper; }
+namespace hub32api::agent { class AgentRegistry; }
 
 namespace hub32api::plugins {
 
-// -----------------------------------------------------------------------
-// ComputerPlugin — bridges Hub32's ComputerControlInterface and
-// NetworkObjectDirectoryManager to the ComputerPluginInterface API.
-// -----------------------------------------------------------------------
+/**
+ * @brief Bridges Hub32's ComputerControlInterface and live agent data
+ *        to the ComputerPluginInterface API.
+ *
+ * When an AgentRegistry is attached and has online agents, the computer
+ * list is built from live agent registrations. Otherwise, mock data is
+ * returned for standalone testing.
+ */
 class ComputerPlugin final : public ComputerPluginInterface
 {
 public:
@@ -26,6 +31,12 @@ public:
     bool initialize() override;
     void shutdown()   override;
 
+    /**
+     * @brief Attaches the AgentRegistry for live agent data.
+     * @param registry Pointer to AgentRegistry (nullptr to use mock data only).
+     */
+    void setAgentRegistry(agent::AgentRegistry* registry);
+
     Result<std::vector<ComputerInfo>> listComputers() override;
     Result<ComputerInfo>              getComputer(const Uid& uid) override;
     Result<ComputerState>             getState(const Uid& uid) override;
@@ -35,6 +46,7 @@ public:
 
 private:
     core::internal::Hub32CoreWrapper& m_core;
+    agent::AgentRegistry* m_agentRegistry = nullptr; ///< Optional live agent registry
 };
 
 } // namespace hub32api::plugins

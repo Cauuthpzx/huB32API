@@ -15,6 +15,7 @@
 #include <unordered_map>
 #include <vector>
 #include <mutex>
+#include "hub32api/export.h"
 
 namespace hub32api::core::internal {
 
@@ -28,7 +29,7 @@ namespace hub32api::core::internal {
  * Thread-safe: all public methods are safe to call from any thread after
  * construction. Catalogs are immutable once loaded.
  */
-class I18n
+class HUB32API_EXPORT I18n
 {
 public:
     /**

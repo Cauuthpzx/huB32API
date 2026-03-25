@@ -1,6 +1,11 @@
 #include "core/PrecompiledHeader.hpp"
 #include "FeaturePlugin.hpp"
 #include "core/internal/Hub32CoreWrapper.hpp"
+#include "agent/AgentRegistry.hpp"
+#include "hub32api/agent/AgentInfo.hpp"
+#include "hub32api/agent/AgentCommand.hpp"
+
+#include <random>
 
 namespace hub32api::plugins {
 
@@ -13,26 +18,72 @@ FeaturePlugin::FeaturePlugin(core::internal::Hub32CoreWrapper& core)
 
 /**
  * @brief Initializes the FeaturePlugin.
- *
- * When Hub32Core is linked, this will cache features from
- * Hub32Core::featureManager().features() for quick lookup.
- *
  * @return true if initialization succeeded.
  */
 bool FeaturePlugin::initialize()
 {
-    spdlog::info("[FeaturePlugin] initialized");
+    spdlog::info("[FeaturePlugin] initialized (live agent support: {})",
+                 m_agentRegistry ? "yes" : "no");
     return true;
+}
+
+/**
+ * @brief Attaches the AgentRegistry for live command routing.
+ * @param registry Pointer to AgentRegistry (nullptr reverts to mock-only mode).
+ */
+void FeaturePlugin::setAgentRegistry(agent::AgentRegistry* registry)
+{
+    m_agentRegistry = registry;
+    spdlog::info("[FeaturePlugin] agent registry {}",
+                 registry ? "attached" : "detached");
+}
+
+/**
+ * @brief Maps API feature UIDs to agent handler feature UIDs.
+ *
+ * The API uses "feat-lock-screen" style UIDs, while agent handlers
+ * use "lock-screen" style UIDs.
+ *
+ * @param featureUid The API-level feature UID.
+ * @return The agent-level feature UID.
+ */
+std::string FeaturePlugin::agentFeatureUid(const Uid& featureUid)
+{
+    if (featureUid == "feat-lock-screen")      return "lock-screen";
+    if (featureUid == "feat-screen-broadcast") return "screen-capture";
+    if (featureUid == "feat-input-lock")       return "input-lock";
+    if (featureUid == "feat-message")          return "message-display";
+    if (featureUid == "feat-power-control")    return "power-control";
+    return featureUid; // pass through if already in agent format
+}
+
+/**
+ * @brief Generates a UUID v4 string for command IDs.
+ * @return UUID v4 string.
+ */
+std::string FeaturePlugin::generateCommandId()
+{
+    static thread_local std::mt19937_64 gen(std::random_device{}());
+    std::uniform_int_distribution<uint64_t> dist;
+    const auto r1 = dist(gen);
+    const auto r2 = dist(gen);
+    char buf[40];
+    std::snprintf(buf, sizeof(buf),
+        "%08x-%04x-%04x-%04x-%012llx",
+        static_cast<uint32_t>(r1 >> 32),
+        static_cast<uint16_t>((r1 >> 16) & 0xFFFF),
+        static_cast<uint16_t>(0x4000 | ((r1 & 0x0FFF))),
+        static_cast<uint16_t>(0x8000 | ((r2 >> 48) & 0x3FFF)),
+        static_cast<unsigned long long>(r2 & 0xFFFFFFFFFFFFULL));
+    return buf;
 }
 
 /**
  * @brief Lists all available features for the given computer.
  *
- * Returns a set of mock FeatureDescriptor entries representing typical
- * Veyon classroom-management features. The isActive flag reflects the
- * current in-memory state tracked by controlFeature().
+ * Returns feature descriptors with isActive reflecting the current state.
  *
- * @param computerUid The computer to list features for (used for per-computer active state).
+ * @param computerUid The computer to list features for.
  * @return Result containing a vector of FeatureDescriptor on success.
  */
 Result<std::vector<FeatureDescriptor>> FeaturePlugin::listFeatures(const Uid& computerUid)
@@ -134,14 +185,11 @@ Result<bool> FeaturePlugin::isFeatureActive(const Uid& computerUid, const Uid& f
 /**
  * @brief Starts, stops, or initializes a feature on a single computer.
  *
- * - FeatureOperation::Start: adds the feature to the computer's active set.
- * - FeatureOperation::Stop: removes the feature from the computer's active set.
- * - FeatureOperation::Initialize: no-op (logged only).
+ * If an AgentRegistry is attached and the target computer corresponds to
+ * an online agent, the command is queued for the agent to execute. Otherwise
+ * the feature state is tracked locally (mock behavior).
  *
- * When Hub32Core is linked, this will delegate to
- * Hub32Core::featureManager().controlFeature().
- *
- * @param computerUid The target computer.
+ * @param computerUid The target computer (may be an agent ID).
  * @param featureUid  The feature to control.
  * @param op          The operation to perform (Start, Stop, Initialize).
  * @param args        Optional key-value arguments for the feature operation.
@@ -152,11 +200,47 @@ Result<void> FeaturePlugin::controlFeature(
     FeatureOperation op, const FeatureArgs& args)
 {
     std::lock_guard lock(m_mutex);
+
+    // Try routing to a live agent
+    if (m_agentRegistry && op != FeatureOperation::Initialize) {
+        auto agentResult = m_agentRegistry->findAgent(computerUid);
+        if (agentResult.is_ok()) {
+            const auto& agent = agentResult.value();
+            if (agent.state == AgentState::Online || agent.state == AgentState::Busy) {
+                // Build and queue a command for the agent
+                AgentCommand cmd;
+                cmd.commandId  = generateCommandId();
+                cmd.agentId    = computerUid;
+                cmd.featureUid = agentFeatureUid(featureUid);
+                cmd.operation  = (op == FeatureOperation::Start) ? "start" : "stop";
+                cmd.arguments  = args;
+
+                m_agentRegistry->queueCommand(cmd);
+
+                spdlog::info("[FeaturePlugin] Queued '{}' {} on agent '{}' (cmd={})",
+                             featureUid, to_string(op), computerUid, cmd.commandId);
+
+                // Update local tracking
+                if (op == FeatureOperation::Start) {
+                    m_activeFeatures[computerUid].insert(featureUid);
+                } else {
+                    auto it = m_activeFeatures.find(computerUid);
+                    if (it != m_activeFeatures.end()) {
+                        it->second.erase(featureUid);
+                        if (it->second.empty()) m_activeFeatures.erase(it);
+                    }
+                }
+                return Result<void>::ok();
+            }
+        }
+    }
+
+    // Fall back to mock/local behavior
     switch (op)
     {
     case FeatureOperation::Start:
         m_activeFeatures[computerUid].insert(featureUid);
-        spdlog::info("[FeaturePlugin] Started feature '{}' on computer '{}'",
+        spdlog::info("[FeaturePlugin] Started feature '{}' on computer '{}' (mock)",
                      featureUid, computerUid);
         break;
 
@@ -171,7 +255,7 @@ Result<void> FeaturePlugin::controlFeature(
                     m_activeFeatures.erase(it);
                 }
             }
-            spdlog::info("[FeaturePlugin] Stopped feature '{}' on computer '{}'",
+            spdlog::info("[FeaturePlugin] Stopped feature '{}' on computer '{}' (mock)",
                          featureUid, computerUid);
         }
         break;
@@ -189,8 +273,8 @@ Result<void> FeaturePlugin::controlFeature(
  * @brief Applies a feature operation to multiple computers in batch.
  *
  * Iterates over the provided computer UIDs and calls controlFeature() for
- * each one. Returns the list of UIDs for which the operation succeeded.
- * With mock data, all operations succeed.
+ * each one. For agents, commands are queued individually. Returns the list
+ * of UIDs for which the operation succeeded.
  *
  * @param computerUids The list of target computers.
  * @param featureUid   The feature to control.

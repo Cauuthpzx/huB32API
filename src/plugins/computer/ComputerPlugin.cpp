@@ -2,6 +2,8 @@
 #include "ComputerPlugin.hpp"
 #include "NetworkDirectoryBridge.hpp"
 #include "core/internal/Hub32CoreWrapper.hpp"
+#include "agent/AgentRegistry.hpp"
+#include "hub32api/agent/AgentInfo.hpp"
 
 namespace hub32api::plugins {
 
@@ -14,15 +16,12 @@ ComputerPlugin::ComputerPlugin(core::internal::Hub32CoreWrapper& core)
 
 /**
  * @brief Initializes the ComputerPlugin.
- *
- * Currently returns mock data. When Hub32Core is linked, this will enumerate
- * computers via NetworkObjectDirectoryManager.
- *
  * @return true if initialization succeeded.
  */
 bool ComputerPlugin::initialize()
 {
-    spdlog::info("[ComputerPlugin] initialized");
+    spdlog::info("[ComputerPlugin] initialized (live agent support: {})",
+                 m_agentRegistry ? "yes" : "no");
     return true;
 }
 
@@ -35,36 +34,91 @@ void ComputerPlugin::shutdown()
 }
 
 /**
- * @brief Lists all known computers from the network directory.
+ * @brief Attaches the AgentRegistry for live agent data.
+ * @param registry Pointer to AgentRegistry (nullptr reverts to mock-only mode).
+ */
+void ComputerPlugin::setAgentRegistry(agent::AgentRegistry* registry)
+{
+    m_agentRegistry = registry;
+    spdlog::info("[ComputerPlugin] agent registry {}",
+                 registry ? "attached" : "detached");
+}
+
+/**
+ * @brief Lists all known computers.
  *
- * Returns a vector of ComputerInfo entries. Currently provides realistic mock
- * data representing a mixed environment of lab, office, and remote machines.
+ * If an AgentRegistry is attached and has online agents, those agents
+ * appear as computers (with state mapped from AgentState). Mock computers
+ * from the network directory bridge are always included as fallback.
  *
  * @return Result containing a vector of ComputerInfo on success.
  */
 Result<std::vector<ComputerInfo>> ComputerPlugin::listComputers()
 {
+    std::vector<ComputerInfo> result;
+
+    // Live agents first
+    if (m_agentRegistry) {
+        const auto agents = m_agentRegistry->listAgents();
+        for (const auto& agent : agents) {
+            ComputerInfo ci;
+            ci.uid      = agent.agentId;
+            ci.name     = agent.hostname;
+            ci.hostname = agent.hostname;
+            ci.location = "Agent";
+
+            switch (agent.state) {
+                case AgentState::Online: ci.state = ComputerState::Connected; break;
+                case AgentState::Busy:   ci.state = ComputerState::Connected; break;
+                case AgentState::Error:  ci.state = ComputerState::Online;    break;
+                default:                 ci.state = ComputerState::Offline;    break;
+            }
+            result.push_back(std::move(ci));
+        }
+    }
+
+    // Always include mock computers for testing/demo
     NetworkDirectoryBridge bridge(m_core);
-    return Result<std::vector<ComputerInfo>>::ok(bridge.enumerate());
+    auto mockComputers = bridge.enumerate();
+    result.insert(result.end(),
+                  std::make_move_iterator(mockComputers.begin()),
+                  std::make_move_iterator(mockComputers.end()));
+
+    return Result<std::vector<ComputerInfo>>::ok(std::move(result));
 }
 
 /**
  * @brief Retrieves a single computer's information by its UID.
  *
- * Searches the mock computer list for a matching UID.
+ * Checks live agents first, then mock directory.
  *
  * @param uid The unique identifier of the computer to look up.
  * @return Result containing the ComputerInfo if found, or ComputerNotFound error.
  */
 Result<ComputerInfo> ComputerPlugin::getComputer(const Uid& uid)
 {
+    // Check live agents first
+    if (m_agentRegistry) {
+        auto agentResult = m_agentRegistry->findAgent(uid);
+        if (agentResult.is_ok()) {
+            const auto& agent = agentResult.value();
+            ComputerInfo ci;
+            ci.uid      = agent.agentId;
+            ci.name     = agent.hostname;
+            ci.hostname = agent.hostname;
+            ci.location = "Agent";
+            ci.state    = (agent.state == AgentState::Online || agent.state == AgentState::Busy)
+                          ? ComputerState::Connected : ComputerState::Offline;
+            return Result<ComputerInfo>::ok(std::move(ci));
+        }
+    }
+
+    // Fall back to mock directory
     NetworkDirectoryBridge bridge(m_core);
     const auto computers = bridge.enumerate();
 
-    for (const auto& c : computers)
-    {
-        if (c.uid == uid)
-        {
+    for (const auto& c : computers) {
+        if (c.uid == uid) {
             return Result<ComputerInfo>::ok(c);
         }
     }
@@ -78,20 +132,33 @@ Result<ComputerInfo> ComputerPlugin::getComputer(const Uid& uid)
 /**
  * @brief Retrieves the current state of a computer by its UID.
  *
- * Looks up the computer in the mock directory and returns its state.
+ * Checks live agents first, then mock directory.
  *
  * @param uid The unique identifier of the computer.
  * @return Result containing the ComputerState if found, or ComputerNotFound error.
  */
 Result<ComputerState> ComputerPlugin::getState(const Uid& uid)
 {
+    // Check live agents first
+    if (m_agentRegistry) {
+        auto agentResult = m_agentRegistry->findAgent(uid);
+        if (agentResult.is_ok()) {
+            const auto& agent = agentResult.value();
+            switch (agent.state) {
+                case AgentState::Online: return Result<ComputerState>::ok(ComputerState::Connected);
+                case AgentState::Busy:   return Result<ComputerState>::ok(ComputerState::Connected);
+                case AgentState::Error:  return Result<ComputerState>::ok(ComputerState::Online);
+                default:                 return Result<ComputerState>::ok(ComputerState::Offline);
+            }
+        }
+    }
+
+    // Fall back to mock directory
     NetworkDirectoryBridge bridge(m_core);
     const auto computers = bridge.enumerate();
 
-    for (const auto& c : computers)
-    {
-        if (c.uid == uid)
-        {
+    for (const auto& c : computers) {
+        if (c.uid == uid) {
             return Result<ComputerState>::ok(c.state);
         }
     }

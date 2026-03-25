@@ -62,6 +62,14 @@ HttpServer::HttpServer(const ServerConfig& cfg)
     m_impl->keyAuth = std::make_unique<auth::Hub32KeyAuth>();
     m_impl->agentRegistry = std::make_unique<agent::AgentRegistry>();
 
+    // 4a. Wire AgentRegistry into plugins for live agent routing
+    if (auto* compPlugin = m_impl->registry->computerPlugin()) {
+        static_cast<plugins::ComputerPlugin*>(compPlugin)->setAgentRegistry(m_impl->agentRegistry.get());
+    }
+    if (auto* featPlugin = m_impl->registry->featurePlugin()) {
+        static_cast<plugins::FeaturePlugin*>(featPlugin)->setAgentRegistry(m_impl->agentRegistry.get());
+    }
+
     // 4b. Initialize i18n
     core::internal::I18n::init(cfg.localesDir, cfg.defaultLocale);
 
