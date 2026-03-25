@@ -58,6 +58,13 @@ configure_file(
 include(GenerateExportHeader)
 
 # -----------------------------------------------------------------------
+# Enable testing early so agent/ and other subdirectories can add_test()
+# -----------------------------------------------------------------------
+if(BUILD_TESTS)
+    enable_testing()
+endif()
+
+# -----------------------------------------------------------------------
 # Main targets
 # -----------------------------------------------------------------------
 add_subdirectory(src)
@@ -71,7 +78,6 @@ if(BUILD_EXAMPLES)
 endif()
 
 if(BUILD_TESTS)
-    enable_testing()
     add_subdirectory(tests)
 endif()
 

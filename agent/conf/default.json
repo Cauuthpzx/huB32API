@@ -1,0 +1,8 @@
+{
+    "serverUrl": "http://127.0.0.1:11081",
+    "agentKey": "",
+    "pollIntervalMs": 5000,
+    "heartbeatIntervalMs": 30000,
+    "logLevel": "info",
+    "logFile": ""
+}
