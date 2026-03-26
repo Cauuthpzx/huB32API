@@ -12,10 +12,10 @@
 #include "../core/PrecompiledHeader.hpp"
 #include "hub32api/config/ServerConfig.hpp"
 #include "internal/ConfigValidator.hpp"
+#include "../utils/string_utils.hpp"
 
 #include <fstream>
 #include <sstream>
-#include <iomanip>
 #include <openssl/rand.h>
 
 namespace hub32api {
@@ -42,27 +42,21 @@ namespace {
  *
  * @return A 64-character lowercase hexadecimal string with 256 bits of entropy.
  */
-std::string generateRandomSecret()
+Result<std::string> generateRandomSecret()
 {
     // SECURITY: Use OpenSSL's cryptographically secure PRNG instead of
     // std::mt19937_64 which is not crypto-secure and can be predicted
     // if the attacker knows the approximate seed time.
-    unsigned char buf[32]; // 256 bits
+    unsigned char buf[kSecretKeyBytes];  // 256 bits
     if (RAND_bytes(buf, sizeof(buf)) != 1) {
         // If OpenSSL CSPRNG fails, refuse to generate a weak secret.
         // This should never happen in normal operation.
-        throw std::runtime_error(
-            "[ServerConfig] FATAL: OpenSSL RAND_bytes failed — "
-            "cannot generate cryptographically secure JWT secret. "
-            "Check OpenSSL installation and entropy sources.");
+        return Result<std::string>::fail(ApiError{
+            ErrorCode::CryptoFailure,
+            "[ServerConfig] OpenSSL RAND_bytes failed — cannot generate JWT secret"
+        });
     }
-
-    std::ostringstream oss;
-    oss << std::hex << std::setfill('0');
-    for (int i = 0; i < 32; ++i) {
-        oss << std::setw(2) << static_cast<int>(buf[i]);
-    }
-    return oss.str();
+    return Result<std::string>::ok(utils::bytes_to_hex(buf, kSecretKeyBytes));
 }
 
 /**
@@ -166,7 +160,12 @@ ServerConfig ServerConfig::defaults()
     ServerConfig cfg{};
     if (cfg.jwtSecret.empty())
     {
-        cfg.jwtSecret = generateRandomSecret();
+        auto secretResult = generateRandomSecret();
+        if (secretResult.is_err()) {
+            spdlog::error("[ServerConfig] {}", secretResult.error().message);
+            return cfg;
+        }
+        cfg.jwtSecret = secretResult.take();
         spdlog::info("[ServerConfig] generated random JWT secret ({} chars)",
                      cfg.jwtSecret.size());
     }
@@ -297,14 +296,23 @@ ServerConfig ServerConfig::from_file(const std::string& path)
     // Generate a random secret if none was provided
     if (cfg.jwtSecret.empty())
     {
-        cfg.jwtSecret = generateRandomSecret();
+        auto secretResult = generateRandomSecret();
+        if (secretResult.is_err()) {
+            spdlog::error("[ServerConfig] {}", secretResult.error().message);
+            return defaults();
+        }
+        cfg.jwtSecret = secretResult.take();
         spdlog::warn("[ServerConfig] no jwtSecret in config; generated random secret");
     }
 
     // Validate the loaded configuration
     config::internal::ConfigValidator validator;
-    const auto errors = validator.validate(cfg);
-    for (const auto& err : errors) {
+    auto validationResult = validator.validate(cfg);
+    if (validationResult.is_err()) {
+        spdlog::error("[ServerConfig] CRITICAL: {}", validationResult.error().message);
+        return defaults();
+    }
+    for (const auto& err : validationResult.value()) {
         spdlog::warn("[ServerConfig] validation: {}", err);
     }
 
@@ -386,14 +394,23 @@ ServerConfig ServerConfig::from_registry()
     // Generate a random secret if none was provided
     if (cfg.jwtSecret.empty())
     {
-        cfg.jwtSecret = generateRandomSecret();
+        auto secretResult = generateRandomSecret();
+        if (secretResult.is_err()) {
+            spdlog::error("[ServerConfig] {}", secretResult.error().message);
+            return defaults();
+        }
+        cfg.jwtSecret = secretResult.take();
         spdlog::warn("[ServerConfig] no jwtSecret in registry; generated random secret");
     }
 
     // Validate the loaded configuration
     config::internal::ConfigValidator validator;
-    const auto errors = validator.validate(cfg);
-    for (const auto& err : errors) {
+    auto validationResult = validator.validate(cfg);
+    if (validationResult.is_err()) {
+        spdlog::error("[ServerConfig] CRITICAL: {}", validationResult.error().message);
+        return defaults();
+    }
+    for (const auto& err : validationResult.value()) {
         spdlog::warn("[ServerConfig] validation: {}", err);
     }
 

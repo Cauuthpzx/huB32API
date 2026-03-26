@@ -31,30 +31,33 @@ namespace hub32api::config::internal {
  *  - When TLS is enabled, tlsCertFile and tlsKeyFile are not empty.
  *
  * @param cfg  The ServerConfig to validate.
- * @return A vector of error strings for non-critical issues. Empty if the configuration is valid.
- * @throws std::runtime_error if critical fields are invalid (prevents startup).
+ * @return Result with vector of warning strings on success, or ApiError on critical failure.
  */
-std::vector<std::string> ConfigValidator::validate(const ServerConfig& cfg) const
+Result<std::vector<std::string>> ConfigValidator::validate(const ServerConfig& cfg) const
 {
     std::vector<std::string> errors;
 
     // --- CRITICAL: Port range checks ---
-    if (cfg.httpPort == 0 || cfg.httpPort > 65535) {
-        throw std::runtime_error(
-            "CRITICAL: httpPort must be in the range 1-65535 (got " +
-            std::to_string(cfg.httpPort) + ")");
+    if (cfg.httpPort == 0) {
+        return Result<std::vector<std::string>>::fail(ApiError{
+            ErrorCode::InvalidConfig,
+            "httpPort must be in the range 1-65535 (got " + std::to_string(cfg.httpPort) + ")"
+        });
     }
 
     // --- CRITICAL: Bind address must not be empty ---
     if (cfg.bindAddress.empty()) {
-        throw std::runtime_error("CRITICAL: bindAddress must not be empty");
+        return Result<std::vector<std::string>>::fail(ApiError{
+            ErrorCode::InvalidConfig, "bindAddress must not be empty"
+        });
     }
 
     // --- CRITICAL: JWT algorithm must be RS256 or HS256 ---
     if (cfg.jwtAlgorithm != "RS256" && cfg.jwtAlgorithm != "HS256") {
-        throw std::runtime_error(
-            "CRITICAL: jwtAlgorithm must be \"RS256\" or \"HS256\" (got \"" +
-            cfg.jwtAlgorithm + "\")");
+        return Result<std::vector<std::string>>::fail(ApiError{
+            ErrorCode::InvalidConfig,
+            "jwtAlgorithm must be \"RS256\" or \"HS256\" (got \"" + cfg.jwtAlgorithm + "\")"
+        });
     }
 
     // --- NON-CRITICAL: Metrics port (when enabled) ---
@@ -96,7 +99,7 @@ std::vector<std::string> ConfigValidator::validate(const ServerConfig& cfg) cons
         }
     }
 
-    return errors;
+    return Result<std::vector<std::string>>::ok(std::move(errors));
 }
 
 } // namespace hub32api::config::internal
