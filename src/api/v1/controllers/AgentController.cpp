@@ -399,6 +399,9 @@ void AgentController::handleReportResult(const httplib::Request& req, httplib::R
     const CommandStatus status = command_status_from_string(reqDto.status);
     m_registry.reportCommandResult(commandId, status, reqDto.result, reqDto.durationMs);
 
+    spdlog::info("[AuditLog] command result: cmdId={} agentId={} status={} duration={}ms",
+                 commandId, agentId, reqDto.status, reqDto.durationMs);
+
     // --- Return success ---
     nlohmann::json j;
     j["ok"] = true;

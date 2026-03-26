@@ -126,8 +126,8 @@ Result<void> TeacherLocationRepository::revoke(const std::string& teacherId,
  * @param locationId   UUID of the location.
  * @return true if the teacher has access, false otherwise.
  */
-bool TeacherLocationRepository::hasAccess(const std::string& teacherId,
-                                          const std::string& locationId)
+Result<bool> TeacherLocationRepository::hasAccess(const std::string& teacherId,
+                                                   const std::string& locationId)
 {
     std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
 
@@ -137,7 +137,7 @@ bool TeacherLocationRepository::hasAccess(const std::string& teacherId,
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(m_db, k_sql, -1, &stmt, nullptr) != SQLITE_OK) {
         spdlog::error("[TeacherLocationRepository] hasAccess prepare failed: {}", sqlite3_errmsg(m_db));
-        return false;
+        return Result<bool>::fail(ApiError{ErrorCode::InternalError, sqlite3_errmsg(m_db)});
     }
 
     sqlite3_bind_text(stmt, 1, teacherId.c_str(),  static_cast<int>(teacherId.size()),  SQLITE_STATIC);
@@ -146,7 +146,7 @@ bool TeacherLocationRepository::hasAccess(const std::string& teacherId,
     const int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
 
-    return rc == SQLITE_ROW;
+    return Result<bool>::ok(rc == SQLITE_ROW);
 }
 
 // ---------------------------------------------------------------------------
@@ -159,7 +159,7 @@ bool TeacherLocationRepository::hasAccess(const std::string& teacherId,
  * @param teacherId  UUID of the teacher.
  * @return Vector of location IDs (possibly empty).
  */
-std::vector<std::string> TeacherLocationRepository::getLocationIdsForTeacher(
+Result<std::vector<std::string>> TeacherLocationRepository::getLocationIdsForTeacher(
     const std::string& teacherId)
 {
     std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
@@ -171,7 +171,7 @@ std::vector<std::string> TeacherLocationRepository::getLocationIdsForTeacher(
     if (sqlite3_prepare_v2(m_db, k_sql, -1, &stmt, nullptr) != SQLITE_OK) {
         spdlog::error("[TeacherLocationRepository] getLocationIdsForTeacher prepare failed: {}",
                       sqlite3_errmsg(m_db));
-        return {};
+        return Result<std::vector<std::string>>::fail(ApiError{ErrorCode::InternalError, sqlite3_errmsg(m_db)});
     }
 
     sqlite3_bind_text(stmt, 1, teacherId.c_str(), static_cast<int>(teacherId.size()), SQLITE_STATIC);
@@ -189,10 +189,10 @@ std::vector<std::string> TeacherLocationRepository::getLocationIdsForTeacher(
     if (rc != SQLITE_DONE) {
         spdlog::error("[TeacherLocationRepository] getLocationIdsForTeacher step failed: {}",
                       sqlite3_errmsg(m_db));
-        return {};
+        return Result<std::vector<std::string>>::fail(ApiError{ErrorCode::InternalError, sqlite3_errmsg(m_db)});
     }
 
-    return locationIds;
+    return Result<std::vector<std::string>>::ok(std::move(locationIds));
 }
 
 // ---------------------------------------------------------------------------
@@ -205,7 +205,7 @@ std::vector<std::string> TeacherLocationRepository::getLocationIdsForTeacher(
  * @param locationId  UUID of the location.
  * @return Vector of teacher IDs (possibly empty).
  */
-std::vector<std::string> TeacherLocationRepository::getTeacherIdsForLocation(
+Result<std::vector<std::string>> TeacherLocationRepository::getTeacherIdsForLocation(
     const std::string& locationId)
 {
     std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
@@ -217,7 +217,7 @@ std::vector<std::string> TeacherLocationRepository::getTeacherIdsForLocation(
     if (sqlite3_prepare_v2(m_db, k_sql, -1, &stmt, nullptr) != SQLITE_OK) {
         spdlog::error("[TeacherLocationRepository] getTeacherIdsForLocation prepare failed: {}",
                       sqlite3_errmsg(m_db));
-        return {};
+        return Result<std::vector<std::string>>::fail(ApiError{ErrorCode::InternalError, sqlite3_errmsg(m_db)});
     }
 
     sqlite3_bind_text(stmt, 1, locationId.c_str(), static_cast<int>(locationId.size()), SQLITE_STATIC);
@@ -235,10 +235,10 @@ std::vector<std::string> TeacherLocationRepository::getTeacherIdsForLocation(
     if (rc != SQLITE_DONE) {
         spdlog::error("[TeacherLocationRepository] getTeacherIdsForLocation step failed: {}",
                       sqlite3_errmsg(m_db));
-        return {};
+        return Result<std::vector<std::string>>::fail(ApiError{ErrorCode::InternalError, sqlite3_errmsg(m_db)});
     }
 
-    return teacherIds;
+    return Result<std::vector<std::string>>::ok(std::move(teacherIds));
 }
 
 } // namespace hub32api::db

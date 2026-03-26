@@ -88,11 +88,12 @@ AgentState agent_state_from_string(const std::string& s)
 std::string to_string(CommandStatus s)
 {
     switch (s) {
-        case CommandStatus::Pending: return "pending";
-        case CommandStatus::Running: return "running";
-        case CommandStatus::Success: return "success";
-        case CommandStatus::Failed:  return "failed";
-        case CommandStatus::Timeout: return "timeout";
+        case CommandStatus::Pending:    return "pending";
+        case CommandStatus::Dispatched: return "dispatched";
+        case CommandStatus::Running:    return "running";
+        case CommandStatus::Success:    return "success";
+        case CommandStatus::Failed:     return "failed";
+        case CommandStatus::Timeout:    return "timeout";
     }
     return "pending";
 }
@@ -100,10 +101,11 @@ std::string to_string(CommandStatus s)
 /** @brief Parses a string to CommandStatus. */
 CommandStatus command_status_from_string(const std::string& s)
 {
-    if (s == "running") return CommandStatus::Running;
-    if (s == "success") return CommandStatus::Success;
-    if (s == "failed")  return CommandStatus::Failed;
-    if (s == "timeout") return CommandStatus::Timeout;
+    if (s == "dispatched") return CommandStatus::Dispatched;
+    if (s == "running")    return CommandStatus::Running;
+    if (s == "success")    return CommandStatus::Success;
+    if (s == "failed")     return CommandStatus::Failed;
+    if (s == "timeout")    return CommandStatus::Timeout;
     return CommandStatus::Pending;
 }
 

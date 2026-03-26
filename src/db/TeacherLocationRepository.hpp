@@ -21,9 +21,9 @@ public:
 
     Result<void> assign(const std::string& teacherId, const std::string& locationId);
     Result<void> revoke(const std::string& teacherId, const std::string& locationId);
-    bool hasAccess(const std::string& teacherId, const std::string& locationId);
-    std::vector<std::string> getLocationIdsForTeacher(const std::string& teacherId);
-    std::vector<std::string> getTeacherIdsForLocation(const std::string& locationId);
+    Result<bool> hasAccess(const std::string& teacherId, const std::string& locationId);
+    Result<std::vector<std::string>> getLocationIdsForTeacher(const std::string& teacherId);
+    Result<std::vector<std::string>> getTeacherIdsForLocation(const std::string& locationId);
 
 private:
     DatabaseManager& m_dbManager;

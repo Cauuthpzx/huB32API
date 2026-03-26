@@ -401,3 +401,70 @@ TEST_F(AgentDbIntegrationTest, FullLifecycle_RegisterHeartbeatOffline)
     EXPECT_EQ(backOnline.value().ipLastSeen, "192.168.1.51");
     EXPECT_EQ(backOnline.value().agentVersion, "2.0.1");
 }
+
+// ---------------------------------------------------------------------------
+// Test 8: TeacherSendsLock_AgentPollsAndReports
+//
+// Verifies the full command dispatch flow: teacher queues lock-screen command
+// → command stored as Pending → agent polls (status transitions to Dispatched)
+// → second poll returns empty → agent reports success → final state verified.
+// ---------------------------------------------------------------------------
+
+TEST_F(AgentDbIntegrationTest, TeacherSendsLock_AgentPollsAndReports)
+{
+    // 1. Register an agent
+    hub32api::AgentInfo info;
+    info.agentId = "agent-cmd-test";
+    info.hostname = "PC-CMD-01";
+    info.ipAddress = "10.0.0.1";
+    info.state = hub32api::AgentState::Online;
+    auto regResult = agentRegistry.registerAgent(info);
+    ASSERT_TRUE(regResult.is_ok());
+
+    // 2. Teacher queues a lock-screen command (simulates FeaturePlugin behavior)
+    hub32api::AgentCommand cmd;
+    cmd.commandId = "cmd-lock-001";
+    cmd.agentId = "agent-cmd-test";
+    cmd.featureUid = "lock-screen";
+    cmd.operation = "start";
+    cmd.status = hub32api::CommandStatus::Pending;
+    cmd.createdAt = std::chrono::system_clock::now();
+    agentRegistry.queueCommand(cmd);
+
+    // 3. Verify command is findable in history with Pending status
+    auto findResult = agentRegistry.findCommand("cmd-lock-001");
+    ASSERT_TRUE(findResult.is_ok());
+    EXPECT_EQ(findResult.value().status, hub32api::CommandStatus::Pending);
+
+    // 4. Agent polls for pending commands
+    auto commands = agentRegistry.dequeuePendingCommands("agent-cmd-test");
+    ASSERT_EQ(commands.size(), 1u);
+    EXPECT_EQ(commands[0].commandId, "cmd-lock-001");
+    EXPECT_EQ(commands[0].featureUid, "lock-screen");
+    EXPECT_EQ(commands[0].operation, "start");
+    EXPECT_EQ(commands[0].status, hub32api::CommandStatus::Dispatched);
+
+    // 5. Verify second poll returns empty (commands were dequeued)
+    auto emptyPoll = agentRegistry.dequeuePendingCommands("agent-cmd-test");
+    EXPECT_TRUE(emptyPoll.empty());
+
+    // 6. Verify command history shows Dispatched
+    auto dispatched = agentRegistry.findCommand("cmd-lock-001");
+    ASSERT_TRUE(dispatched.is_ok());
+    EXPECT_EQ(dispatched.value().status, hub32api::CommandStatus::Dispatched);
+
+    // 7. Agent reports success
+    agentRegistry.reportCommandResult(
+        "cmd-lock-001",
+        hub32api::CommandStatus::Success,
+        R"({"locked": true})",
+        150  // 150ms execution time
+    );
+
+    // 8. Verify final command state
+    auto finalCmd = agentRegistry.findCommand("cmd-lock-001");
+    ASSERT_TRUE(finalCmd.is_ok());
+    EXPECT_EQ(finalCmd.value().status, hub32api::CommandStatus::Success);
+    EXPECT_EQ(finalCmd.value().result, R"({"locked": true})");
+    EXPECT_EQ(finalCmd.value().durationMs, 150);
+}

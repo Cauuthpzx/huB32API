@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Write",
+      "Edit",
+      "Bash(cmake *)",
+      "Bash(ninja *)",
+      "Bash(ctest *)",
+      "Bash(meson *)",
+      "Bash(git *)",
+      "Bash(cat *)",
+      "Bash(ls *)",
+      "Bash(mkdir *)",
+      "Bash(cp *)",
+      "Bash(grep *)",
+      "Bash(find *)",
+      "Bash(clang-format *)",
+      "Bash(clang-tidy *)"
+    ],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(sudo *)"
+    ]
+  }
+}

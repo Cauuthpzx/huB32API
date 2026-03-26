@@ -13,11 +13,12 @@ namespace hub32api {
  */
 enum class CommandStatus
 {
-    Pending,    ///< Command queued, waiting for agent to pick up
-    Running,    ///< Agent is currently executing the command
-    Success,    ///< Command completed successfully
-    Failed,     ///< Command execution failed
-    Timeout     ///< Command timed out before completion
+    Pending,     ///< Command queued, waiting for agent to pick up
+    Dispatched,  ///< Command sent to agent, awaiting execution
+    Running,     ///< Agent is currently executing the command
+    Success,     ///< Command completed successfully
+    Failed,      ///< Command execution failed
+    Timeout      ///< Command timed out before completion
 };
 
 /**

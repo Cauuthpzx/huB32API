@@ -191,11 +191,16 @@ std::vector<AgentCommand> AgentRegistry::dequeuePendingCommands(const Uid& agent
         return {};
     }
 
-    std::deque<AgentCommand> temp;
-    temp.swap(it->second);
-
-    return {std::make_move_iterator(temp.begin()),
-            std::make_move_iterator(temp.end())};
+    std::vector<AgentCommand> result;
+    while (!it->second.empty()) {
+        auto cmd = std::move(it->second.front());
+        it->second.pop_front();
+        cmd.status = CommandStatus::Dispatched;
+        // Update history with Dispatched status
+        m_commandHistory[cmd.commandId] = cmd;
+        result.push_back(std::move(cmd));
+    }
+    return result;
 }
 
 /**
