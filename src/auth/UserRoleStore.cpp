@@ -29,7 +29,7 @@
 namespace hub32api::auth {
 
 namespace {
-    constexpr int PBKDF2_ITERATIONS = 100000;
+    constexpr int PBKDF2_ITERATIONS = 310000;  // OWASP 2024 minimum for PBKDF2-SHA256
     constexpr int SALT_BYTES = 16;
     constexpr int HASH_BYTES = 32;
 
