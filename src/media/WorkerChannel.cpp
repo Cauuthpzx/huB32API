@@ -2,9 +2,14 @@
 
 #include "../core/PrecompiledHeader.hpp"
 #include "WorkerChannel.hpp"
+#include "FBS/message_generated.h"
+#include "FBS/response_generated.h"
+#include "FBS/notification_generated.h"
+#include "FBS/log_generated.h"
 #include <uv.h>
 #include <chrono>
 #include <cstring>
+#include <spdlog/spdlog.h>
 
 namespace hub32api::media {
 
@@ -154,19 +159,78 @@ void WorkerChannel::channelWrite(const uint8_t* message, uint32_t messageLen, vo
 
 void WorkerChannel::onWorkerMessage(const uint8_t* data, uint32_t len)
 {
-    std::vector<uint8_t> msg(data, data + len);
-
-    // Dispatch to notification callback for all messages.
-    // Full FlatBuffers parsing (request/response ID matching) will be
-    // added in Phase 3.3 when FBS headers are integrated.
-    if (m_notifyCb) {
-        m_notifyCb(msg);
+    // Verify FlatBuffers message integrity
+    flatbuffers::Verifier verifier(data, len);
+    if (!FBS::Message::VerifyMessageBuffer(verifier)) {
+        spdlog::error("WorkerChannel: invalid FlatBuffers message (len={})", len);
+        return;
     }
 
-    // TODO Phase 3.3: Parse FBS::Message to extract message type:
-    //   - Response: match id to m_pending, set response + notify CV
-    //   - Notification: forward to notification callback
-    //   - Log: forward to spdlog
+    const auto* message = FBS::Message::GetMessage(data);
+    if (!message) {
+        spdlog::error("WorkerChannel: null Message after parse");
+        return;
+    }
+
+    switch (message->data_type()) {
+        case FBS::Message::Body::Response: {
+            const auto* response = message->data_as_Response();
+            if (!response) {
+                spdlog::error("WorkerChannel: null Response body");
+                return;
+            }
+
+            uint32_t id = response->id();
+
+            // Match to pending request and resolve it
+            std::shared_ptr<PendingRequest> pending;
+            {
+                std::lock_guard lock(m_pendingMutex);
+                auto it = m_pending.find(id);
+                if (it == m_pending.end()) {
+                    spdlog::warn("WorkerChannel: response id={} has no pending request", id);
+                    return;
+                }
+                pending = it->second;
+            }
+
+            // Set response data and wake the waiting thread
+            {
+                std::lock_guard pLock(pending->mutex);
+                pending->response.assign(data, data + len);
+                pending->completed = true;
+            }
+            pending->cv.notify_one();
+
+            if (!response->accepted()) {
+                const auto* reason = response->reason();
+                spdlog::warn("WorkerChannel: response id={} rejected: {}",
+                             id, reason ? reason->str() : "unknown");
+            }
+            break;
+        }
+
+        case FBS::Message::Body::Notification: {
+            std::vector<uint8_t> msg(data, data + len);
+            if (m_notifyCb) {
+                m_notifyCb(msg);
+            }
+            break;
+        }
+
+        case FBS::Message::Body::Log: {
+            const auto* log = message->data_as_Log();
+            if (log && log->data()) {
+                spdlog::debug("mediasoup-worker: {}", log->data()->str());
+            }
+            break;
+        }
+
+        default:
+            spdlog::warn("WorkerChannel: unknown message type: {}",
+                         static_cast<int>(message->data_type()));
+            break;
+    }
 }
 
 } // namespace hub32api::media

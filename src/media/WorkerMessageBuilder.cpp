@@ -316,8 +316,20 @@ nlohmann::json WorkerMessageBuilder::parseWebRtcTransportDump(
         if (dump->dtls_parameters()->fingerprints()) {
             for (const auto* fp : *dump->dtls_parameters()->fingerprints()) {
                 nlohmann::json f;
-                // TODO: Map FBS::WebRtcTransport::FingerprintAlgorithm enum to string
-                f["algorithm"] = "sha-256";
+                switch (fp->algorithm()) {
+                    case FBS::WebRtcTransport::FingerprintAlgorithm::SHA1:
+                        f["algorithm"] = "sha-1"; break;
+                    case FBS::WebRtcTransport::FingerprintAlgorithm::SHA224:
+                        f["algorithm"] = "sha-224"; break;
+                    case FBS::WebRtcTransport::FingerprintAlgorithm::SHA256:
+                        f["algorithm"] = "sha-256"; break;
+                    case FBS::WebRtcTransport::FingerprintAlgorithm::SHA384:
+                        f["algorithm"] = "sha-384"; break;
+                    case FBS::WebRtcTransport::FingerprintAlgorithm::SHA512:
+                        f["algorithm"] = "sha-512"; break;
+                    default:
+                        f["algorithm"] = "sha-256"; break;
+                }
                 f["value"] = fp->value() ? fp->value()->str() : "";
                 result["dtlsParameters"]["fingerprints"].push_back(std::move(f));
             }

@@ -81,6 +81,7 @@ struct MediasoupSfuBackend::Impl
     std::unordered_map<std::string, int> routerToWorker;             // routerId -> worker index
     std::unordered_map<std::string, std::string> transportToRouter;  // transportId -> routerId
     std::unordered_map<std::string, std::string> producerToTransport; // producerId -> transportId
+    std::unordered_map<std::string, std::string> producerKindMap;    // producerId -> "video"/"audio"
     std::unordered_map<std::string, std::string> consumerToTransport; // consumerId -> transportId
     int nextWorkerIdx = 0;
 
@@ -275,7 +276,10 @@ void MediasoupSfuBackend::closeRouter(const std::string& routerId)
     // Remove producers/consumers belonging to those transports
     for (const auto& tid : transportIds) {
         for (auto it = m_impl->producerToTransport.begin(); it != m_impl->producerToTransport.end();) {
-            if (it->second == tid) { it = m_impl->producerToTransport.erase(it); } else { ++it; }
+            if (it->second == tid) {
+                m_impl->producerKindMap.erase(it->first);
+                it = m_impl->producerToTransport.erase(it);
+            } else { ++it; }
         }
         for (auto it = m_impl->consumerToTransport.begin(); it != m_impl->consumerToTransport.end();) {
             if (it->second == tid) { it = m_impl->consumerToTransport.erase(it); } else { ++it; }
@@ -410,6 +414,7 @@ Result<ProducerInfo> MediasoupSfuBackend::produce(const std::string& transportId
     WorkerMessageBuilder::parseProduceResponse(body, reqId, producerType);
 
     m_impl->producerToTransport[producerId] = transportId;
+    m_impl->producerKindMap[producerId] = kind;
 
     ProducerInfo info;
     info.id = producerId;
@@ -454,8 +459,10 @@ Result<ConsumerInfo> MediasoupSfuBackend::consume(const std::string& transportId
     ConsumerInfo info;
     info.id = consumerId;
     info.producerId = producerId;
-    info.kind = "video";  // TODO: determine from producer's kind
-    info.rtpParameters = rtpCapabilities;  // TODO: parse actual negotiated params
+    // Look up producer's kind from tracking map
+    auto kindIt = m_impl->producerKindMap.find(producerId);
+    info.kind = (kindIt != m_impl->producerKindMap.end()) ? kindIt->second : "video";
+    info.rtpParameters = consumeDetails.empty() ? rtpCapabilities : consumeDetails;
     spdlog::info("[MediasoupSfuBackend] consumed {} from producer {} on transport {}",
                  consumerId, producerId, transportId);
     return Result<ConsumerInfo>::ok(std::move(info));
@@ -476,7 +483,10 @@ void MediasoupSfuBackend::closeTransport(const std::string& transportId)
 
     // Remove producers/consumers belonging to this transport
     for (auto it = m_impl->producerToTransport.begin(); it != m_impl->producerToTransport.end();) {
-        if (it->second == transportId) { it = m_impl->producerToTransport.erase(it); } else { ++it; }
+        if (it->second == transportId) {
+            m_impl->producerKindMap.erase(it->first);
+            it = m_impl->producerToTransport.erase(it);
+        } else { ++it; }
     }
     for (auto it = m_impl->consumerToTransport.begin(); it != m_impl->consumerToTransport.end();) {
         if (it->second == transportId) { it = m_impl->consumerToTransport.erase(it); } else { ++it; }

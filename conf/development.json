@@ -2,5 +2,11 @@
   "http": { "port": 11081, "bindAddress": "0.0.0.0" },
   "databaseDir": "data",
   "logging": { "level": "debug" },
-  "connections": { "lifetimeSec": 30, "idleTimeoutSec": 15 }
+  "connections": { "lifetimeSec": 30, "idleTimeoutSec": 15 },
+  "sfu": {
+    "backend": "mock",
+    "workerCount": 2,
+    "rtcMinPort": 40000,
+    "rtcMaxPort": 49999
+  }
 }
