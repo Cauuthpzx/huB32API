@@ -2,31 +2,30 @@
 
 #include "../core/PrecompiledHeader.hpp"
 #include "MediasoupSfuBackend.hpp"
+#include "WorkerChannel.hpp"
 
-// This file provides the SKELETON implementation.
-// The actual mediasoup worker integration requires:
-// 1. Building libmediasoup-worker as a static library (Meson)
-// 2. Including mediasoup headers (worker/include/lib.hpp)
-// 3. Implementing FlatBuffers message encoding/decoding
-// 4. Spawning worker threads via mediasoup_worker_run()
-//
-// For now, this skeleton documents the exact API contract so the
-// implementation can be completed on a Linux build environment.
-// See: third_party/mediasoup-server-ref/controller/ for reference implementation.
+#include <thread>
+#include <vector>
+
+// mediasoup worker C API (linked from libmediasoup-worker.a)
+extern "C" {
+    int mediasoup_worker_run(
+        int argc, char* argv[],
+        const char* version,
+        int consumerChannelFd, int producerChannelFd,
+        void* channelReadFn, void* channelReadCtx,
+        void* channelWriteFn, void* channelWriteCtx);
+}
 
 namespace hub32api::media {
 
 struct MediasoupSfuBackend::Impl
 {
     Config config;
-    // TODO: When building on Linux with mediasoup worker:
-    // std::vector<std::thread> workerThreads;
-    // std::vector<std::unique_ptr<Channel>> channels;
-    // std::unordered_map<std::string, RouterInfo> routers;
-    // std::unordered_map<std::string, TransportState> transports;
-    // std::unordered_map<std::string, ProducerState> producers;
-    // std::unordered_map<std::string, ConsumerState> consumers;
+    std::vector<std::unique_ptr<WorkerChannel>> channels;
+    std::vector<std::thread> workerThreads;
     bool initialized = false;
+    int numWorkers = 0;
 };
 
 MediasoupSfuBackend::MediasoupSfuBackend(const Config& cfg)
@@ -34,20 +33,87 @@ MediasoupSfuBackend::MediasoupSfuBackend(const Config& cfg)
 {
     m_impl->config = cfg;
 
-    // TODO: On Linux, initialize mediasoup workers:
-    // 1. Determine numWorkers (if 0, use std::thread::hardware_concurrency())
-    // 2. For each worker:
-    //    a. Create Channel with ChannelReadFn/ChannelWriteFn callbacks
-    //    b. Spawn thread calling mediasoup_worker_run()
-    //    c. Wait for worker ready notification
+    // Determine worker count: 0 means auto-detect from CPU cores
+    m_impl->numWorkers = cfg.numWorkers;
+    if (m_impl->numWorkers <= 0) {
+        m_impl->numWorkers = static_cast<int>(std::thread::hardware_concurrency());
+        if (m_impl->numWorkers <= 0) {
+            m_impl->numWorkers = 1;
+        }
+    }
 
-    spdlog::info("[MediasoupSfuBackend] initialized with {} workers (stub — requires Linux build)",
-                 cfg.numWorkers);
+    spdlog::info("[MediasoupSfuBackend] spawning {} workers (rtcMinPort={}, rtcMaxPort={})",
+                 m_impl->numWorkers, cfg.rtcMinPort, cfg.rtcMaxPort);
+
+    // Spawn one worker thread per configured worker
+    for (int i = 0; i < m_impl->numWorkers; ++i) {
+        auto channel = std::make_unique<WorkerChannel>();
+        auto* channelPtr = channel.get();
+
+        // Build argv for mediasoup_worker_run()
+        std::string logLevel = "--logLevel=" + cfg.logLevel;
+        std::string rtcMin = "--rtcMinPort=" + std::to_string(cfg.rtcMinPort);
+        std::string rtcMax = "--rtcMaxPort=" + std::to_string(cfg.rtcMaxPort);
+
+        std::vector<std::string> argStrings = {
+            "mediasoup-worker", logLevel, rtcMin, rtcMax
+        };
+        if (!cfg.dtlsCertFile.empty()) {
+            argStrings.push_back("--dtlsCertificateFile=" + cfg.dtlsCertFile);
+        }
+        if (!cfg.dtlsKeyFile.empty()) {
+            argStrings.push_back("--dtlsPrivateKeyFile=" + cfg.dtlsKeyFile);
+        }
+
+        // Shared ownership keeps strings alive for the worker thread's lifetime
+        auto argsCopy = std::make_shared<std::vector<std::string>>(std::move(argStrings));
+        auto argv = std::make_shared<std::vector<char*>>();
+        for (auto& s : *argsCopy) {
+            argv->push_back(s.data());
+        }
+
+        std::thread worker([channelPtr, argsCopy, argv, i]() {
+            spdlog::info("[MediasoupSfuBackend] worker {} starting", i);
+
+            int rc = mediasoup_worker_run(
+                static_cast<int>(argv->size()),
+                argv->data(),
+                "3.14.7",
+                0, 0,  // no pipe fds — using in-process channel callbacks
+                reinterpret_cast<void*>(&WorkerChannel::channelRead),
+                channelPtr,
+                reinterpret_cast<void*>(&WorkerChannel::channelWrite),
+                channelPtr
+            );
+
+            spdlog::info("[MediasoupSfuBackend] worker {} exited with code {}", i, rc);
+        });
+
+        m_impl->channels.push_back(std::move(channel));
+        m_impl->workerThreads.push_back(std::move(worker));
+    }
+
+    m_impl->initialized = true;
+    spdlog::info("[MediasoupSfuBackend] {} workers spawned", m_impl->numWorkers);
 }
 
 MediasoupSfuBackend::~MediasoupSfuBackend()
 {
-    // TODO: Stop all workers, join threads
+    spdlog::info("[MediasoupSfuBackend] shutting down {} workers", m_impl->numWorkers);
+
+    // Close all channels — signals workers to exit their event loops
+    for (auto& ch : m_impl->channels) {
+        ch->close();
+    }
+
+    // Join all worker threads
+    for (auto& t : m_impl->workerThreads) {
+        if (t.joinable()) {
+            t.join();
+        }
+    }
+
+    spdlog::info("[MediasoupSfuBackend] all workers stopped");
 }
 
 Result<std::string> MediasoupSfuBackend::createRouter(const std::string& roomId)
