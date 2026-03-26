@@ -71,6 +71,7 @@
 // Middleware
 #include "../api/v1/middleware/AuthMiddleware.hpp"
 #include "../api/v1/middleware/CorsMiddleware.hpp"
+#include "../api/v1/middleware/InputValidationMiddleware.hpp"
 #include "../api/v1/middleware/LoggingMiddleware.hpp"
 #include "../api/v1/middleware/RateLimitMiddleware.hpp"
 
@@ -749,18 +750,20 @@ void Router::registerV1()
 
     auto cors   = std::make_shared<api::v1::middleware::CorsMiddleware>(corsConfig);
     auto logger = std::make_shared<api::v1::middleware::LoggingMiddleware>();
+    auto iv     = std::make_shared<api::v1::middleware::InputValidationMiddleware>();
     auto rl     = std::make_shared<api::v1::middleware::RateLimitMiddleware>(rlConfig);
     auto auth   = std::make_shared<api::v1::middleware::AuthMiddleware>(m_svcs.jwtAuth);
 
     // ── Route builders ────────────────────────────────────────────────────
-    // Public: CORS + Logging + RateLimit (no JWT)
+    // Public: CORS + Logging + InputValidation + RateLimit (no JWT)
     auto publicRoute = [&](const std::string& method, const std::string& path, auto handler)
     {
-        auto h = [cors, logger, rl, handler]
+        auto h = [cors, logger, iv, rl, handler]
             (const httplib::Request& req, httplib::Response& res)
         {
             logger->logRequest(req);
             if (!cors->process(req, res)) { logger->logResponse(req, res); return; }
+            if (!iv->process(req, res))   { logger->logResponse(req, res); return; }
             if (!rl->process(req, res))   { logger->logResponse(req, res); return; }
             handler(req, res);
             logger->logResponse(req, res);
@@ -771,14 +774,15 @@ void Router::registerV1()
         else if (method == "OPTIONS")m_server.Options(path.c_str(), h);
     };
 
-    // Protected: CORS + Logging + RateLimit + JWT
+    // Protected: CORS + Logging + InputValidation + RateLimit + JWT
     auto protectedRoute = [&](const std::string& method, const std::string& path, auto handler)
     {
-        auto h = [cors, logger, rl, auth, handler]
+        auto h = [cors, logger, iv, rl, auth, handler]
             (const httplib::Request& req, httplib::Response& res)
         {
             logger->logRequest(req);
             if (!cors->process(req, res)) { logger->logResponse(req, res); return; }
+            if (!iv->process(req, res))   { logger->logResponse(req, res); return; }
             if (!rl->process(req, res))   { logger->logResponse(req, res); return; }
             core::internal::ApiContext ctx;
             ctx.requestId = req.has_header("X-Request-ID")
@@ -907,18 +911,20 @@ void Router::registerAgentRoutes()
 
     auto cors   = std::make_shared<api::v1::middleware::CorsMiddleware>(corsConfig);
     auto logger = std::make_shared<api::v1::middleware::LoggingMiddleware>();
+    auto iv     = std::make_shared<api::v1::middleware::InputValidationMiddleware>();
     auto rl     = std::make_shared<api::v1::middleware::RateLimitMiddleware>(rlConfig);
     auto auth   = std::make_shared<api::v1::middleware::AuthMiddleware>(m_svcs.jwtAuth);
 
     // ── Route builders ────────────────────────────────────────────────────
-    // Public: CORS + Logging + RateLimit (no JWT)
+    // Public: CORS + Logging + InputValidation + RateLimit (no JWT)
     auto publicRoute = [&](const std::string& method, const std::string& path, auto handler)
     {
-        auto h = [cors, logger, rl, handler]
+        auto h = [cors, logger, iv, rl, handler]
             (const httplib::Request& req, httplib::Response& res)
         {
             logger->logRequest(req);
             if (!cors->process(req, res)) { logger->logResponse(req, res); return; }
+            if (!iv->process(req, res))   { logger->logResponse(req, res); return; }
             if (!rl->process(req, res))   { logger->logResponse(req, res); return; }
             handler(req, res);
             logger->logResponse(req, res);
@@ -928,14 +934,15 @@ void Router::registerAgentRoutes()
         else if (method == "DELETE") m_server.Delete(path.c_str(), h);
     };
 
-    // Protected: CORS + Logging + RateLimit + JWT
+    // Protected: CORS + Logging + InputValidation + RateLimit + JWT
     auto protectedRoute = [&](const std::string& method, const std::string& path, auto handler)
     {
-        auto h = [cors, logger, rl, auth, handler]
+        auto h = [cors, logger, iv, rl, auth, handler]
             (const httplib::Request& req, httplib::Response& res)
         {
             logger->logRequest(req);
             if (!cors->process(req, res)) { logger->logResponse(req, res); return; }
+            if (!iv->process(req, res))   { logger->logResponse(req, res); return; }
             if (!rl->process(req, res))   { logger->logResponse(req, res); return; }
             core::internal::ApiContext ctx;
             ctx.requestId = req.has_header("X-Request-ID")
@@ -1012,16 +1019,18 @@ void Router::registerV2()
     const api::v1::middleware::RateLimitConfig rlConfig{};
     auto cors   = std::make_shared<api::v1::middleware::CorsMiddleware>(corsConfig);
     auto logger = std::make_shared<api::v1::middleware::LoggingMiddleware>();
+    auto iv     = std::make_shared<api::v1::middleware::InputValidationMiddleware>();
     auto rl     = std::make_shared<api::v1::middleware::RateLimitMiddleware>(rlConfig);
     auto auth   = std::make_shared<api::v1::middleware::AuthMiddleware>(m_svcs.jwtAuth);
 
     auto protectedRoute = [&](const std::string& method, const std::string& path, auto handler)
     {
-        auto h = [cors, logger, rl, auth, handler]
+        auto h = [cors, logger, iv, rl, auth, handler]
             (const httplib::Request& req, httplib::Response& res)
         {
             logger->logRequest(req);
             if (!cors->process(req, res)) { logger->logResponse(req, res); return; }
+            if (!iv->process(req, res))   { logger->logResponse(req, res); return; }
             if (!rl->process(req, res))   { logger->logResponse(req, res); return; }
             core::internal::ApiContext ctx;
             ctx.requestId = req.has_header("X-Request-ID")

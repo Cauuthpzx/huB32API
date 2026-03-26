@@ -18,6 +18,7 @@ add_library(hub32api-server SHARED
     # v1 middleware
     ../api/v1/middleware/AuthMiddleware.cpp
     ../api/v1/middleware/CorsMiddleware.cpp
+    ../api/v1/middleware/InputValidationMiddleware.cpp
     ../api/v1/middleware/LoggingMiddleware.cpp
     ../api/v1/middleware/RateLimitMiddleware.cpp
 

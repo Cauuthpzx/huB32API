@@ -40,7 +40,9 @@
     "invalid_operation": "无效操作：{0}",
     "too_many_requests": "请求过多",
     "rate_limit_exceeded": "已超过速率限制",
-    "service_unavailable": "服务不可用"
+    "service_unavailable": "服务不可用",
+    "payload_too_large": "请求体太大",
+    "unsupported_media_type": "Content-Type 必须是 application/json"
   },
   "auth": {
     "method_hub32_key": "Hub32 密钥认证",

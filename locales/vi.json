@@ -40,7 +40,9 @@
     "invalid_operation": "Thao tác không hợp lệ: {0}",
     "too_many_requests": "Quá nhiều yêu cầu",
     "rate_limit_exceeded": "Đã vượt giới hạn tốc độ",
-    "service_unavailable": "Dịch vụ không khả dụng"
+    "service_unavailable": "Dịch vụ không khả dụng",
+    "payload_too_large": "Nội dung yêu cầu quá lớn",
+    "unsupported_media_type": "Content-Type phải là application/json"
   },
   "auth": {
     "method_hub32_key": "Xác thực bằng khóa Hub32",

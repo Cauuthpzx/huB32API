@@ -40,7 +40,9 @@
     "invalid_operation": "Invalid operation: {0}",
     "too_many_requests": "Too Many Requests",
     "rate_limit_exceeded": "Rate limit exceeded",
-    "service_unavailable": "Service Unavailable"
+    "service_unavailable": "Service Unavailable",
+    "payload_too_large": "Request body is too large",
+    "unsupported_media_type": "Content-Type must be application/json"
   },
   "auth": {
     "method_hub32_key": "Hub32 Key Authentication",
