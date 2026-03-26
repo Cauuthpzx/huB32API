@@ -1,9 +1,11 @@
 include(WindowsBuildHelpers)
 
-add_executable(hub32api-service
-    main.cpp
-    WinServiceAdapter.cpp
-)
+set(SERVICE_SOURCES main.cpp)
+if(WIN32)
+    list(APPEND SERVICE_SOURCES WinServiceAdapter.cpp)
+endif()
+
+add_executable(hub32api-service ${SERVICE_SOURCES})
 
 target_include_directories(hub32api-service
     PRIVATE
@@ -17,10 +19,12 @@ target_link_libraries(hub32api-service
         hub32api-server
 )
 
-add_windows_resources(hub32api-service
-    DESCRIPTION "hub32api Windows Service"
-    ORIGINAL_FILENAME "hub32api-service.exe"
-)
+if(WIN32)
+    add_windows_resources(hub32api-service
+        DESCRIPTION "hub32api Windows Service"
+        ORIGINAL_FILENAME "hub32api-service.exe"
+    )
+endif()
 
 install(TARGETS hub32api-service
     RUNTIME DESTINATION bin

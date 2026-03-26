@@ -57,17 +57,19 @@ target_link_libraries(hub32api-server
         hub32api-core
     PRIVATE
         httplib::httplib
-        ws2_32
-        iphlpapi
+        $<$<PLATFORM_ID:Windows>:ws2_32>
+        $<$<PLATFORM_ID:Windows>:iphlpapi>
 )
 
 set_project_warnings(hub32api-server)
 add_pch(hub32api-server "${CMAKE_SOURCE_DIR}/src/core/PrecompiledHeader.hpp")
 
-add_windows_resources(hub32api-server
-    DESCRIPTION "hub32api HTTP Server"
-    ORIGINAL_FILENAME "hub32api-server.dll"
-)
+if(WIN32)
+    add_windows_resources(hub32api-server
+        DESCRIPTION "hub32api HTTP Server"
+        ORIGINAL_FILENAME "hub32api-server.dll"
+    )
+endif()
 
 install(TARGETS hub32api-server
     LIBRARY DESTINATION lib

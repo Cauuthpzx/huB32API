@@ -48,8 +48,8 @@ target_link_libraries(hub32api-core
         jwt-cpp::jwt-cpp
         SQLite::SQLite3
         Argon2::argon2
-        ws2_32
-        crypt32
+        $<$<PLATFORM_ID:Windows>:ws2_32>
+        $<$<PLATFORM_ID:Windows>:crypt32>
         $<IF:$<TARGET_EXISTS:OpenSSL::SSL>,OpenSSL::SSL,ssl>
         $<IF:$<TARGET_EXISTS:OpenSSL::Crypto>,OpenSSL::Crypto,crypto>
 )

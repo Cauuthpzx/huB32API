@@ -1,5 +1,7 @@
 #include "../core/PrecompiledHeader.hpp"
+#ifdef _WIN32
 #include "WinServiceAdapter.hpp"
+#endif
 #include "../server/HttpServer.hpp"
 #include "hub32api/config/ServerConfig.hpp"
 
@@ -128,13 +130,19 @@ int main(int argc, char* argv[])
             configPath = argv[++i];
     }
 
+#ifdef _WIN32
     if (doInstall)   return hub32api::WinServiceAdapter::install(configPath)   ? 0 : 1;
     if (doUninstall) return hub32api::WinServiceAdapter::uninstall()            ? 0 : 1;
+#endif
 
     // Load configuration
     g_configPath = configPath;
     auto cfgResult = configPath.empty()
+#ifdef _WIN32
         ? hub32api::ServerConfig::from_registry()
+#else
+        ? hub32api::ServerConfig::from_file("conf/default.json")
+#endif
         : hub32api::ServerConfig::from_file(configPath);
 
     if (cfgResult.is_err()) {
@@ -143,11 +151,13 @@ int main(int argc, char* argv[])
     }
     auto cfg = cfgResult.take();
 
+#ifdef _WIN32
     if (asService) {
         return hub32api::WinServiceAdapter::runAsService([&cfg]{ return runServer(cfg); });
     }
+#endif
 
-    // Console mode (--console)
+    // Console mode (--console / Linux default)
     spdlog::info("[main] running in console mode");
     return runServer(cfg);
 }
