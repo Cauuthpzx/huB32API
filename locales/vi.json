@@ -42,7 +42,15 @@
     "rate_limit_exceeded": "Đã vượt giới hạn tốc độ",
     "service_unavailable": "Dịch vụ không khả dụng",
     "payload_too_large": "Nội dung yêu cầu quá lớn",
-    "unsupported_media_type": "Content-Type phải là application/json"
+    "unsupported_media_type": "Content-Type phải là application/json",
+    "school_not_found": "Không tìm thấy trường học",
+    "location_not_found": "Không tìm thấy phòng",
+    "teacher_not_found": "Không tìm thấy giáo viên",
+    "teacher_exists": "Tên đăng nhập đã tồn tại",
+    "forbidden": "Bạn không có quyền thực hiện thao tác này",
+    "name_required": "Tên là bắt buộc",
+    "username_required": "Tên đăng nhập là bắt buộc",
+    "password_required": "Mật khẩu là bắt buộc"
   },
   "auth": {
     "method_hub32_key": "Xác thực bằng khóa Hub32",

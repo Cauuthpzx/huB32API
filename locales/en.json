@@ -42,7 +42,15 @@
     "rate_limit_exceeded": "Rate limit exceeded",
     "service_unavailable": "Service Unavailable",
     "payload_too_large": "Request body is too large",
-    "unsupported_media_type": "Content-Type must be application/json"
+    "unsupported_media_type": "Content-Type must be application/json",
+    "school_not_found": "School not found",
+    "location_not_found": "Location not found",
+    "teacher_not_found": "Teacher not found",
+    "teacher_exists": "Username already exists",
+    "forbidden": "You do not have permission for this action",
+    "name_required": "Name is required",
+    "username_required": "Username is required",
+    "password_required": "Password is required"
   },
   "auth": {
     "method_hub32_key": "Hub32 Key Authentication",

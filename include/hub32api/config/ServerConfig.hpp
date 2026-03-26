@@ -49,6 +49,9 @@ struct HUB32API_EXPORT ServerConfig
     std::string agentKeyFile;     // path to file containing hashed agent registration key
     std::string authKeyFile;      // path to file containing hashed Hub32 auth key
 
+    // Database
+    std::string databaseDir = "data";   // path to SQLite databases
+
     // Hub32 integration
     std::string hub32PluginDir;   // path to hub32 plugin directory
 

@@ -27,6 +27,7 @@
     "expirySeconds": 3600,
     "tokenRevocationFile": ""
   },
+  "databaseDir": "data",
   "hub32": {
     "pluginDir": ""
   },

@@ -62,6 +62,8 @@
 #include "../api/v1/controllers/FeatureController.hpp"
 #include "../api/v1/controllers/FramebufferController.hpp"
 #include "../api/v1/controllers/SessionController.hpp"
+#include "../api/v1/controllers/SchoolController.hpp"
+#include "../api/v1/controllers/TeacherController.hpp"
 
 // Controllers — v2
 #include "../api/v2/controllers/BatchController.hpp"
@@ -87,6 +89,13 @@
 
 // Agent
 #include "../agent/AgentRegistry.hpp"
+
+// Database repositories
+#include "../db/SchoolRepository.hpp"
+#include "../db/LocationRepository.hpp"
+#include "../db/ComputerRepository.hpp"
+#include "../db/TeacherRepository.hpp"
+#include "../db/TeacherLocationRepository.hpp"
 
 // SSE
 #include "SseManager.hpp"
@@ -702,6 +711,8 @@ void Router::registerAll()
 {
     registerV1();
     registerAgentRoutes();
+    registerSchoolRoutes();
+    registerTeacherRoutes();
     registerV2();
     registerHealthAndMetrics();
     registerOpenApi();
@@ -1001,6 +1012,218 @@ void Router::registerAgentRoutes()
         });
 
     spdlog::debug("[Router] agent routes registered");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// School routes
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * @brief Registers all /api/v1/schools and /api/v1/locations routes.
+ */
+void Router::registerSchoolRoutes()
+{
+    if (!m_svcs.schoolRepo || !m_svcs.locationRepo || !m_svcs.computerRepo) {
+        spdlog::warn("[Router] school repos not available — skipping school routes");
+        return;
+    }
+
+    auto schoolCtrl = std::make_shared<api::v1::SchoolController>(
+        *m_svcs.schoolRepo, *m_svcs.locationRepo, *m_svcs.computerRepo, m_svcs.jwtAuth);
+
+    // ── Middleware ────────────────────────────────────────────────────────
+    const api::v1::middleware::CorsConfig corsConfig{
+        {"*"},
+        {"GET","POST","PUT","DELETE","OPTIONS"},
+        {"Authorization","Content-Type","X-Request-ID","Accept"},
+        false,
+        3600
+    };
+    const api::v1::middleware::RateLimitConfig rlConfig{ 120, 20 };
+
+    auto cors   = std::make_shared<api::v1::middleware::CorsMiddleware>(corsConfig);
+    auto logger = std::make_shared<api::v1::middleware::LoggingMiddleware>();
+    auto iv     = std::make_shared<api::v1::middleware::InputValidationMiddleware>();
+    auto rl     = std::make_shared<api::v1::middleware::RateLimitMiddleware>(rlConfig);
+    auto auth   = std::make_shared<api::v1::middleware::AuthMiddleware>(m_svcs.jwtAuth);
+
+    // Protected: CORS + Logging + InputValidation + RateLimit + JWT
+    auto protectedRoute = [&](const std::string& method, const std::string& path, auto handler)
+    {
+        auto h = [cors, logger, iv, rl, auth, handler]
+            (const httplib::Request& req, httplib::Response& res)
+        {
+            logger->logRequest(req);
+            if (!cors->process(req, res)) { logger->logResponse(req, res); return; }
+            if (!iv->process(req, res))   { logger->logResponse(req, res); return; }
+            if (!rl->process(req, res))   { logger->logResponse(req, res); return; }
+            core::internal::ApiContext ctx;
+            ctx.requestId = req.has_header("X-Request-ID")
+                ? req.get_header_value("X-Request-ID") : "";
+            if (!auth->process(req, res, ctx)) { logger->logResponse(req, res); return; }
+            handler(req, res);
+            logger->logResponse(req, res);
+        };
+        if (method == "GET")    m_server.Get(path.c_str(), h);
+        else if (method == "POST")   m_server.Post(path.c_str(), h);
+        else if (method == "PUT")    m_server.Put(path.c_str(), h);
+        else if (method == "DELETE") m_server.Delete(path.c_str(), h);
+    };
+
+    // ── Schools ──────────────────────────────────────────────────────────
+    protectedRoute("POST", "/api/v1/schools",
+        [schoolCtrl](const httplib::Request& req, httplib::Response& res) {
+            schoolCtrl->handleCreateSchool(req, res);
+        });
+
+    protectedRoute("GET", "/api/v1/schools",
+        [schoolCtrl](const httplib::Request& req, httplib::Response& res) {
+            schoolCtrl->handleListSchools(req, res);
+        });
+
+    protectedRoute("GET", R"(/api/v1/schools/([^/]+))",
+        [schoolCtrl](const httplib::Request& req, httplib::Response& res) {
+            schoolCtrl->handleGetSchool(req, res);
+        });
+
+    protectedRoute("PUT", R"(/api/v1/schools/([^/]+))",
+        [schoolCtrl](const httplib::Request& req, httplib::Response& res) {
+            schoolCtrl->handleUpdateSchool(req, res);
+        });
+
+    protectedRoute("DELETE", R"(/api/v1/schools/([^/]+))",
+        [schoolCtrl](const httplib::Request& req, httplib::Response& res) {
+            schoolCtrl->handleDeleteSchool(req, res);
+        });
+
+    // ── Locations ────────────────────────────────────────────────────────
+    protectedRoute("POST", "/api/v1/locations",
+        [schoolCtrl](const httplib::Request& req, httplib::Response& res) {
+            schoolCtrl->handleCreateLocation(req, res);
+        });
+
+    protectedRoute("GET", "/api/v1/locations",
+        [schoolCtrl](const httplib::Request& req, httplib::Response& res) {
+            schoolCtrl->handleListLocations(req, res);
+        });
+
+    // Computers-by-location must be registered BEFORE bare /:id
+    protectedRoute("GET", R"(/api/v1/locations/([^/]+)/computers)",
+        [schoolCtrl](const httplib::Request& req, httplib::Response& res) {
+            schoolCtrl->handleListLocationComputers(req, res);
+        });
+
+    protectedRoute("GET", R"(/api/v1/locations/([^/]+))",
+        [schoolCtrl](const httplib::Request& req, httplib::Response& res) {
+            schoolCtrl->handleGetLocation(req, res);
+        });
+
+    protectedRoute("PUT", R"(/api/v1/locations/([^/]+))",
+        [schoolCtrl](const httplib::Request& req, httplib::Response& res) {
+            schoolCtrl->handleUpdateLocation(req, res);
+        });
+
+    protectedRoute("DELETE", R"(/api/v1/locations/([^/]+))",
+        [schoolCtrl](const httplib::Request& req, httplib::Response& res) {
+            schoolCtrl->handleDeleteLocation(req, res);
+        });
+
+    spdlog::debug("[Router] school + location routes registered");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Teacher routes
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * @brief Registers all /api/v1/teachers routes.
+ */
+void Router::registerTeacherRoutes()
+{
+    if (!m_svcs.teacherRepo || !m_svcs.teacherLocationRepo || !m_svcs.locationRepo) {
+        spdlog::warn("[Router] teacher repos not available — skipping teacher routes");
+        return;
+    }
+
+    auto teacherCtrl = std::make_shared<api::v1::TeacherController>(
+        *m_svcs.teacherRepo, *m_svcs.teacherLocationRepo, *m_svcs.locationRepo, m_svcs.jwtAuth);
+
+    // ── Middleware ────────────────────────────────────────────────────────
+    const api::v1::middleware::CorsConfig corsConfig{
+        {"*"},
+        {"GET","POST","PUT","DELETE","OPTIONS"},
+        {"Authorization","Content-Type","X-Request-ID","Accept"},
+        false,
+        3600
+    };
+    const api::v1::middleware::RateLimitConfig rlConfig{ 120, 20 };
+
+    auto cors   = std::make_shared<api::v1::middleware::CorsMiddleware>(corsConfig);
+    auto logger = std::make_shared<api::v1::middleware::LoggingMiddleware>();
+    auto iv     = std::make_shared<api::v1::middleware::InputValidationMiddleware>();
+    auto rl     = std::make_shared<api::v1::middleware::RateLimitMiddleware>(rlConfig);
+    auto auth   = std::make_shared<api::v1::middleware::AuthMiddleware>(m_svcs.jwtAuth);
+
+    auto protectedRoute = [&](const std::string& method, const std::string& path, auto handler)
+    {
+        auto h = [cors, logger, iv, rl, auth, handler]
+            (const httplib::Request& req, httplib::Response& res)
+        {
+            logger->logRequest(req);
+            if (!cors->process(req, res)) { logger->logResponse(req, res); return; }
+            if (!iv->process(req, res))   { logger->logResponse(req, res); return; }
+            if (!rl->process(req, res))   { logger->logResponse(req, res); return; }
+            core::internal::ApiContext ctx;
+            ctx.requestId = req.has_header("X-Request-ID")
+                ? req.get_header_value("X-Request-ID") : "";
+            if (!auth->process(req, res, ctx)) { logger->logResponse(req, res); return; }
+            handler(req, res);
+            logger->logResponse(req, res);
+        };
+        if (method == "GET")    m_server.Get(path.c_str(), h);
+        else if (method == "POST")   m_server.Post(path.c_str(), h);
+        else if (method == "PUT")    m_server.Put(path.c_str(), h);
+        else if (method == "DELETE") m_server.Delete(path.c_str(), h);
+    };
+
+    // ── CRUD ─────────────────────────────────────────────────────────────
+    protectedRoute("POST", "/api/v1/teachers",
+        [teacherCtrl](const httplib::Request& req, httplib::Response& res) {
+            teacherCtrl->handleCreateTeacher(req, res);
+        });
+
+    protectedRoute("GET", "/api/v1/teachers",
+        [teacherCtrl](const httplib::Request& req, httplib::Response& res) {
+            teacherCtrl->handleListTeachers(req, res);
+        });
+
+    // Location assignment routes must be registered BEFORE bare /:id
+    protectedRoute("POST", R"(/api/v1/teachers/([^/]+)/locations)",
+        [teacherCtrl](const httplib::Request& req, httplib::Response& res) {
+            teacherCtrl->handleAssignLocation(req, res);
+        });
+
+    protectedRoute("DELETE", R"(/api/v1/teachers/([^/]+)/locations/([^/]+))",
+        [teacherCtrl](const httplib::Request& req, httplib::Response& res) {
+            teacherCtrl->handleRevokeLocation(req, res);
+        });
+
+    protectedRoute("GET", R"(/api/v1/teachers/([^/]+))",
+        [teacherCtrl](const httplib::Request& req, httplib::Response& res) {
+            teacherCtrl->handleGetTeacher(req, res);
+        });
+
+    protectedRoute("PUT", R"(/api/v1/teachers/([^/]+))",
+        [teacherCtrl](const httplib::Request& req, httplib::Response& res) {
+            teacherCtrl->handleUpdateTeacher(req, res);
+        });
+
+    protectedRoute("DELETE", R"(/api/v1/teachers/([^/]+))",
+        [teacherCtrl](const httplib::Request& req, httplib::Response& res) {
+            teacherCtrl->handleDeleteTeacher(req, res);
+        });
+
+    spdlog::debug("[Router] teacher routes registered");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

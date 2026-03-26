@@ -244,6 +244,7 @@ ServerConfig ServerConfig::from_file(const std::string& path)
     cfg.usersFile             = j.value("usersFile", cfg.usersFile);
     cfg.agentKeyFile          = j.value("agentKeyFile", cfg.agentKeyFile);
     cfg.authKeyFile           = j.value("authKeyFile", cfg.authKeyFile);
+    cfg.databaseDir           = j.value("databaseDir", cfg.databaseDir);
     cfg.hub32PluginDir        = j.value("hub32PluginDir", cfg.hub32PluginDir);
     cfg.logLevel              = j.value("logLevel", cfg.logLevel);
     cfg.logFile               = j.value("logFile", cfg.logFile);
@@ -342,6 +343,7 @@ ServerConfig ServerConfig::from_registry()
     readRegistryString(hKey, "jwtAlgorithm", cfg.jwtAlgorithm);
     readRegistryString(hKey, "jwtPrivateKeyFile", cfg.jwtPrivateKeyFile);
     readRegistryString(hKey, "jwtPublicKeyFile", cfg.jwtPublicKeyFile);
+    readRegistryString(hKey, "databaseDir", cfg.databaseDir);
     readRegistryString(hKey, "hub32PluginDir", cfg.hub32PluginDir);
     readRegistryString(hKey, "usersFile", cfg.usersFile);
     readRegistryString(hKey, "agentKeyFile", cfg.agentKeyFile);

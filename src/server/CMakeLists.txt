@@ -14,6 +14,8 @@ add_library(hub32api-server SHARED
     ../api/v1/controllers/FeatureController.cpp
     ../api/v1/controllers/FramebufferController.cpp
     ../api/v1/controllers/SessionController.cpp
+    ../api/v1/controllers/SchoolController.cpp
+    ../api/v1/controllers/TeacherController.cpp
 
     # v1 middleware
     ../api/v1/middleware/AuthMiddleware.cpp

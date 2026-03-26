@@ -8,6 +8,8 @@ namespace httplib { class Server; }
 namespace hub32api::core::internal { class PluginRegistry; class ConnectionPool; }
 namespace hub32api::auth { class JwtAuth; class Hub32KeyAuth; class UserRoleStore; }
 namespace hub32api::agent { class AgentRegistry; }
+namespace hub32api::db { class SchoolRepository; class LocationRepository; class ComputerRepository;
+                         class TeacherRepository; class TeacherLocationRepository; }
 namespace hub32api::server { class SseManager; }
 
 namespace hub32api::server::internal {
@@ -28,6 +30,11 @@ public:
         auth::UserRoleStore&            roleStore;
         agent::AgentRegistry&           agentRegistry;
         std::string                     agentKeyHash;  ///< PBKDF2-SHA256 hash of agent registration key
+        db::SchoolRepository*           schoolRepo = nullptr;
+        db::LocationRepository*         locationRepo = nullptr;
+        db::ComputerRepository*         computerRepo = nullptr;
+        db::TeacherRepository*          teacherRepo = nullptr;
+        db::TeacherLocationRepository*  teacherLocationRepo = nullptr;
     };
 
     explicit Router(httplib::Server& server, Services svcs);
@@ -40,6 +47,8 @@ private:
     void registerHealthAndMetrics();
     void registerOpenApi();
     void registerAgentRoutes();
+    void registerSchoolRoutes();
+    void registerTeacherRoutes();
     void registerSse();
     void registerDebug();
 

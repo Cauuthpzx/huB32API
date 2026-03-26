@@ -9,6 +9,12 @@
 #include "../auth/Hub32KeyAuth.hpp"
 #include "../auth/UserRoleStore.hpp"
 #include "../agent/AgentRegistry.hpp"
+#include "../db/DatabaseManager.hpp"
+#include "../db/SchoolRepository.hpp"
+#include "../db/LocationRepository.hpp"
+#include "../db/ComputerRepository.hpp"
+#include "../db/TeacherRepository.hpp"
+#include "../db/TeacherLocationRepository.hpp"
 #include "../core/internal/I18n.hpp"
 #include "../plugins/computer/ComputerPlugin.hpp"
 #include "../plugins/feature/FeaturePlugin.hpp"
@@ -70,6 +76,12 @@ struct HttpServer::Impl
     std::unique_ptr<auth::Hub32KeyAuth>               keyAuth;
     std::unique_ptr<auth::UserRoleStore>              roleStore;
     std::unique_ptr<agent::AgentRegistry>             agentRegistry;
+    std::unique_ptr<db::DatabaseManager>              dbManager;
+    std::unique_ptr<db::SchoolRepository>             schoolRepo;
+    std::unique_ptr<db::LocationRepository>           locationRepo;
+    std::unique_ptr<db::ComputerRepository>           computerRepo;
+    std::unique_ptr<db::TeacherRepository>            teacherRepo;
+    std::unique_ptr<db::TeacherLocationRepository>    teacherLocationRepo;
     std::unique_ptr<server::internal::ThreadPool>     threadPool;
     std::unique_ptr<httplib::Server>                  httpServer;
     std::unique_ptr<server::internal::Router>         router;
@@ -113,6 +125,14 @@ HttpServer::HttpServer(const ServerConfig& cfg)
     m_impl->roleStore = std::make_unique<auth::UserRoleStore>(cfg.usersFile);
     m_impl->agentRegistry = std::make_unique<agent::AgentRegistry>();
 
+    // 4.1 Database
+    m_impl->dbManager = std::make_unique<db::DatabaseManager>(cfg.databaseDir);
+    m_impl->schoolRepo = std::make_unique<db::SchoolRepository>(m_impl->dbManager->schoolDb());
+    m_impl->locationRepo = std::make_unique<db::LocationRepository>(m_impl->dbManager->schoolDb());
+    m_impl->computerRepo = std::make_unique<db::ComputerRepository>(m_impl->dbManager->schoolDb());
+    m_impl->teacherRepo = std::make_unique<db::TeacherRepository>(m_impl->dbManager->schoolDb());
+    m_impl->teacherLocationRepo = std::make_unique<db::TeacherLocationRepository>(m_impl->dbManager->schoolDb());
+
     // 4a. Wire AgentRegistry into plugins for live agent routing
     if (auto* compPlugin = m_impl->registry->computerPlugin()) {
         static_cast<plugins::ComputerPlugin*>(compPlugin)->setAgentRegistry(m_impl->agentRegistry.get());
@@ -145,7 +165,10 @@ HttpServer::HttpServer(const ServerConfig& cfg)
 
     server::internal::Router::Services svcs{
         *m_impl->registry, *m_impl->pool, *m_impl->jwtAuth, *m_impl->keyAuth,
-        *m_impl->roleStore, *m_impl->agentRegistry, agentKeyHash
+        *m_impl->roleStore, *m_impl->agentRegistry, agentKeyHash,
+        m_impl->schoolRepo.get(), m_impl->locationRepo.get(),
+        m_impl->computerRepo.get(), m_impl->teacherRepo.get(),
+        m_impl->teacherLocationRepo.get()
     };
     m_impl->router = std::make_unique<server::internal::Router>(*m_impl->httpServer, svcs);
     m_impl->router->registerAll();

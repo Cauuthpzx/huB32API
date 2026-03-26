@@ -42,7 +42,15 @@
     "rate_limit_exceeded": "已超过速率限制",
     "service_unavailable": "服务不可用",
     "payload_too_large": "请求体太大",
-    "unsupported_media_type": "Content-Type 必须是 application/json"
+    "unsupported_media_type": "Content-Type 必须是 application/json",
+    "school_not_found": "未找到学校",
+    "location_not_found": "未找到教室",
+    "teacher_not_found": "未找到教师",
+    "teacher_exists": "用户名已存在",
+    "forbidden": "您没有权限执行此操作",
+    "name_required": "名称为必填项",
+    "username_required": "用户名为必填项",
+    "password_required": "密码为必填项"
   },
   "auth": {
     "method_hub32_key": "Hub32 密钥认证",
