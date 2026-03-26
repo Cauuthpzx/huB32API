@@ -17,6 +17,7 @@ COPY . .
 RUN cmake -S . -B build/release \
         -GNinja \
         -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr/local \
         -DBUILD_TESTS=OFF \
         -DBUILD_EXAMPLES=OFF \
         -DBUILD_DOCS=OFF \
