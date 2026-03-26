@@ -816,6 +816,45 @@ void Router::registerV1()
             authCtrl->handleLogin(req, res);
         });
 
+    protectedRoute("GET", "/api/v1/auth/me",
+        [this](const httplib::Request& req, httplib::Response& res) {
+            // Extract subject (username) from validated JWT (AuthMiddleware already ran)
+            const std::string authHeader = req.get_header_value("Authorization");
+            if (authHeader.size() <= 7) {
+                api::common::sendError(res, 401, "Unauthorized");
+                return;
+            }
+            const std::string token = authHeader.substr(7);
+            auto authResult = m_svcs.jwtAuth.authenticate(token);
+            if (authResult.is_err() || !authResult.value().token) {
+                api::common::sendError(res, 401, "Invalid token");
+                return;
+            }
+
+            const auto& subject = authResult.value().token->subject;
+
+            if (!m_svcs.teacherRepo) {
+                api::common::sendError(res, 503, "Teacher repository not available");
+                return;
+            }
+
+            auto teacher = m_svcs.teacherRepo->findByUsername(subject);
+            if (teacher.is_err()) {
+                api::common::sendError(res, 404, "Teacher not found");
+                return;
+            }
+
+            const auto& t = teacher.value();
+            nlohmann::json j;
+            j["id"]        = t.id;
+            j["username"]  = t.username;
+            j["fullName"]  = t.fullName;
+            j["role"]      = t.role;
+            j["createdAt"] = t.createdAt;
+            res.status = 200;
+            res.set_content(j.dump(), "application/json");
+        });
+
     protectedRoute("DELETE", "/api/v1/auth",
         [authCtrl](const httplib::Request& req, httplib::Response& res) {
             authCtrl->handleLogout(req, res);

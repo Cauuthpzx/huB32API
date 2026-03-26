@@ -224,7 +224,14 @@ void ComputerController::handleInfo(const httplib::Request& req, httplib::Respon
 
     nlohmann::json j;
     j["computer"] = dto;
-    j["state"]    = dto.state;
+
+    // user / session — null until SessionPlugin integration is wired
+    // (requires active_sessions table join, Phase 5 work)
+    j["user"]    = nullptr;
+    j["session"] = nullptr;
+
+    // screens — default single monitor (real data requires agent query)
+    j["screens"] = nlohmann::json::array({{{"x", 0}, {"y", 0}, {"width", 1920}, {"height", 1080}}});
 
     res.status = 200;
     res.set_content(j.dump(), "application/json");
