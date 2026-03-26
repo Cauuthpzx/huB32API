@@ -9,6 +9,7 @@
 #include "../auth/Hub32KeyAuth.hpp"
 #include "../auth/UserRoleStore.hpp"
 #include "../agent/AgentRegistry.hpp"
+#include "../agent/HeartbeatMonitor.hpp"
 #include "../db/DatabaseManager.hpp"
 #include "../db/SchoolRepository.hpp"
 #include "../db/LocationRepository.hpp"
@@ -76,6 +77,7 @@ struct HttpServer::Impl
     std::unique_ptr<auth::Hub32KeyAuth>               keyAuth;
     std::unique_ptr<auth::UserRoleStore>              roleStore;
     std::unique_ptr<agent::AgentRegistry>             agentRegistry;
+    std::unique_ptr<agent::HeartbeatMonitor>          heartbeatMonitor;
     std::unique_ptr<db::DatabaseManager>              dbManager;
     std::unique_ptr<db::SchoolRepository>             schoolRepo;
     std::unique_ptr<db::LocationRepository>           locationRepo;
@@ -141,6 +143,26 @@ HttpServer::HttpServer(const ServerConfig& cfg)
         static_cast<plugins::FeaturePlugin*>(featPlugin)->setAgentRegistry(m_impl->agentRegistry.get());
     }
 
+    // 4b. Start HeartbeatMonitor — marks agents offline in both registry and DB
+    m_impl->heartbeatMonitor = std::make_unique<agent::HeartbeatMonitor>(
+        *m_impl->agentRegistry,
+        std::chrono::seconds(30),   // check every 30 s
+        [this](const Uid& agentId) {
+            // When an agent goes offline, update computer state in the database
+            if (m_impl->computerRepo) {
+                auto agent = m_impl->agentRegistry->findAgent(agentId);
+                if (agent.is_ok()) {
+                    auto computer = m_impl->computerRepo->findByHostname(agent.value().hostname);
+                    if (computer.is_ok()) {
+                        m_impl->computerRepo->updateState(computer.value().id, "offline");
+                    }
+                }
+            }
+            m_impl->agentRegistry->updateState(agentId, AgentState::Offline);
+            spdlog::warn("[HeartbeatMonitor] agent {} went offline", agentId);
+        });
+    m_impl->heartbeatMonitor->start(std::chrono::seconds(90));  // 90 s timeout
+
     // 4b. Initialize i18n
     core::internal::I18n::init(cfg.localesDir, cfg.defaultLocale);
 
@@ -179,6 +201,8 @@ HttpServer::HttpServer(const ServerConfig& cfg)
 HttpServer::~HttpServer()
 {
     stop();
+    if (m_impl->heartbeatMonitor)
+        m_impl->heartbeatMonitor->stop();
     if (m_impl->registry)
         m_impl->registry->shutdownAll();
 }

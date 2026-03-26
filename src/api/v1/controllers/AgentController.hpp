@@ -11,6 +11,7 @@
 namespace httplib { class Request; class Response; }
 namespace hub32api::agent { class AgentRegistry; }
 namespace hub32api::auth { class JwtAuth; }
+namespace hub32api::db { class ComputerRepository; }
 
 namespace hub32api::api::v1 {
 
@@ -95,10 +96,22 @@ public:
      */
     void handleHeartbeat(const httplib::Request& req, httplib::Response& res);
 
+    /**
+     * @brief Wires in a ComputerRepository for agent↔computer DB synchronisation.
+     *
+     * Using a pointer + setter (not constructor injection) avoids changing the
+     * constructor signature and all existing callers.  Safe to call before any
+     * request is handled.  Passing nullptr disables DB sync (graceful degradation).
+     *
+     * @param repo Pointer to the ComputerRepository, or nullptr to disable.
+     */
+    void setComputerRepository(db::ComputerRepository* repo);
+
 private:
-    agent::AgentRegistry& m_registry;  ///< Agent registry for managing agent state
-    auth::JwtAuth& m_jwtAuth;          ///< JWT auth service for issuing tokens
-    std::string m_agentKeyHash;        ///< PBKDF2-SHA256 hash of agent registration key
+    agent::AgentRegistry&    m_registry;       ///< Agent registry for managing agent state
+    auth::JwtAuth&           m_jwtAuth;        ///< JWT auth service for issuing tokens
+    std::string              m_agentKeyHash;   ///< PBKDF2-SHA256 hash of agent registration key
+    db::ComputerRepository*  m_computerRepo = nullptr; ///< Optional DB repo (nullptr = disabled)
 };
 
 } // namespace hub32api::api::v1

@@ -13,6 +13,7 @@
 #include "hub32api/agent/AgentCommand.hpp"
 #include "core/internal/I18n.hpp"
 #include "core/internal/CryptoUtils.hpp"
+#include "db/ComputerRepository.hpp"
 
 // cpp-httplib
 #include <httplib.h>
@@ -97,6 +98,15 @@ AgentController::AgentController(agent::AgentRegistry& registry, auth::JwtAuth& 
 {}
 
 /**
+ * @brief Wires in a ComputerRepository for agent↔computer DB synchronisation.
+ * @param repo Pointer to the ComputerRepository, or nullptr to disable.
+ */
+void AgentController::setComputerRepository(db::ComputerRepository* repo)
+{
+    m_computerRepo = repo;
+}
+
+/**
  * @brief Handles POST /api/v1/agents/register — agent self-registration.
  *
  * Validates the agentKey against a PBKDF2-SHA256 hash loaded from a file
@@ -167,6 +177,18 @@ void AgentController::handleRegister(const httplib::Request& req, httplib::Respo
     if (regResult.is_err()) {
         sendError(res, 500, tr(lang, "error.registration_failed"), regResult.error().message);
         return;
+    }
+
+    // --- Upsert computer record in database (agent registration → computer sync) ---
+    // macAddress is not included in the registration DTO; pass empty string.
+    if (m_computerRepo) {
+        auto existing = m_computerRepo->findByHostname(reqDto.hostname);
+        if (existing.is_ok()) {
+            m_computerRepo->updateHeartbeat(existing.value().id, req.remote_addr, reqDto.agentVersion);
+            m_computerRepo->updateState(existing.value().id, "online");
+        } else {
+            m_computerRepo->createUnassigned(reqDto.hostname, /*macAddress=*/"");
+        }
     }
 
     // --- Issue JWT with subject=agentId, role="agent" ---
@@ -408,6 +430,19 @@ void AgentController::handleHeartbeat(const httplib::Request& req, httplib::Resp
     }
 
     m_registry.heartbeat(id);
+
+    // --- Update computer heartbeat in database ---
+    if (m_computerRepo) {
+        auto agent = m_registry.findAgent(id);
+        if (agent.is_ok()) {
+            auto computer = m_computerRepo->findByHostname(agent.value().hostname);
+            if (computer.is_ok()) {
+                m_computerRepo->updateHeartbeat(computer.value().id,
+                                                agent.value().ipAddress,
+                                                agent.value().agentVersion);
+            }
+        }
+    }
 
     nlohmann::json j;
     j["ok"] = true;

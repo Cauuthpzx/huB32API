@@ -875,9 +875,51 @@ void Router::registerV1()
             featureCtrl->handleGetOne(req, res);
         });
 
-    protectedRoute("PUT", R"(/api/v1/computers/([^/]+)/features/([^/]+))",
-        [featureCtrl](const httplib::Request& req, httplib::Response& res) {
+    // PUT /api/v1/computers/:id/features/:fid — location-based access control
+    // Non-admin users (teachers) must have access to the computer's location.
+    m_server.Put(R"(/api/v1/computers/([^/]+)/features/([^/]+))",
+        [this, cors, logger, iv, rl, auth, featureCtrl]
+        (const httplib::Request& req, httplib::Response& res)
+        {
+            using hub32api::core::internal::tr;
+            const auto lang = [&req] {
+                auto* i18n = hub32api::core::internal::I18n::instance();
+                if (!i18n) return std::string("en");
+                return i18n->negotiate(req.get_header_value("Accept-Language"));
+            }();
+
+            logger->logRequest(req);
+            if (!cors->process(req, res)) { logger->logResponse(req, res); return; }
+            if (!iv->process(req, res))   { logger->logResponse(req, res); return; }
+            if (!rl->process(req, res))   { logger->logResponse(req, res); return; }
+
+            core::internal::ApiContext ctx;
+            ctx.requestId = req.has_header("X-Request-ID")
+                ? req.get_header_value("X-Request-ID") : "";
+            if (!auth->process(req, res, ctx)) { logger->logResponse(req, res); return; }
+
+            // Role-based location access check (admin bypasses)
+            if (ctx.auth.token && ctx.auth.token->role != "admin") {
+                if (m_svcs.computerRepo && m_svcs.teacherLocationRepo && m_svcs.teacherRepo) {
+                    const std::string computerId = req.matches.size() > 1
+                        ? req.matches[1].str() : "";
+                    auto computer = m_svcs.computerRepo->findById(computerId);
+                    if (computer.is_ok() && !computer.value().locationId.empty()) {
+                        auto teacher = m_svcs.teacherRepo->findByUsername(ctx.auth.token->subject);
+                        if (teacher.is_ok()) {
+                            if (!m_svcs.teacherLocationRepo->hasAccess(
+                                    teacher.value().id, computer.value().locationId)) {
+                                sendError(res, 403, tr(lang, "error.forbidden"));
+                                logger->logResponse(req, res);
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+
             featureCtrl->handleControl(req, res);
+            logger->logResponse(req, res);
         });
 
     protectedRoute("GET", R"(/api/v1/computers/([^/]+)/features)",
@@ -909,6 +951,7 @@ void Router::registerAgentRoutes()
     // ── Controller ───────────────────────────────────────────────────────
     auto agentCtrl = std::make_shared<api::v1::AgentController>(
         m_svcs.agentRegistry, m_svcs.jwtAuth, m_svcs.agentKeyHash);
+    agentCtrl->setComputerRepository(m_svcs.computerRepo);
 
     // ── Middleware ────────────────────────────────────────────────────────
     const api::v1::middleware::CorsConfig corsConfig{
