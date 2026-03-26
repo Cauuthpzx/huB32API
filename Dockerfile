@@ -55,7 +55,7 @@ WORKDIR /opt/hub32api
 EXPOSE 11081
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -sf http://localhost:11081/api/v1/health || exit 1
+    CMD curl -sf http://localhost:11081/health || exit 1
 
 ENTRYPOINT ["/usr/local/bin/hub32api-service"]
 CMD ["--console", "--config", "/opt/hub32api/conf/production.json"]
