@@ -94,7 +94,10 @@ void TokenStore::initDb(const std::string& dbPath)
     }
 
     // Enable WAL mode for better concurrent read/write performance
-    sqlite3_exec(m_db, "PRAGMA journal_mode=WAL;", nullptr, nullptr, nullptr);
+    rc = sqlite3_exec(m_db, "PRAGMA journal_mode=WAL;", nullptr, nullptr, nullptr);
+    if (rc != SQLITE_OK) {
+        spdlog::warn("[TokenStore] PRAGMA journal_mode=WAL failed: {}", sqlite3_errmsg(m_db));
+    }
 
     // Create the revocation table
     constexpr const char* k_createTable =

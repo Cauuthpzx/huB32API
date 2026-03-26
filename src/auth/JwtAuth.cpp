@@ -140,7 +140,12 @@ Result<std::unique_ptr<JwtAuth>> JwtAuth::create(const ServerConfig& cfg)
     }
 
     impl->validator = std::make_unique<internal::JwtValidator>(impl->publicKey);
-    impl->store = std::make_unique<internal::TokenStore>(cfg.tokenRevocationFile);
+
+    auto storeResult = internal::TokenStore::create(cfg.tokenRevocationFile);
+    if (storeResult.is_err()) {
+        return Result<std::unique_ptr<JwtAuth>>::fail(storeResult.error());
+    }
+    impl->store = storeResult.take();
 
     spdlog::info("[JwtAuth] using {} algorithm", impl->algorithm);
 
