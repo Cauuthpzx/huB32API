@@ -14,6 +14,10 @@ add_unit_test(test_connection_pool    core/test_connection_pool.cpp)
 add_unit_test(test_result_type        core/test_result_type.cpp)
 add_unit_test(test_crypto_utils    core/test_crypto_utils.cpp)
 add_unit_test(test_jwt_auth           auth/test_jwt_auth.cpp)
+target_link_libraries(test_jwt_auth PRIVATE
+    $<IF:$<TARGET_EXISTS:OpenSSL::SSL>,OpenSSL::SSL,ssl>
+    $<IF:$<TARGET_EXISTS:OpenSSL::Crypto>,OpenSSL::Crypto,crypto>
+)
 add_unit_test(test_user_role_store   auth/test_user_role_store.cpp)
 add_unit_test(test_computer_ctrl_v1   api/v1/test_computer_controller.cpp)
 add_unit_test(test_feature_ctrl_v1    api/v1/test_feature_controller.cpp)

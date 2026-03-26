@@ -18,7 +18,7 @@ namespace hub32api::config::internal {
  * CRITICAL FIELDS (throw on error):
  *  - httpPort must be in the valid TCP port range (1-65535).
  *  - bindAddress must not be empty.
- *  - jwtAlgorithm must be "RS256" or "HS256".
+ *  - jwtAlgorithm must be "RS256".
  *
  * NON-CRITICAL FIELDS (warn on error with sensible defaults):
  *  - metricsPort is within the valid TCP port range (1-65535) when metrics
@@ -52,22 +52,17 @@ Result<std::vector<std::string>> ConfigValidator::validate(const ServerConfig& c
         });
     }
 
-    // --- CRITICAL: JWT algorithm must be RS256 or HS256 ---
-    if (cfg.jwtAlgorithm != to_string(JwtAlgorithm::RS256) && cfg.jwtAlgorithm != to_string(JwtAlgorithm::HS256)) {
+    // --- CRITICAL: JWT algorithm must be RS256 ---
+    if (cfg.jwtAlgorithm != to_string(JwtAlgorithm::RS256)) {
         return Result<std::vector<std::string>>::fail(ApiError{
             ErrorCode::InvalidConfig,
-            "jwtAlgorithm must be \"RS256\" or \"HS256\" (got \"" + cfg.jwtAlgorithm + "\")"
+            "jwtAlgorithm must be \"RS256\" (got \"" + cfg.jwtAlgorithm + "\"). HS256 is no longer supported."
         });
     }
 
     // --- NON-CRITICAL: Metrics port (when enabled) ---
     if (cfg.metricsEnabled && cfg.metricsPort == 0) {
         errors.emplace_back("metricsPort must be in the range 1-65535 when metrics are enabled");
-    }
-
-    // --- NON-CRITICAL: JWT secret ---
-    if (cfg.jwtSecret.empty()) {
-        errors.emplace_back("jwtSecret must not be empty");
     }
 
     // --- NON-CRITICAL: JWT expiry ---

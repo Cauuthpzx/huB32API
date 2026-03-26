@@ -1,13 +1,13 @@
 /**
  * @file JwtValidator.cpp
- * @brief Full implementation of JwtValidator using jwt-cpp with HS256 and RS256.
+ * @brief Full implementation of JwtValidator using jwt-cpp with RS256 only.
  *
  * Uses the nlohmann-json traits adapter so that jwt-cpp shares the same
  * JSON library as the rest of the project, avoiding a second JSON parser
  * (picojson) in the final binary.
  *
- * Supports both HS256 (symmetric HMAC) and RS256 (asymmetric RSA) algorithms.
- * When RS256 is configured, only the public key is needed for verification.
+ * Only RS256 (asymmetric RSA) is supported. The public key is needed for
+ * verification.
  */
 
 // jwt-cpp must come before the PCH because it defines JWT_DISABLE_PICOJSON
@@ -32,19 +32,12 @@ using JwtDecoded = jwt::decoded_jwt<jwt::traits::nlohmann_json>;
 // ---------------------------------------------------------------------------
 
 /**
- * @brief Constructs a JwtValidator with the specified algorithm and credentials.
+ * @brief Constructs a JwtValidator with the RS256 public key.
  *
- * @param algorithm  "RS256" for asymmetric RSA verification, or "HS256" for
- *                   symmetric HMAC-SHA256 verification.
- * @param secret     Raw secret bytes used for HS256 verification. Ignored when
- *                   algorithm is "RS256".
- * @param publicKey  PEM-encoded RSA public key for RS256 verification. Ignored
- *                   when algorithm is "HS256".
+ * @param publicKey  PEM-encoded RSA public key for RS256 verification.
  */
-JwtValidator::JwtValidator(const std::string& algorithm,
-                           const std::string& secret,
-                           const std::string& publicKey)
-    : m_algorithm(algorithm), m_secret(secret), m_publicKey(publicKey)
+JwtValidator::JwtValidator(const std::string& publicKey)
+    : m_publicKey(publicKey)
 {}
 
 // ---------------------------------------------------------------------------
@@ -57,7 +50,7 @@ JwtValidator::JwtValidator(const std::string& algorithm,
  * The method performs the following steps in order:
  *  1. Strips the optional "Bearer " prefix.
  *  2. Decodes the token structure with jwt::decode().
- *  3. Verifies the signature (HS256 or RS256), issuer, and audience with
+ *  3. Verifies the signature (RS256), issuer, and audience with
  *     jwt::verify().
  *  4. Checks that the token has not expired.
  *  5. Extracts sub, role, jti, iat, and exp claims into a JwtToken.
@@ -133,12 +126,13 @@ Result<JwtToken> JwtValidator::validate(const std::string& rawToken) const
             });
         }
 
-        if (tokenAlg != m_algorithm) {
+        const std::string expectedAlg = hub32api::to_string(hub32api::JwtAlgorithm::RS256);
+        if (tokenAlg != expectedAlg) {
             spdlog::warn("[JwtValidator] REJECTED: token algorithm '{}' does not match "
-                         "configured algorithm '{}'", tokenAlg, m_algorithm);
+                         "configured algorithm '{}'", tokenAlg, expectedAlg);
             return Result<JwtToken>::fail(ApiError{
                 ErrorCode::Unauthorized,
-                "Token algorithm mismatch: expected " + m_algorithm + ", got " + tokenAlg
+                "Token algorithm mismatch: expected " + expectedAlg + ", got " + tokenAlg
             });
         }
     }
@@ -151,11 +145,7 @@ Result<JwtToken> JwtValidator::validate(const std::string& rawToken) const
             .with_issuer(std::string(kJwtIssuer))
             .with_audience(std::string(kJwtAudience));
 
-        if (m_algorithm == hub32api::to_string(hub32api::JwtAlgorithm::RS256)) {
-            verifier.allow_algorithm(jwt::algorithm::rs256{m_publicKey, "", "", ""});
-        } else {
-            verifier.allow_algorithm(jwt::algorithm::hs256{m_secret});
-        }
+        verifier.allow_algorithm(jwt::algorithm::rs256{m_publicKey, "", "", ""});
 
         verifier.verify(*decoded);
     }

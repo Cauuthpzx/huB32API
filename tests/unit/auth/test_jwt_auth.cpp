@@ -2,6 +2,9 @@
  * @file test_jwt_auth.cpp
  * @brief Unit tests for hub32api::auth::JwtAuth — token issuance, validation,
  *        revocation, and expiry detection.
+ *
+ * All tests use RS256 with in-memory RSA key pairs generated at test startup.
+ * HS256 support has been removed entirely.
  */
 
 #include <gtest/gtest.h>
@@ -9,6 +12,13 @@
 #include <thread>
 #include <chrono>
 #include <string>
+#include <fstream>
+#include <filesystem>
+
+#include <openssl/rsa.h>
+#include <openssl/pem.h>
+#include <openssl/bio.h>
+#include <openssl/evp.h>
 
 #include "hub32api/config/ServerConfig.hpp"
 #include "auth/JwtAuth.hpp"
@@ -19,25 +29,81 @@ using namespace hub32api::auth;
 namespace {
 
 /**
- * @brief Builds a ServerConfig with a known JWT secret for deterministic tests.
- *
- * Explicitly sets jwtAlgorithm to "HS256" because the default is "RS256" which
- * requires PEM key files. These unit tests use a shared secret, not RSA keys.
- * (Before the security fix, the constructor silently fell back to HS256 when
- * RS256 key files were missing — that silent fallback has been removed.)
- *
- * @return A ServerConfig suitable for unit-test token operations.
+ * @brief RAII helper that writes RSA key pair to temp files and cleans up on destruction.
+ */
+struct TestRsaKeys
+{
+    std::string privateKeyPath;
+    std::string publicKeyPath;
+
+    TestRsaKeys()
+    {
+        // Generate RSA key pair using OpenSSL EVP API
+        EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr);
+        EVP_PKEY_keygen_init(ctx);
+        EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, 4096);
+        EVP_PKEY* pkey = nullptr;
+        EVP_PKEY_keygen(ctx, &pkey);
+        EVP_PKEY_CTX_free(ctx);
+
+        // Write private key to temp file
+        auto tmpDir = std::filesystem::temp_directory_path();
+        privateKeyPath = (tmpDir / "hub32_test_priv.pem").string();
+        publicKeyPath  = (tmpDir / "hub32_test_pub.pem").string();
+
+        {
+            BIO* bio = BIO_new_file(privateKeyPath.c_str(), "w");
+            PEM_write_bio_PrivateKey(bio, pkey, nullptr, nullptr, 0, nullptr, nullptr);
+            BIO_free(bio);
+        }
+        {
+            BIO* bio = BIO_new_file(publicKeyPath.c_str(), "w");
+            PEM_write_bio_PUBKEY(bio, pkey);
+            BIO_free(bio);
+        }
+
+        EVP_PKEY_free(pkey);
+    }
+
+    ~TestRsaKeys()
+    {
+        std::filesystem::remove(privateKeyPath);
+        std::filesystem::remove(publicKeyPath);
+    }
+};
+
+// Global test keys — generated once per test suite run.
+// Using a pointer to avoid static-init-order issues.
+static TestRsaKeys* g_testKeys = nullptr;
+
+/**
+ * @brief Builds a ServerConfig pointing to the test RSA key files.
  */
 ServerConfig makeTestConfig(int expirySeconds = 3600)
 {
     ServerConfig cfg;
-    cfg.jwtAlgorithm     = "HS256";
-    cfg.jwtSecret        = "test-secret-key-for-unit-tests";
-    cfg.jwtExpirySeconds = expirySeconds;
+    cfg.jwtAlgorithm      = "RS256";
+    cfg.jwtPrivateKeyFile = g_testKeys->privateKeyPath;
+    cfg.jwtPublicKeyFile  = g_testKeys->publicKeyPath;
+    cfg.jwtExpirySeconds  = expirySeconds;
     return cfg;
 }
 
 } // anonymous namespace
+
+// ---------------------------------------------------------------------------
+// Test environment — generates RSA keys once for all tests
+// ---------------------------------------------------------------------------
+class JwtAuthTestEnvironment : public ::testing::Environment
+{
+public:
+    void SetUp() override    { g_testKeys = new TestRsaKeys(); }
+    void TearDown() override { delete g_testKeys; g_testKeys = nullptr; }
+};
+
+// Register the environment so keys are generated before any test runs.
+static auto* const g_env =
+    ::testing::AddGlobalTestEnvironment(new JwtAuthTestEnvironment());
 
 // ---------------------------------------------------------------------------
 // IssueToken — basic issuance checks
@@ -160,18 +226,11 @@ TEST(JwtAuthTest, ExpiredTokenFailsAuthentication)
 // ---------------------------------------------------------------------------
 
 /**
- * @brief Verifies that algorithm pinning works: tokens issued with HS256 are
- *        accepted when the server is configured for HS256 (algorithm matches).
+ * @brief Verifies that algorithm pinning works: tokens issued with RS256 are
+ *        accepted when the server is configured for RS256 (algorithm matches).
  */
 TEST(JwtAuthTest, RejectsTokenWithMismatchedAlgorithm)
 {
-    // This test verifies that algorithm pinning works:
-    // A token signed with HS256 must be rejected when the server is configured for HS256
-    // but the token claims a different algorithm.
-    // We can test this by creating a token with a tampered header.
-
-    // For now, verify the basic contract: tokens issued by our own JwtAuth
-    // are accepted (algorithm matches).
     ServerConfig cfg = makeTestConfig();
 
     auto authCreateResult = JwtAuth::create(cfg);
@@ -186,22 +245,22 @@ TEST(JwtAuthTest, RejectsTokenWithMismatchedAlgorithm)
 }
 
 // ---------------------------------------------------------------------------
-// Security: HS256 requires non-empty secret
+// Security: HS256 is no longer supported
 // ---------------------------------------------------------------------------
 
 /**
- * @brief Verifies that JwtAuth::create() with HS256 and an empty secret
- *        returns an error Result, preventing use of a weak/missing key.
+ * @brief Verifies that JwtAuth::create() with HS256 algorithm
+ *        returns an error Result — HS256 has been removed.
  */
-TEST(JwtAuthTest, HS256RequiresNonEmptySecret)
+TEST(JwtAuthTest, HS256IsRejected)
 {
     ServerConfig cfg{};
     cfg.jwtAlgorithm = "HS256";
-    cfg.jwtSecret = "";  // empty!
+    cfg.jwtSecret = "some-secret";
 
     auto result = JwtAuth::create(cfg);
     EXPECT_TRUE(result.is_err())
-        << "HS256 with empty secret must fail";
+        << "HS256 must be rejected";
     EXPECT_EQ(result.error().code, ErrorCode::InvalidConfig);
 }
 
@@ -211,7 +270,7 @@ TEST(JwtAuthTest, HS256RequiresNonEmptySecret)
 
 /**
  * @brief Verifies that JwtAuth::create() with RS256 and missing key file
- *        paths returns an error Result — no silent fallback to HS256.
+ *        paths returns an error Result — no silent fallback.
  */
 TEST(JwtAuthTest, RS256RequiresKeyFiles)
 {

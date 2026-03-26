@@ -28,15 +28,8 @@ std::string to_string(JwtAlgorithm alg)
 {
     switch (alg) {
         case JwtAlgorithm::RS256: return "RS256";
-        case JwtAlgorithm::HS256: return "HS256";
     }
     return "RS256";
-}
-
-JwtAlgorithm jwt_algorithm_from_string(const std::string& s)
-{
-    if (s == "HS256") return JwtAlgorithm::HS256;
-    return JwtAlgorithm::RS256;
 }
 
 // -- AuthMethod -------------------------------------------------------------

@@ -2,13 +2,12 @@
  * @file JwtAuth.cpp
  * @brief Full implementation of JwtAuth — JWT token issuance and validation.
  *
- * issueToken() builds a signed JWT (RS256 or HS256) containing all required
- * claims and a UUID-style jti for revocation support.
+ * issueToken() builds a signed RS256 JWT containing all required claims
+ * and a UUID-style jti for revocation support.
  *
- * When RS256 is configured with valid PEM key files, tokens are signed with
- * the RSA private key and verified with the public key. If RS256 keys are
- * missing or unreadable, construction fails with a fatal error — there is
- * NO silent fallback to HS256.
+ * RS256 is the only supported algorithm. Valid PEM key files are required.
+ * Tokens are signed with the RSA private key and verified with the public
+ * key. If keys are missing or unreadable, construction fails with an error.
  *
  * authenticate() delegates signature/claims verification to JwtValidator,
  * then checks the in-memory token denylist before returning an AuthContext.
@@ -60,11 +59,8 @@ namespace {
  */
 struct JwtAuth::Impl
 {
-    /** @brief Algorithm in use: "RS256" or "HS256". */
+    /** @brief Algorithm in use: always "RS256". */
     std::string algorithm;
-
-    /** @brief Raw HMAC secret for signing/verifying HS256 tokens. */
-    std::string secret;
 
     /** @brief PEM-encoded RSA private key content for RS256 signing. */
     std::string privateKey;
@@ -96,12 +92,10 @@ JwtAuth::JwtAuth(std::unique_ptr<Impl> impl) : m_impl(std::move(impl)) {}
 /**
  * @brief Factory method — creates a JwtAuth from server configuration.
  *
- * When jwtAlgorithm is "RS256", valid PEM key files MUST be provided.
+ * Only RS256 is supported. Valid PEM key files MUST be provided.
  * Tokens will be signed with the RSA private key and verified with the
  * public key. If the key files are missing or unreadable, the factory
- * returns a Result error — there is NO silent fallback to HS256.
- *
- * When jwtAlgorithm is "HS256", cfg.jwtSecret must be non-empty.
+ * returns a Result error.
  *
  * @param cfg   Server configuration providing JWT settings.
  * @return Result containing a unique_ptr<JwtAuth> on success,
@@ -111,50 +105,41 @@ Result<std::unique_ptr<JwtAuth>> JwtAuth::create(const ServerConfig& cfg)
 {
     auto impl = std::make_unique<Impl>();
     impl->algorithm     = cfg.jwtAlgorithm;
-    impl->secret        = cfg.jwtSecret;
     impl->expirySeconds = cfg.jwtExpirySeconds;
 
-    // SECURITY: If RS256 is configured, key files are REQUIRED.
-    // Silent fallback to HS256 creates an invisible security downgrade
-    // where tokens signed with a potentially weak HS256 secret are
-    // accepted system-wide. An attacker who can reconstruct the secret
-    // (via mt19937_64 seed prediction or HS256 brute-force) gains
-    // the ability to forge tokens for any user including admin.
-    if (cfg.jwtAlgorithm == to_string(JwtAlgorithm::RS256)) {
-        if (cfg.jwtPrivateKeyFile.empty() || cfg.jwtPublicKeyFile.empty()) {
-            return Result<std::unique_ptr<JwtAuth>>::fail(ApiError{
-                ErrorCode::InvalidConfig,
-                "[JwtAuth] RS256 algorithm requires both private and public key files"
-            });
-        }
-
-        impl->privateKey = readFileContent(cfg.jwtPrivateKeyFile);
-        impl->publicKey  = readFileContent(cfg.jwtPublicKeyFile);
-
-        if (impl->privateKey.empty()) {
-            return Result<std::unique_ptr<JwtAuth>>::fail(ApiError{
-                ErrorCode::FileReadError,
-                "[JwtAuth] Cannot read RS256 private key file: " + cfg.jwtPrivateKeyFile
-            });
-        }
-        if (impl->publicKey.empty()) {
-            return Result<std::unique_ptr<JwtAuth>>::fail(ApiError{
-                ErrorCode::FileReadError,
-                "[JwtAuth] Cannot read RS256 public key file: " + cfg.jwtPublicKeyFile
-            });
-        }
-    }
-
-    // For HS256: verify secret is non-empty
-    if (cfg.jwtAlgorithm == to_string(JwtAlgorithm::HS256) && cfg.jwtSecret.empty()) {
+    // SECURITY: Only RS256 is supported. Reject anything else.
+    if (cfg.jwtAlgorithm != to_string(JwtAlgorithm::RS256)) {
         return Result<std::unique_ptr<JwtAuth>>::fail(ApiError{
             ErrorCode::InvalidConfig,
-            "[JwtAuth] HS256 algorithm requires a non-empty jwtSecret"
+            "[JwtAuth] Only RS256 algorithm is supported (got \"" + cfg.jwtAlgorithm + "\")"
         });
     }
 
-    impl->validator = std::make_unique<internal::JwtValidator>(
-        impl->algorithm, impl->secret, impl->publicKey);
+    // RS256 key files are REQUIRED — no fallback.
+    if (cfg.jwtPrivateKeyFile.empty() || cfg.jwtPublicKeyFile.empty()) {
+        return Result<std::unique_ptr<JwtAuth>>::fail(ApiError{
+            ErrorCode::InvalidConfig,
+            "[JwtAuth] RS256 algorithm requires both private and public key files"
+        });
+    }
+
+    impl->privateKey = readFileContent(cfg.jwtPrivateKeyFile);
+    impl->publicKey  = readFileContent(cfg.jwtPublicKeyFile);
+
+    if (impl->privateKey.empty()) {
+        return Result<std::unique_ptr<JwtAuth>>::fail(ApiError{
+            ErrorCode::FileReadError,
+            "[JwtAuth] Cannot read RS256 private key file: " + cfg.jwtPrivateKeyFile
+        });
+    }
+    if (impl->publicKey.empty()) {
+        return Result<std::unique_ptr<JwtAuth>>::fail(ApiError{
+            ErrorCode::FileReadError,
+            "[JwtAuth] Cannot read RS256 public key file: " + cfg.jwtPublicKeyFile
+        });
+    }
+
+    impl->validator = std::make_unique<internal::JwtValidator>(impl->publicKey);
     impl->store = std::make_unique<internal::TokenStore>(cfg.tokenRevocationFile);
 
     spdlog::info("[JwtAuth] using {} algorithm", impl->algorithm);
@@ -173,7 +158,7 @@ JwtAuth::~JwtAuth() = default;
 // ---------------------------------------------------------------------------
 
 /**
- * @brief Issues a signed JWT (RS256 or HS256) for the given subject and role.
+ * @brief Issues a signed RS256 JWT for the given subject and role.
  *
  * The generated token contains the following claims:
  *  - iss  "hub32api"
@@ -184,8 +169,7 @@ JwtAuth::~JwtAuth() = default;
  *  - iat  current time
  *  - exp  current time + jwtExpirySeconds
  *
- * When the active algorithm is RS256, the token is signed with the RSA
- * private key. Otherwise, HS256 signing with the shared secret is used.
+ * The token is signed with the RSA private key using RS256.
  *
  * @param subject  The authenticated username to embed as the "sub" claim.
  * @param role     The role string to embed as the "role" claim.
@@ -218,12 +202,8 @@ Result<std::string> JwtAuth::issueToken(
             .set_id(jti)
             .set_payload_claim("role", jwt::claim(role));
 
-        std::string token;
-        if (m_impl->algorithm == to_string(JwtAlgorithm::RS256)) {
-            token = builder.sign(jwt::algorithm::rs256{m_impl->publicKey, m_impl->privateKey, "", ""});
-        } else {
-            token = builder.sign(jwt::algorithm::hs256{m_impl->secret});
-        }
+        std::string token = builder.sign(
+            jwt::algorithm::rs256{m_impl->publicKey, m_impl->privateKey, "", ""});
 
         spdlog::debug("[JwtAuth] issued token: sub={} role={} jti={} alg={}",
                       subject, role, jti, m_impl->algorithm);

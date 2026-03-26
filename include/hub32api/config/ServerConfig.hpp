@@ -35,7 +35,7 @@ struct HUB32API_EXPORT ServerConfig
     // JWT authentication
     std::string jwtSecret;
     int         jwtExpirySeconds   = 3600;
-    std::string jwtAlgorithm       = "RS256";  // RS256 (default) or HS256
+    std::string jwtAlgorithm       = "RS256";  // RS256 only (HS256 removed)
     std::string jwtPrivateKeyFile;              // PEM private key path (RS256)
     std::string jwtPublicKeyFile;               // PEM public key path (RS256)
     std::string tokenRevocationFile;            // path to persist revoked tokens (empty = in-memory only)

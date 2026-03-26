@@ -78,6 +78,7 @@ constexpr int    kDefaultMaxPathDepth    = 10;                // levels
 // Crypto / buffer sizes
 // -----------------------------------------------------------------------
 constexpr size_t kSecretKeyBytes     = 32;   // bytes — JWT secret key length (256 bits)
+constexpr int    kRsaMinKeyBits      = 4096; // bits — minimum RSA key size
 constexpr size_t kUuidBytes          = 16;   // bytes — UUID v4 raw bytes
 constexpr size_t kTimestampBufSize   = 32;   // bytes — ISO 8601 timestamp buffer
 constexpr int    kPbkdf2Iterations   = 310000;  // rounds — OWASP 2024 minimum for PBKDF2-SHA256
@@ -125,11 +126,9 @@ HUB32API_EXPORT UserRole user_role_from_string(const std::string& s);
 enum class JwtAlgorithm
 {
     RS256,
-    HS256,
 };
 
 HUB32API_EXPORT std::string to_string(JwtAlgorithm alg);
-HUB32API_EXPORT JwtAlgorithm jwt_algorithm_from_string(const std::string& s);
 
 // -----------------------------------------------------------------------
 // AuthMethod — authentication method identifiers
