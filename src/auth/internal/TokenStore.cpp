@@ -1,54 +1,131 @@
 /**
  * @file TokenStore.cpp
- * @brief Implementation of TokenStore — revoked-token denylist with optional
- *        file-based persistence and time-based expiry tracking.
+ * @brief Implementation of TokenStore — revoked-token denylist backed by
+ *        SQLite (with WAL mode) or an in-memory set when no path is given.
  *
- * Revoked JTIs are stored alongside a steady_clock expiry timestamp.
- * purgeExpired() removes entries that have passed their expiry, keeping
- * the denylist bounded without losing active revocations.
+ * Schema:
+ *   revoked_tokens(
+ *       jti        TEXT PRIMARY KEY,
+ *       revoked_at INTEGER NOT NULL,
+ *       expires_at INTEGER NOT NULL
+ *   )
  *
- * When a persist path is configured the store additionally:
- *  - Loads previously revoked tokens from the file at construction.
- *  - Appends new revocations to the file (one line per entry).
- *  - Rewrites the file after purging to remove stale entries.
- *
- * File format: one line per entry — <jti>\t<expiry_epoch_seconds>\n
+ * All timestamps are stored as Unix epoch seconds (INTEGER).
+ * All SQLite operations use prepared statements — no string concatenation.
  */
 
 #include "../../core/PrecompiledHeader.hpp"
 #include "TokenStore.hpp"
 
-#include <fstream>
+#include <sqlite3.h>
 
 namespace hub32api::auth::internal {
 
 namespace {
 
-/// Default duration to keep a revoked token entry before it can be purged.
-/// Set to 1 hour, which should exceed the longest JWT lifetime in use.
+/// Default duration a revocation entry is retained before purging.
+/// Must exceed the maximum JWT lifetime so the token cannot be re-used
+/// after the entry is deleted.
 constexpr auto k_defaultRevocationTtl = std::chrono::hours(1);
+
+/**
+ * @brief Converts a system_clock time_point to Unix epoch seconds.
+ */
+inline int64_t toEpochSeconds(std::chrono::system_clock::time_point tp)
+{
+    return std::chrono::duration_cast<std::chrono::seconds>(
+        tp.time_since_epoch()).count();
+}
 
 } // anonymous namespace
 
 // ---------------------------------------------------------------------------
-// Construction
+// Construction / destruction
 // ---------------------------------------------------------------------------
 
 /**
- * @brief Constructs the TokenStore, optionally loading persisted state.
+ * @brief Constructs the TokenStore, optionally opening an SQLite database.
  *
- * If @p persistPath is non-empty, any previously revoked tokens stored in
- * that file are loaded into the in-memory denylist. Expired entries in the
- * file are silently skipped.
+ * If @p dbPath is non-empty, initDb() is called to open (or create) the
+ * database and create the revoked_tokens table. On any SQLite failure the
+ * store falls back to in-memory mode so the server can still run.
  *
- * @param persistPath  Path to the persistence file, or empty for in-memory only.
+ * @param dbPath  Path to the SQLite file, or empty for in-memory only.
  */
-TokenStore::TokenStore(const std::string& persistPath)
-    : m_persistPath(persistPath)
+TokenStore::TokenStore(const std::string& dbPath)
 {
-    if (!m_persistPath.empty()) {
-        loadFromFile();
+    if (!dbPath.empty()) {
+        initDb(dbPath);
     }
+}
+
+TokenStore::~TokenStore()
+{
+    if (m_db) {
+        sqlite3_close(m_db);
+        m_db = nullptr;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Private: database initialisation
+// ---------------------------------------------------------------------------
+
+/**
+ * @brief Opens the SQLite database, enables WAL mode, and creates the schema.
+ *
+ * On failure, logs the error and leaves m_useSqlite = false so the in-memory
+ * fallback is used automatically.
+ *
+ * @param dbPath  Path to the SQLite database file.
+ */
+void TokenStore::initDb(const std::string& dbPath)
+{
+    int rc = sqlite3_open(dbPath.c_str(), &m_db);
+    if (rc != SQLITE_OK) {
+        spdlog::error("[TokenStore] sqlite3_open('{}') failed: {}",
+                      dbPath, sqlite3_errmsg(m_db));
+        sqlite3_close(m_db);
+        m_db = nullptr;
+        return;
+    }
+
+    // Enable WAL mode for better concurrent read/write performance
+    sqlite3_exec(m_db, "PRAGMA journal_mode=WAL;", nullptr, nullptr, nullptr);
+
+    // Create the revocation table
+    constexpr const char* k_createTable =
+        "CREATE TABLE IF NOT EXISTS revoked_tokens ("
+        "  jti        TEXT    PRIMARY KEY,"
+        "  revoked_at INTEGER NOT NULL,"
+        "  expires_at INTEGER NOT NULL"
+        ");";
+
+    constexpr const char* k_createIndex =
+        "CREATE INDEX IF NOT EXISTS idx_revoked_tokens_expires_at "
+        "ON revoked_tokens(expires_at);";
+
+    char* errMsg = nullptr;
+    rc = sqlite3_exec(m_db, k_createTable, nullptr, nullptr, &errMsg);
+    if (rc != SQLITE_OK) {
+        spdlog::error("[TokenStore] failed to create table: {}",
+                      errMsg ? errMsg : "unknown error");
+        sqlite3_free(errMsg);
+        sqlite3_close(m_db);
+        m_db = nullptr;
+        return;
+    }
+
+    rc = sqlite3_exec(m_db, k_createIndex, nullptr, nullptr, &errMsg);
+    if (rc != SQLITE_OK) {
+        spdlog::warn("[TokenStore] failed to create index: {}",
+                     errMsg ? errMsg : "unknown error");
+        sqlite3_free(errMsg);
+        // Non-fatal: the index is a performance hint only
+    }
+
+    m_useSqlite = true;
+    spdlog::info("[TokenStore] opened SQLite database '{}'", dbPath);
 }
 
 // ---------------------------------------------------------------------------
@@ -56,156 +133,142 @@ TokenStore::TokenStore(const std::string& persistPath)
 // ---------------------------------------------------------------------------
 
 /**
- * @brief Revokes a token by its JTI, adding it to the denylist.
+ * @brief Revokes a token JTI with a default TTL of 1 hour.
  *
- * The revocation entry is stored with an expiry timestamp of now + 1 hour.
- * After that time, purgeExpired() may remove the entry (the JWT itself
- * will have expired by then, so continued tracking is unnecessary).
+ * Delegates to revokeWithExpiry() with an expiry of now + 1 hour.
  *
- * If a persist path is configured the entry is also appended to the file.
- *
- * @param jti The unique JWT ID to revoke.
+ * @param jti  The JWT ID to add to the denylist.
  */
 void TokenStore::revoke(const std::string& jti)
 {
+    revokeWithExpiry(jti,
+        std::chrono::system_clock::now() + k_defaultRevocationTtl);
+}
+
+/**
+ * @brief Revokes a token JTI with an explicit expiry timestamp.
+ *
+ * SQLite mode: INSERT OR REPLACE so that re-revocation updates the expiry.
+ * In-memory mode: inserts the JTI into the in-memory set (expiry not tracked).
+ *
+ * @param jti        The JWT ID to revoke.
+ * @param expiresAt  The time after which purgeExpired() may remove this entry.
+ */
+void TokenStore::revokeWithExpiry(const std::string& jti,
+                                  std::chrono::system_clock::time_point expiresAt)
+{
     std::lock_guard lock(m_mutex);
-    m_revoked.insert(jti);
-    auto expiry = std::chrono::steady_clock::now() + k_defaultRevocationTtl;
-    m_expiryTimes[jti] = expiry;
-    appendToFile(jti, expiry);
+
+    if (m_useSqlite) {
+        constexpr const char* k_sql =
+            "INSERT OR REPLACE INTO revoked_tokens(jti, revoked_at, expires_at) "
+            "VALUES(?, ?, ?);";
+
+        sqlite3_stmt* stmt = nullptr;
+        if (sqlite3_prepare_v2(m_db, k_sql, -1, &stmt, nullptr) != SQLITE_OK) {
+            spdlog::error("[TokenStore] revokeWithExpiry prepare failed: {}",
+                          sqlite3_errmsg(m_db));
+            return;
+        }
+
+        const int64_t revokedAt = toEpochSeconds(std::chrono::system_clock::now());
+        const int64_t expiresAtSec = toEpochSeconds(expiresAt);
+
+        sqlite3_bind_text(stmt, 1, jti.c_str(), static_cast<int>(jti.size()), SQLITE_STATIC);
+        sqlite3_bind_int64(stmt, 2, revokedAt);
+        sqlite3_bind_int64(stmt, 3, expiresAtSec);
+
+        if (sqlite3_step(stmt) != SQLITE_DONE) {
+            spdlog::error("[TokenStore] revokeWithExpiry step failed: {}",
+                          sqlite3_errmsg(m_db));
+        }
+        sqlite3_finalize(stmt);
+    } else {
+        m_memRevoked.insert(jti);
+    }
+
     spdlog::debug("[TokenStore] revoked jti={}", jti);
 }
 
 /**
- * @brief Checks whether a token JTI has been revoked.
+ * @brief Checks whether a token JTI is in the revocation denylist.
  *
- * @param jti The unique JWT ID to check.
- * @return true if the JTI is in the revocation set, false otherwise.
+ * SQLite mode: queries for the JTI only if expires_at is still in the future,
+ * so entries that have logically expired (but not yet purged) are not reported
+ * as revoked.
+ *
+ * In-memory mode: checks the in-memory set (no expiry tracking).
+ *
+ * @param jti  The JWT ID to look up.
+ * @return true if the JTI is currently revoked, false otherwise.
  */
-bool TokenStore::isRevoked(const std::string& jti) const noexcept
+bool TokenStore::isRevoked(const std::string& jti) const
 {
     std::lock_guard lock(m_mutex);
-    return m_revoked.count(jti) > 0;
+
+    if (m_useSqlite) {
+        constexpr const char* k_sql =
+            "SELECT 1 FROM revoked_tokens "
+            "WHERE jti = ? AND expires_at > ? "
+            "LIMIT 1;";
+
+        sqlite3_stmt* stmt = nullptr;
+        if (sqlite3_prepare_v2(m_db, k_sql, -1, &stmt, nullptr) != SQLITE_OK) {
+            spdlog::error("[TokenStore] isRevoked prepare failed: {}",
+                          sqlite3_errmsg(m_db));
+            return false;
+        }
+
+        const int64_t nowSec = toEpochSeconds(std::chrono::system_clock::now());
+        sqlite3_bind_text(stmt, 1, jti.c_str(), static_cast<int>(jti.size()), SQLITE_STATIC);
+        sqlite3_bind_int64(stmt, 2, nowSec);
+
+        const bool found = (sqlite3_step(stmt) == SQLITE_ROW);
+        sqlite3_finalize(stmt);
+        return found;
+    }
+
+    return m_memRevoked.count(jti) > 0;
 }
 
 /**
- * @brief Removes revoked entries whose expiry time has passed.
+ * @brief Removes revocation entries whose expiry time has passed.
  *
- * Iterates the expiry map and removes any entry whose tracked expiry
- * timestamp is in the past. The corresponding entry is also removed
- * from the revoked set. This keeps the denylist bounded over time.
- *
- * If entries were purged and a persist path is configured, the file is
- * rewritten to exclude the expired entries.
+ * SQLite mode: executes a DELETE for all rows where expires_at <= now.
+ * In-memory mode: no-op (in-memory set has no expiry tracking).
  */
 void TokenStore::purgeExpired()
 {
     std::lock_guard lock(m_mutex);
-    const auto now = std::chrono::steady_clock::now();
-    int purged = 0;
 
-    for (auto it = m_expiryTimes.begin(); it != m_expiryTimes.end(); )
-    {
-        if (now >= it->second)
-        {
-            m_revoked.erase(it->first);
-            it = m_expiryTimes.erase(it);
-            ++purged;
-        }
-        else
-        {
-            ++it;
-        }
+    if (!m_useSqlite) {
+        return;
     }
 
-    if (purged > 0)
-    {
-        saveToFile();  // Rewrite file without expired entries
-        spdlog::debug("[TokenStore] purged {} expired revocation entries ({} remaining)",
-                      purged, m_revoked.size());
+    constexpr const char* k_sql =
+        "DELETE FROM revoked_tokens WHERE expires_at <= ?;";
+
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(m_db, k_sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        spdlog::error("[TokenStore] purgeExpired prepare failed: {}",
+                      sqlite3_errmsg(m_db));
+        return;
     }
-}
 
-// ---------------------------------------------------------------------------
-// File persistence (private)
-// ---------------------------------------------------------------------------
+    const int64_t nowSec = toEpochSeconds(std::chrono::system_clock::now());
+    sqlite3_bind_int64(stmt, 1, nowSec);
 
-/**
- * @brief Loads revoked tokens from the persist file.
- *
- * Each line is expected to contain <jti>\t<expiry_epoch_seconds>.
- * Entries whose expiry has already passed are silently skipped.
- * The steady_clock expiry is reconstructed as an approximate offset
- * from the current time.
- */
-void TokenStore::loadFromFile()
-{
-    std::ifstream f(m_persistPath);
-    if (!f.is_open()) return;
-
-    std::string line;
-    const auto now = std::chrono::steady_clock::now();
-    int loaded = 0, skipped = 0;
-
-    while (std::getline(f, line)) {
-        auto tab = line.find('\t');
-        if (tab == std::string::npos) continue;
-
-        std::string jti = line.substr(0, tab);
-        int64_t epochSec = 0;
-        try { epochSec = std::stoll(line.substr(tab + 1)); } catch (...) { continue; }
-
-        // Convert epoch seconds to steady_clock point (approximate)
-        auto expiry = now + std::chrono::seconds(epochSec -
-            std::chrono::duration_cast<std::chrono::seconds>(
-                now.time_since_epoch()).count());
-
-        if (expiry > now) {
-            m_revoked.insert(jti);
-            m_expiryTimes[jti] = expiry;
-            ++loaded;
-        } else {
-            ++skipped;
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        spdlog::error("[TokenStore] purgeExpired step failed: {}",
+                      sqlite3_errmsg(m_db));
+    } else {
+        const int purged = sqlite3_changes(m_db);
+        if (purged > 0) {
+            spdlog::debug("[TokenStore] purged {} expired revocation entries", purged);
         }
     }
-    spdlog::info("[TokenStore] loaded {} revoked tokens from '{}' ({} expired, skipped)",
-                 loaded, m_persistPath, skipped);
-}
 
-/**
- * @brief Rewrites the persist file with all current (non-expired) entries.
- *
- * Called after purgeExpired() removes stale entries, so the file stays
- * bounded and does not grow without limit.
- */
-void TokenStore::saveToFile()
-{
-    if (m_persistPath.empty()) return;
-    std::ofstream f(m_persistPath, std::ios::trunc);
-    if (!f.is_open()) return;
-
-    for (const auto& [jti, expiry] : m_expiryTimes) {
-        auto epochSec = std::chrono::duration_cast<std::chrono::seconds>(
-            expiry.time_since_epoch()).count();
-        f << jti << '\t' << epochSec << '\n';
-    }
-}
-
-/**
- * @brief Appends a single revoked entry to the persist file.
- *
- * Uses std::ios::app so that concurrent revocations do not overwrite
- * each other (the mutex is already held by the caller).
- */
-void TokenStore::appendToFile(const std::string& jti,
-                               std::chrono::steady_clock::time_point expiry)
-{
-    if (m_persistPath.empty()) return;
-    std::ofstream f(m_persistPath, std::ios::app);
-    if (!f.is_open()) return;
-    auto epochSec = std::chrono::duration_cast<std::chrono::seconds>(
-        expiry.time_since_epoch()).count();
-    f << jti << '\t' << epochSec << '\n';
+    sqlite3_finalize(stmt);
 }
 
 } // namespace hub32api::auth::internal

@@ -2,62 +2,69 @@
 
 #include <chrono>
 #include <mutex>
-#include <unordered_map>
-#include <unordered_set>
 #include <string>
+#include <unordered_set>
+
+#include "hub32api/export.h"
+
+struct sqlite3;
 
 namespace hub32api::auth::internal {
 
 /**
  * @brief TokenStore — tracks revoked JWT tokens (denylist).
  *
- * Maintains an in-memory set of revoked JTIs with optional file-based
- * persistence. When a persist path is provided, revoked tokens survive
- * process restarts: the file is loaded at construction, each revocation
- * is appended, and purgeExpired() rewrites the file without stale entries.
+ * When a dbPath is provided, revoked tokens are persisted in an SQLite
+ * database using WAL mode. Each entry carries an expires_at timestamp
+ * so that purgeExpired() can remove stale rows and keep the database bounded.
  *
- * Each revoked token is stored alongside an expiry timestamp so that
- * purgeExpired() can remove stale entries instead of clearing everything.
+ * When no dbPath is given the store operates in in-memory mode using a simple
+ * std::unordered_set (useful for testing and configurations where persistence
+ * is not required).
  */
-class TokenStore
+class HUB32API_EXPORT TokenStore
 {
 public:
     /**
-     * @brief Constructs the token store, optionally loading persisted state.
+     * @brief Constructs the token store.
      *
-     * @param persistPath  Path to a file used for persistence.
-     *                     If empty, the store is in-memory only (previous behaviour).
+     * @param dbPath  Path to the SQLite database file.
+     *                If empty, the store is in-memory only (no persistence).
      */
-    explicit TokenStore(const std::string& persistPath = {});
+    explicit TokenStore(const std::string& dbPath = {});
+    ~TokenStore();
 
-    /** @brief Revokes a token by its JTI, preventing further use. */
+    TokenStore(const TokenStore&) = delete;
+    TokenStore& operator=(const TokenStore&) = delete;
+
+    /** @brief Revokes a token by its JTI with a default TTL of 1 hour. */
     void revoke(const std::string& jti);
 
-    /** @brief Checks whether a token JTI has been revoked. */
-    bool isRevoked(const std::string& jti) const noexcept;
+    /**
+     * @brief Revokes a token by its JTI with an explicit expiry timestamp.
+     *
+     * @param jti       The JWT ID to revoke.
+     * @param expiresAt The time at which this revocation entry may be purged.
+     */
+    void revokeWithExpiry(const std::string& jti,
+                          std::chrono::system_clock::time_point expiresAt);
 
-    /** @brief Removes revoked entries whose expiry time has passed. */
+    /** @brief Checks whether a token JTI is in the revocation denylist. */
+    bool isRevoked(const std::string& jti) const;
+
+    /** @brief Removes revocation entries whose expiry time has passed. */
     void purgeExpired();
 
 private:
-    mutable std::mutex                    m_mutex;
-    std::unordered_set<std::string>       m_revoked;
+    mutable std::mutex m_mutex;
+    mutable sqlite3*   m_db       = nullptr;
+    bool               m_useSqlite = false;
 
-    /** @brief Maps each revoked JTI to the time at which it may be purged. */
-    std::unordered_map<std::string,
-                       std::chrono::steady_clock::time_point> m_expiryTimes;
+    /** @brief Fallback in-memory set used when no database path is configured. */
+    std::unordered_set<std::string> m_memRevoked;
 
-    /** @brief File path for persistence (empty = in-memory only). */
-    std::string m_persistPath;
-
-    /** @brief Loads revoked tokens from the persist file at startup. */
-    void loadFromFile();
-
-    /** @brief Rewrites the persist file with all current entries (used after purge). */
-    void saveToFile();
-
-    /** @brief Appends a single revoked entry to the persist file. */
-    void appendToFile(const std::string& jti, std::chrono::steady_clock::time_point expiry);
+    /** @brief Opens the SQLite database and creates the schema if needed. */
+    void initDb(const std::string& dbPath);
 };
 
 } // namespace hub32api::auth::internal
