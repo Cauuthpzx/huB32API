@@ -50,7 +50,15 @@
     "forbidden": "Bạn không có quyền thực hiện thao tác này",
     "name_required": "Tên là bắt buộc",
     "username_required": "Tên đăng nhập là bắt buộc",
-    "password_required": "Mật khẩu là bắt buộc"
+    "password_required": "Mật khẩu là bắt buộc",
+    "location_id_required": "ID phòng là bắt buộc",
+    "direction_required": "Hướng phải là 'send' hoặc 'recv'",
+    "transport_not_found": "Không tìm thấy transport",
+    "kind_required": "Loại phải là 'video' hoặc 'audio'",
+    "transport_id_required": "ID transport là bắt buộc",
+    "producer_id_required": "ID producer là bắt buộc",
+    "router_creation_failed": "Không thể tạo router cho phòng",
+    "transport_creation_failed": "Không thể tạo transport"
   },
   "auth": {
     "method_hub32_key": "Xác thực bằng khóa Hub32",

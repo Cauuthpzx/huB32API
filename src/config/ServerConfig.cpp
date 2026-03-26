@@ -265,6 +265,17 @@ ServerConfig ServerConfig::from_file(const std::string& path)
         cfg.defaultLocale  = i18nObj.value("defaultLocale", cfg.defaultLocale);
     }
 
+    // TURN / ICE
+    cfg.turnSecret            = j.value("turnSecret", cfg.turnSecret);
+    cfg.turnServerUrl         = j.value("turnServerUrl", cfg.turnServerUrl);
+
+    // Support nested "turn" object from default.json format
+    if (j.contains("turn") && j["turn"].is_object()) {
+        const auto& turnObj = j["turn"];
+        cfg.turnSecret    = turnObj.value("secret", cfg.turnSecret);
+        cfg.turnServerUrl = turnObj.value("serverUrl", cfg.turnServerUrl);
+    }
+
     cfg.metricsEnabled        = j.value("metricsEnabled", cfg.metricsEnabled);
     cfg.metricsPort           = j.value("metricsPort", cfg.metricsPort);
 
@@ -352,6 +363,8 @@ ServerConfig ServerConfig::from_registry()
     readRegistryString(hKey, "logLevel", cfg.logLevel);
     readRegistryString(hKey, "logFile", cfg.logFile);
     readRegistryString(hKey, "auditLogFile", cfg.auditLogFile);
+    readRegistryString(hKey, "turnSecret", cfg.turnSecret);
+    readRegistryString(hKey, "turnServerUrl", cfg.turnServerUrl);
 
     RegCloseKey(hKey);
 

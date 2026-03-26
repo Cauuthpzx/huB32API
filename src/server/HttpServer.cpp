@@ -17,6 +17,9 @@
 #include "../db/TeacherRepository.hpp"
 #include "../db/TeacherLocationRepository.hpp"
 #include "../core/internal/I18n.hpp"
+#include "../media/SfuBackend.hpp"
+#include "../media/MockSfuBackend.hpp"
+#include "../media/RoomManager.hpp"
 #include "../plugins/computer/ComputerPlugin.hpp"
 #include "../plugins/feature/FeaturePlugin.hpp"
 #include "../plugins/session/SessionPlugin.hpp"
@@ -84,6 +87,8 @@ struct HttpServer::Impl
     std::unique_ptr<db::ComputerRepository>           computerRepo;
     std::unique_ptr<db::TeacherRepository>            teacherRepo;
     std::unique_ptr<db::TeacherLocationRepository>    teacherLocationRepo;
+    std::unique_ptr<media::SfuBackend>                sfuBackend;
+    std::unique_ptr<media::RoomManager>               roomManager;
     std::unique_ptr<server::internal::ThreadPool>     threadPool;
     std::unique_ptr<httplib::Server>                  httpServer;
     std::unique_ptr<server::internal::Router>         router;
@@ -134,6 +139,10 @@ HttpServer::HttpServer(const ServerConfig& cfg)
     m_impl->computerRepo = std::make_unique<db::ComputerRepository>(*m_impl->dbManager);
     m_impl->teacherRepo = std::make_unique<db::TeacherRepository>(*m_impl->dbManager);
     m_impl->teacherLocationRepo = std::make_unique<db::TeacherLocationRepository>(*m_impl->dbManager);
+
+    // 4.2 SFU backend (MockSfuBackend for dev, real mediasoup for production)
+    m_impl->sfuBackend = std::make_unique<media::MockSfuBackend>();
+    m_impl->roomManager = std::make_unique<media::RoomManager>(*m_impl->sfuBackend);
 
     // 4a. Wire AgentRegistry into plugins for live agent routing
     if (auto* compPlugin = m_impl->registry->computerPlugin()) {
@@ -190,7 +199,9 @@ HttpServer::HttpServer(const ServerConfig& cfg)
         *m_impl->roleStore, *m_impl->agentRegistry, agentKeyHash,
         m_impl->schoolRepo.get(), m_impl->locationRepo.get(),
         m_impl->computerRepo.get(), m_impl->teacherRepo.get(),
-        m_impl->teacherLocationRepo.get()
+        m_impl->teacherLocationRepo.get(),
+        m_impl->roomManager.get(), m_impl->sfuBackend.get(),
+        cfg.turnSecret, cfg.turnServerUrl
     };
     m_impl->router = std::make_unique<server::internal::Router>(*m_impl->httpServer, svcs);
     m_impl->router->registerAll();

@@ -50,7 +50,15 @@
     "forbidden": "You do not have permission for this action",
     "name_required": "Name is required",
     "username_required": "Username is required",
-    "password_required": "Password is required"
+    "password_required": "Password is required",
+    "location_id_required": "Location ID is required",
+    "direction_required": "Direction must be 'send' or 'recv'",
+    "transport_not_found": "Transport not found",
+    "kind_required": "Kind must be 'video' or 'audio'",
+    "transport_id_required": "Transport ID is required",
+    "producer_id_required": "Producer ID is required",
+    "router_creation_failed": "Failed to create room router",
+    "transport_creation_failed": "Failed to create transport"
   },
   "auth": {
     "method_hub32_key": "Hub32 Key Authentication",

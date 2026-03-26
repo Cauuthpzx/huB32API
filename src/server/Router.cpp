@@ -63,6 +63,7 @@
 #include "../api/v1/controllers/FramebufferController.hpp"
 #include "../api/v1/controllers/SessionController.hpp"
 #include "../api/v1/controllers/SchoolController.hpp"
+#include "../api/v1/controllers/StreamController.hpp"
 #include "../api/v1/controllers/TeacherController.hpp"
 
 // Controllers — v2
@@ -90,6 +91,10 @@
 // Agent
 #include "../agent/AgentRegistry.hpp"
 
+// Media
+#include "../media/SfuBackend.hpp"
+#include "../media/RoomManager.hpp"
+
 // Database repositories
 #include "../db/SchoolRepository.hpp"
 #include "../db/LocationRepository.hpp"
@@ -102,6 +107,8 @@
 
 #include "../plugins/metrics/MetricsPlugin.hpp"
 
+#include "api/common/HttpErrorUtil.hpp"
+
 #include <httplib.h>
 #include <sstream>
 #include <cstdlib>
@@ -113,6 +120,8 @@
 #  include <icmpapi.h>
 #endif
 
+using hub32api::api::common::sendError;
+
 namespace hub32api::server::internal {
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -121,34 +130,6 @@ namespace hub32api::server::internal {
 
 namespace {
 
-/**
- * @brief Resolves the client's preferred locale from the Accept-Language header.
- * @param req The incoming HTTP request.
- * @return The best matching locale code.
- */
-std::string resolveLocale(const httplib::Request& req)
-{
-    auto* i18n = hub32api::core::internal::I18n::instance();
-    if (!i18n) return "en";
-    const std::string acceptLang = req.get_header_value("Accept-Language");
-    return i18n->negotiate(acceptLang);
-}
-
-/**
- * @brief Sends an RFC-7807 Problem Details JSON error response.
- */
-void sendError(httplib::Response& res,
-               int status,
-               const std::string& title,
-               const std::string& detail = {})
-{
-    nlohmann::json j;
-    j["status"] = status;
-    j["title"]  = title;
-    j["detail"] = detail.empty() ? title : detail;
-    res.status  = status;
-    res.set_content(j.dump(), "application/problem+json");
-}
 
 /**
  * @brief Non-blocking TCP connect check. Returns true if @p host:@p port
@@ -702,7 +683,9 @@ nlohmann::json buildOpenApiSpec()
  * @param svcs    All service references needed by controllers.
  */
 Router::Router(httplib::Server& server, Services svcs)
-    : m_server(server), m_svcs(svcs), m_sse(std::make_shared<server::SseManager>()) {}
+    : m_server(server), m_svcs(svcs), m_sse(std::make_shared<server::SseManager>()),
+      m_rl(std::make_shared<api::v1::middleware::RateLimitMiddleware>(
+               api::v1::middleware::RateLimitConfig{ 120, 20 })) {}
 
 /**
  * @brief Registers all routes. Call once before Server::listen().
@@ -713,6 +696,7 @@ void Router::registerAll()
     registerAgentRoutes();
     registerSchoolRoutes();
     registerTeacherRoutes();
+    registerStreamRoutes();
     registerV2();
     registerHealthAndMetrics();
     registerOpenApi();
@@ -757,12 +741,11 @@ void Router::registerV1()
         false,
         3600
     };
-    const api::v1::middleware::RateLimitConfig rlConfig{ 120, 20 };
 
     auto cors   = std::make_shared<api::v1::middleware::CorsMiddleware>(corsConfig);
     auto logger = std::make_shared<api::v1::middleware::LoggingMiddleware>();
     auto iv     = std::make_shared<api::v1::middleware::InputValidationMiddleware>();
-    auto rl     = std::make_shared<api::v1::middleware::RateLimitMiddleware>(rlConfig);
+    auto rl     = m_rl;
     auto auth   = std::make_shared<api::v1::middleware::AuthMiddleware>(m_svcs.jwtAuth);
 
     // ── Route builders ────────────────────────────────────────────────────
@@ -961,12 +944,11 @@ void Router::registerAgentRoutes()
         false,
         3600
     };
-    const api::v1::middleware::RateLimitConfig rlConfig{ 120, 20 };
 
     auto cors   = std::make_shared<api::v1::middleware::CorsMiddleware>(corsConfig);
     auto logger = std::make_shared<api::v1::middleware::LoggingMiddleware>();
     auto iv     = std::make_shared<api::v1::middleware::InputValidationMiddleware>();
-    auto rl     = std::make_shared<api::v1::middleware::RateLimitMiddleware>(rlConfig);
+    auto rl     = m_rl;
     auto auth   = std::make_shared<api::v1::middleware::AuthMiddleware>(m_svcs.jwtAuth);
 
     // ── Route builders ────────────────────────────────────────────────────
@@ -1082,12 +1064,11 @@ void Router::registerSchoolRoutes()
         false,
         3600
     };
-    const api::v1::middleware::RateLimitConfig rlConfig{ 120, 20 };
 
     auto cors   = std::make_shared<api::v1::middleware::CorsMiddleware>(corsConfig);
     auto logger = std::make_shared<api::v1::middleware::LoggingMiddleware>();
     auto iv     = std::make_shared<api::v1::middleware::InputValidationMiddleware>();
-    auto rl     = std::make_shared<api::v1::middleware::RateLimitMiddleware>(rlConfig);
+    auto rl     = m_rl;
     auto auth   = std::make_shared<api::v1::middleware::AuthMiddleware>(m_svcs.jwtAuth);
 
     // Protected: CORS + Logging + InputValidation + RateLimit + JWT
@@ -1199,12 +1180,11 @@ void Router::registerTeacherRoutes()
         false,
         3600
     };
-    const api::v1::middleware::RateLimitConfig rlConfig{ 120, 20 };
 
     auto cors   = std::make_shared<api::v1::middleware::CorsMiddleware>(corsConfig);
     auto logger = std::make_shared<api::v1::middleware::LoggingMiddleware>();
     auto iv     = std::make_shared<api::v1::middleware::InputValidationMiddleware>();
-    auto rl     = std::make_shared<api::v1::middleware::RateLimitMiddleware>(rlConfig);
+    auto rl     = m_rl;
     auto auth   = std::make_shared<api::v1::middleware::AuthMiddleware>(m_svcs.jwtAuth);
 
     auto protectedRoute = [&](const std::string& method, const std::string& path, auto handler)
@@ -1270,6 +1250,111 @@ void Router::registerTeacherRoutes()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Stream (WebRTC signaling) routes
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * @brief Registers all /api/v1/stream/ routes for WebRTC signaling.
+ *
+ * Routes:
+ *   POST   /api/v1/stream/transport                 → handleCreateTransport
+ *   POST   /api/v1/stream/transport/:id/connect     → handleConnectTransport
+ *   POST   /api/v1/stream/produce                   → handleProduce
+ *   POST   /api/v1/stream/consume                   → handleConsume
+ *   DELETE /api/v1/stream/transport/:id              → handleCloseTransport
+ *   GET    /api/v1/stream/ice-servers               → handleGetIceServers
+ *   GET    /api/v1/stream/capabilities/:locationId  → handleGetCapabilities
+ */
+void Router::registerStreamRoutes()
+{
+    if (!m_svcs.roomManager || !m_svcs.sfuBackend) {
+        spdlog::warn("[Router] SFU backend not available — skipping stream routes");
+        return;
+    }
+
+    auto streamCtrl = std::make_shared<api::v1::StreamController>(
+        *m_svcs.roomManager, *m_svcs.sfuBackend,
+        m_svcs.turnSecret, m_svcs.turnServerUrl);
+
+    // ── Middleware ────────────────────────────────────────────────────────
+    const api::v1::middleware::CorsConfig corsConfig{
+        {"*"},
+        {"GET","POST","DELETE","OPTIONS"},
+        {"Authorization","Content-Type","X-Request-ID","Accept"},
+        false,
+        3600
+    };
+
+    auto cors   = std::make_shared<api::v1::middleware::CorsMiddleware>(corsConfig);
+    auto logger = std::make_shared<api::v1::middleware::LoggingMiddleware>();
+    auto iv     = std::make_shared<api::v1::middleware::InputValidationMiddleware>();
+    auto rl     = m_rl;
+    auto auth   = std::make_shared<api::v1::middleware::AuthMiddleware>(m_svcs.jwtAuth);
+
+    auto protectedRoute = [&](const std::string& method, const std::string& path, auto handler)
+    {
+        auto h = [cors, logger, iv, rl, auth, handler]
+            (const httplib::Request& req, httplib::Response& res)
+        {
+            logger->logRequest(req);
+            if (!cors->process(req, res)) { logger->logResponse(req, res); return; }
+            if (!iv->process(req, res))   { logger->logResponse(req, res); return; }
+            if (!rl->process(req, res))   { logger->logResponse(req, res); return; }
+            core::internal::ApiContext ctx;
+            ctx.requestId = req.has_header("X-Request-ID")
+                ? req.get_header_value("X-Request-ID") : "";
+            if (!auth->process(req, res, ctx)) { logger->logResponse(req, res); return; }
+            handler(req, res);
+            logger->logResponse(req, res);
+        };
+        if (method == "GET")    m_server.Get(path.c_str(), h);
+        else if (method == "POST")   m_server.Post(path.c_str(), h);
+        else if (method == "DELETE") m_server.Delete(path.c_str(), h);
+    };
+
+    // ── Transport ───────────────────────────────────────────────────────
+    protectedRoute("POST", "/api/v1/stream/transport",
+        [streamCtrl](const httplib::Request& req, httplib::Response& res) {
+            streamCtrl->handleCreateTransport(req, res);
+        });
+
+    // connect must be registered BEFORE bare transport/:id
+    protectedRoute("POST", R"(/api/v1/stream/transport/([^/]+)/connect)",
+        [streamCtrl](const httplib::Request& req, httplib::Response& res) {
+            streamCtrl->handleConnectTransport(req, res);
+        });
+
+    protectedRoute("DELETE", R"(/api/v1/stream/transport/([^/]+))",
+        [streamCtrl](const httplib::Request& req, httplib::Response& res) {
+            streamCtrl->handleCloseTransport(req, res);
+        });
+
+    // ── Produce / Consume ───────────────────────────────────────────────
+    protectedRoute("POST", "/api/v1/stream/produce",
+        [streamCtrl](const httplib::Request& req, httplib::Response& res) {
+            streamCtrl->handleProduce(req, res);
+        });
+
+    protectedRoute("POST", "/api/v1/stream/consume",
+        [streamCtrl](const httplib::Request& req, httplib::Response& res) {
+            streamCtrl->handleConsume(req, res);
+        });
+
+    // ── ICE + Capabilities ──────────────────────────────────────────────
+    protectedRoute("GET", "/api/v1/stream/ice-servers",
+        [streamCtrl](const httplib::Request& req, httplib::Response& res) {
+            streamCtrl->handleGetIceServers(req, res);
+        });
+
+    protectedRoute("GET", R"(/api/v1/stream/capabilities/([^/]+))",
+        [streamCtrl](const httplib::Request& req, httplib::Response& res) {
+            streamCtrl->handleGetCapabilities(req, res);
+        });
+
+    spdlog::debug("[Router] stream (WebRTC signaling) routes registered");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // v2
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1282,11 +1367,10 @@ void Router::registerV2()
     auto locCtrl   = std::make_shared<api::v2::LocationController>(m_svcs.registry);
 
     const api::v1::middleware::CorsConfig corsConfig{};
-    const api::v1::middleware::RateLimitConfig rlConfig{};
     auto cors   = std::make_shared<api::v1::middleware::CorsMiddleware>(corsConfig);
     auto logger = std::make_shared<api::v1::middleware::LoggingMiddleware>();
     auto iv     = std::make_shared<api::v1::middleware::InputValidationMiddleware>();
-    auto rl     = std::make_shared<api::v1::middleware::RateLimitMiddleware>(rlConfig);
+    auto rl     = m_rl;
     auto auth   = std::make_shared<api::v1::middleware::AuthMiddleware>(m_svcs.jwtAuth);
 
     auto protectedRoute = [&](const std::string& method, const std::string& path, auto handler)
@@ -1421,7 +1505,24 @@ void Router::registerOpenApi()
 void Router::registerSse()
 {
     // GET /api/v1/events — SSE stream for real-time events
-    m_server.Get("/api/v1/events", [this](const httplib::Request& /*req*/, httplib::Response& res) {
+    // AUTH: Validates JWT before establishing the SSE connection.
+    m_server.Get("/api/v1/events", [this](const httplib::Request& req, httplib::Response& res) {
+        // --- Validate JWT before allowing SSE subscription ---
+        const std::string authHeader = req.get_header_value("Authorization");
+        if (authHeader.empty() || authHeader.substr(0, 7) != "Bearer ") {
+            res.status = 401;
+            res.set_content(R"({"status":401,"title":"Unauthorized","detail":"SSE requires Bearer token"})",
+                            "application/json");
+            return;
+        }
+        auto authResult = m_svcs.jwtAuth.authenticate(authHeader.substr(7));
+        if (authResult.is_err()) {
+            res.status = 401;
+            res.set_content(R"({"status":401,"title":"Unauthorized","detail":"Invalid token"})",
+                            "application/json");
+            return;
+        }
+
         // Generate unique client ID
         static std::atomic<int> clientCounter{0};
         const std::string clientId = "sse-" + std::to_string(++clientCounter);
@@ -1438,8 +1539,10 @@ void Router::registerSse()
                 std::string connectMsg = "event: connected\ndata: {\"clientId\":\"" + clientId + "\"}\n\n";
                 sink.write(connectMsg.c_str(), connectMsg.size());
 
-                // Register this client's sink function
-                auto sinkFn = [&sink](const std::string& data) -> bool {
+                // Use shared alive flag to prevent dangling sink reference
+                auto alive = std::make_shared<std::atomic<bool>>(true);
+                auto sinkFn = [&sink, alive](const std::string& data) -> bool {
+                    if (!alive->load(std::memory_order_acquire)) return false;
                     return sink.write(data.c_str(), data.size());
                 };
 
@@ -1450,6 +1553,7 @@ void Router::registerSse()
                     std::this_thread::sleep_for(std::chrono::seconds(15));
                     std::string heartbeat = ":heartbeat\n\n";
                     if (!sink.write(heartbeat.c_str(), heartbeat.size())) {
+                        alive->store(false, std::memory_order_release);
                         break;  // Client disconnected
                     }
                 }
@@ -1460,8 +1564,31 @@ void Router::registerSse()
     });
 
     // GET /api/v1/computers/:id/screen/stream — SSE stream for screen updates
+    // AUTH: Validates JWT before establishing the SSE connection.
     m_server.Get(R"(/api/v1/computers/([^/]+)/screen/stream)",
         [this](const httplib::Request& req, httplib::Response& res) {
+            // --- Validate JWT ---
+            const std::string authHeader = req.get_header_value("Authorization");
+            if (authHeader.empty() || authHeader.substr(0, 7) != "Bearer ") {
+                res.status = 401;
+                res.set_content(R"({"status":401,"title":"Unauthorized","detail":"SSE requires Bearer token"})",
+                                "application/json");
+                return;
+            }
+            auto authResult = m_svcs.jwtAuth.authenticate(authHeader.substr(7));
+            if (authResult.is_err()) {
+                res.status = 401;
+                res.set_content(R"({"status":401,"title":"Unauthorized","detail":"Invalid token"})",
+                                "application/json");
+                return;
+            }
+
+            if (req.matches.size() <= 1) {
+                res.status = 400;
+                res.set_content(R"({"status":400,"title":"Bad Request","detail":"Missing computer ID"})",
+                                "application/json");
+                return;
+            }
             const std::string compId = req.matches[1].str();
             static std::atomic<int> counter{0};
             const std::string clientId = "screen-" + std::to_string(++counter);
@@ -1477,7 +1604,10 @@ void Router::registerSse()
                     std::string connectMsg = "event: connected\ndata: {\"computer\":\"" + compId + "\"}\n\n";
                     sink.write(connectMsg.c_str(), connectMsg.size());
 
-                    auto sinkFn = [&sink](const std::string& data) -> bool {
+                    // Use shared alive flag to prevent dangling sink reference
+                    auto alive = std::make_shared<std::atomic<bool>>(true);
+                    auto sinkFn = [&sink, alive](const std::string& data) -> bool {
+                        if (!alive->load(std::memory_order_acquire)) return false;
                         return sink.write(data.c_str(), data.size());
                     };
                     m_sse->subscribe(channel, clientId, sinkFn);
@@ -1485,7 +1615,10 @@ void Router::registerSse()
                     while (true) {
                         std::this_thread::sleep_for(std::chrono::seconds(15));
                         std::string heartbeat = ":heartbeat\n\n";
-                        if (!sink.write(heartbeat.c_str(), heartbeat.size())) break;
+                        if (!sink.write(heartbeat.c_str(), heartbeat.size())) {
+                            alive->store(false, std::memory_order_release);
+                            break;
+                        }
                     }
 
                     m_sse->unsubscribe(channel, clientId);

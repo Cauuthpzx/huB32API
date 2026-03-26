@@ -10,6 +10,8 @@ namespace hub32api::auth { class JwtAuth; class Hub32KeyAuth; class UserRoleStor
 namespace hub32api::agent { class AgentRegistry; }
 namespace hub32api::db { class SchoolRepository; class LocationRepository; class ComputerRepository;
                          class TeacherRepository; class TeacherLocationRepository; }
+namespace hub32api::media { class SfuBackend; class RoomManager; }
+namespace hub32api::api::v1::middleware { class RateLimitMiddleware; }
 namespace hub32api::server { class SseManager; }
 
 namespace hub32api::server::internal {
@@ -35,6 +37,10 @@ public:
         db::ComputerRepository*         computerRepo = nullptr;
         db::TeacherRepository*          teacherRepo = nullptr;
         db::TeacherLocationRepository*  teacherLocationRepo = nullptr;
+        media::RoomManager*             roomManager = nullptr;
+        media::SfuBackend*              sfuBackend = nullptr;
+        std::string                     turnSecret;
+        std::string                     turnServerUrl;
     };
 
     explicit Router(httplib::Server& server, Services svcs);
@@ -49,12 +55,14 @@ private:
     void registerAgentRoutes();
     void registerSchoolRoutes();
     void registerTeacherRoutes();
+    void registerStreamRoutes();
     void registerSse();
     void registerDebug();
 
     httplib::Server& m_server;
     Services         m_svcs;
     std::shared_ptr<server::SseManager> m_sse;
+    std::shared_ptr<api::v1::middleware::RateLimitMiddleware> m_rl;
 };
 
 } // namespace hub32api::server::internal

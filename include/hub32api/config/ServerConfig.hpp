@@ -64,6 +64,10 @@ struct HUB32API_EXPORT ServerConfig
     std::string localesDir;               // path to locale JSON catalogs
     std::string defaultLocale    = "en";  // fallback locale
 
+    // TURN / ICE
+    std::string turnSecret;        // HMAC secret for TURN credential generation (coturn REST API)
+    std::string turnServerUrl;     // e.g., "turn.example.com"
+
     // Metrics
     bool metricsEnabled            = false;
     uint16_t metricsPort           = 9091;

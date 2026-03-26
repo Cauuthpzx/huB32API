@@ -40,6 +40,10 @@
     "localesDir": "locales",
     "defaultLocale": "en"
   },
+  "turn": {
+    "secret": "",
+    "serverUrl": ""
+  },
   "metrics": {
     "enabled": false,
     "port": 9091

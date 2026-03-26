@@ -50,7 +50,15 @@
     "forbidden": "您没有权限执行此操作",
     "name_required": "名称为必填项",
     "username_required": "用户名为必填项",
-    "password_required": "密码为必填项"
+    "password_required": "密码为必填项",
+    "location_id_required": "教室 ID 为必填项",
+    "direction_required": "方向必须是 'send' 或 'recv'",
+    "transport_not_found": "未找到传输通道",
+    "kind_required": "类型必须是 'video' 或 'audio'",
+    "transport_id_required": "传输通道 ID 为必填项",
+    "producer_id_required": "生产者 ID 为必填项",
+    "router_creation_failed": "无法创建教室路由器",
+    "transport_creation_failed": "无法创建传输通道"
   },
   "auth": {
     "method_hub32_key": "Hub32 密钥认证",

@@ -7,6 +7,9 @@ add_library(hub32api-server SHARED
     SseManager.cpp
     ThreadPool.cpp
 
+    # common utilities
+    ../api/common/HttpErrorUtil.cpp
+
     # v1 controllers
     ../api/v1/controllers/AgentController.cpp
     ../api/v1/controllers/AuthController.cpp
@@ -15,6 +18,7 @@ add_library(hub32api-server SHARED
     ../api/v1/controllers/FramebufferController.cpp
     ../api/v1/controllers/SessionController.cpp
     ../api/v1/controllers/SchoolController.cpp
+    ../api/v1/controllers/StreamController.cpp
     ../api/v1/controllers/TeacherController.cpp
 
     # v1 middleware
@@ -57,6 +61,7 @@ target_link_libraries(hub32api-server
         iphlpapi
 )
 
+set_project_warnings(hub32api-server)
 add_pch(hub32api-server "${CMAKE_SOURCE_DIR}/src/core/PrecompiledHeader.hpp")
 
 add_windows_resources(hub32api-server
