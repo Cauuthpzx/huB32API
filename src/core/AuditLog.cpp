@@ -139,7 +139,12 @@ void AuditLog::writerLoop()
         "INSERT INTO audit_log (level, category, subject, action, detail, ip_address, success) "
         "VALUES (?, ?, ?, ?, ?, ?, ?)";
 
-    sqlite3_prepare_v2(m_impl->db, insertSql, -1, &stmt, nullptr);
+    int rc = sqlite3_prepare_v2(m_impl->db, insertSql, -1, &stmt, nullptr);
+    if (rc != SQLITE_OK) {
+        spdlog::error("[AuditLog] failed to prepare statement: {}",
+                      sqlite3_errmsg(m_impl->db));
+        return;
+    }
 
     while (true) {
         std::queue<AuditEntry> batch;
@@ -153,7 +158,13 @@ void AuditLog::writerLoop()
 
         if (batch.empty() && m_impl->stopping) break;
 
-        sqlite3_exec(m_impl->db, "BEGIN", nullptr, nullptr, nullptr);
+        rc = sqlite3_exec(m_impl->db, "BEGIN", nullptr, nullptr, nullptr);
+        if (rc != SQLITE_OK) {
+            spdlog::error("[AuditLog] failed to begin transaction: {}",
+                          sqlite3_errmsg(m_impl->db));
+            continue;
+        }
+
         while (!batch.empty()) {
             const auto& e = batch.front();
             sqlite3_bind_text(stmt, 1, e.level.c_str(), -1, SQLITE_TRANSIENT);
@@ -163,11 +174,20 @@ void AuditLog::writerLoop()
             sqlite3_bind_text(stmt, 5, e.detail.c_str(), -1, SQLITE_TRANSIENT);
             sqlite3_bind_text(stmt, 6, e.ipAddress.c_str(), -1, SQLITE_TRANSIENT);
             sqlite3_bind_int(stmt,  7, e.success ? 1 : 0);
-            sqlite3_step(stmt);
+            rc = sqlite3_step(stmt);
+            if (rc != SQLITE_DONE) {
+                spdlog::error("[AuditLog] failed to insert row: {}",
+                              sqlite3_errmsg(m_impl->db));
+            }
             sqlite3_reset(stmt);
             batch.pop();
         }
-        sqlite3_exec(m_impl->db, "COMMIT", nullptr, nullptr, nullptr);
+
+        rc = sqlite3_exec(m_impl->db, "COMMIT", nullptr, nullptr, nullptr);
+        if (rc != SQLITE_OK) {
+            spdlog::error("[AuditLog] failed to commit transaction: {}",
+                          sqlite3_errmsg(m_impl->db));
+        }
     }
 
     if (stmt) sqlite3_finalize(stmt);
