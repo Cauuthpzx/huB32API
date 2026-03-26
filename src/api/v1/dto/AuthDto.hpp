@@ -20,7 +20,7 @@ struct AuthResponse
 {
     std::string token;       // JWT Bearer token
     std::string tokenType = "Bearer";
-    int         expiresIn = 3600;
+    int         expiresIn = 3600;  // kDefaultTokenExpirySec — literal required by NLOHMANN macro
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(AuthResponse, token, tokenType, expiresIn)

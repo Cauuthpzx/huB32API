@@ -7,8 +7,11 @@
 #include "db/LocationRepository.hpp"
 #include "auth/JwtAuth.hpp"
 #include "core/internal/I18n.hpp"
+#include "api/common/HttpErrorUtil.hpp"
 
 #include <httplib.h>
+
+using hub32api::api::common::sendError;
 
 namespace {
 
@@ -16,19 +19,6 @@ std::string getLocale(const httplib::Request& req) {
     auto* i = hub32api::core::internal::I18n::instance();
     if (!i) return "en";
     return i->negotiate(req.get_header_value("Accept-Language"));
-}
-
-void sendError(httplib::Response& res,
-               int                status,
-               const std::string& title,
-               const std::string& detail = {})
-{
-    nlohmann::json j;
-    j["status"] = status;
-    j["title"]  = title;
-    j["detail"] = detail.empty() ? title : detail;
-    res.status  = status;
-    res.set_content(j.dump(), "application/json");
 }
 
 /**
@@ -40,14 +30,14 @@ bool requireAdmin(const httplib::Request& req, httplib::Response& res,
 {
     using hub32api::core::internal::tr;
     const std::string authHeader = req.get_header_value("Authorization");
-    if (authHeader.size() <= 7) {
+    if (authHeader.size() <= hub32api::kBearerPrefixLen) {
         sendError(res, 403, tr(lang, "error.forbidden"));
         return false;
     }
-    const std::string token = authHeader.substr(7);
+    const std::string token = authHeader.substr(hub32api::kBearerPrefixLen);
     auto result = jwtAuth.authenticate(token);
     if (result.is_err() || !result.value().token ||
-        result.value().token->role != "admin") {
+        hub32api::user_role_from_string(result.value().token->role) != hub32api::UserRole::Admin) {
         sendError(res, 403, tr(lang, "error.forbidden"));
         return false;
     }
@@ -162,6 +152,10 @@ void TeacherController::handleGetTeacher(const httplib::Request& req, httplib::R
     const auto lang = getLocale(req);
 
     // Protected but not admin-only — teachers can view their own profile
+    if (req.matches.size() <= 1) {
+        sendError(res, 400, tr(lang, "error.missing_path_param"));
+        return;
+    }
     const std::string id = req.matches[1].str();
     auto result = m_teacherRepo.findById(id);
     if (result.is_err()) {
@@ -189,6 +183,10 @@ void TeacherController::handleUpdateTeacher(const httplib::Request& req, httplib
 
     if (!requireAdmin(req, res, m_jwtAuth, lang)) return;
 
+    if (req.matches.size() <= 1) {
+        sendError(res, 400, tr(lang, "error.missing_path_param"));
+        return;
+    }
     const std::string id = req.matches[1].str();
 
     nlohmann::json body;
@@ -234,6 +232,10 @@ void TeacherController::handleDeleteTeacher(const httplib::Request& req, httplib
 
     if (!requireAdmin(req, res, m_jwtAuth, lang)) return;
 
+    if (req.matches.size() <= 1) {
+        sendError(res, 400, tr(lang, "error.missing_path_param"));
+        return;
+    }
     const std::string id = req.matches[1].str();
     auto result = m_teacherRepo.remove(id);
     if (result.is_err()) {
@@ -251,6 +253,10 @@ void TeacherController::handleAssignLocation(const httplib::Request& req, httpli
 
     if (!requireAdmin(req, res, m_jwtAuth, lang)) return;
 
+    if (req.matches.size() <= 1) {
+        sendError(res, 400, tr(lang, "error.missing_path_param"));
+        return;
+    }
     const std::string teacherId = req.matches[1].str();
 
     dto::AssignLocationRequest dto;
@@ -297,6 +303,10 @@ void TeacherController::handleRevokeLocation(const httplib::Request& req, httpli
 
     if (!requireAdmin(req, res, m_jwtAuth, lang)) return;
 
+    if (req.matches.size() <= 2) {
+        sendError(res, 400, tr(lang, "error.missing_path_param"));
+        return;
+    }
     const std::string teacherId  = req.matches[1].str();
     const std::string locationId = req.matches[2].str();
 

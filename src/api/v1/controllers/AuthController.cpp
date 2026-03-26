@@ -6,9 +6,12 @@
 #include "auth/Hub32KeyAuth.hpp"
 #include "auth/UserRoleStore.hpp"
 #include "core/internal/I18n.hpp"
+#include "api/common/HttpErrorUtil.hpp"
 
 // cpp-httplib
 #include <httplib.h>
+
+using hub32api::api::common::sendError;
 
 namespace {
 
@@ -18,33 +21,9 @@ std::string getLocale(const httplib::Request& req) {
     return i->negotiate(req.get_header_value("Accept-Language"));
 }
 
-/**
- * @brief Sends an RFC-7807-style JSON error response.
- * @param res    The httplib response to populate.
- * @param status HTTP status code to set.
- * @param title  Short human-readable problem title.
- * @param detail Longer explanation; defaults to @p title when empty.
- */
-void sendError(httplib::Response& res,
-               int                status,
-               const std::string& title,
-               const std::string& detail = {})
+hub32api::AuthMethod normalizeAuthMethod(const std::string& method)
 {
-    nlohmann::json j;
-    j["status"] = status;
-    j["title"]  = title;
-    j["detail"] = detail.empty() ? title : detail;
-    res.status  = status;
-    res.set_content(j.dump(), "application/json");
-}
-
-std::string normalizeAuthMethod(const std::string& method)
-{
-    // Veyon-compatible UUIDs
-    if (method == "0c69b301-81b4-42d6-8fae-128cdd113314") return "hub32-key";
-    if (method == "63611f7c-b457-42c7-832e-67d0f9281085") return "logon";
-    // Already a string name
-    return method;
+    return hub32api::auth_method_from_string(method);
 }
 
 } // anonymous namespace
@@ -92,7 +71,7 @@ void AuthController::handleLogin(const httplib::Request& req, httplib::Response&
         return;
     }
 
-    req_dto.method = normalizeAuthMethod(req_dto.method);
+    const auto authMethod = normalizeAuthMethod(req_dto.method);
 
     // --- Authenticate and determine role ---
     // SECURITY: Role is determined by authenticated lookup in persistent store.
@@ -104,7 +83,7 @@ void AuthController::handleLogin(const httplib::Request& req, httplib::Response&
     // from the store entry, not from the username string.
     std::string role;
 
-    if (req_dto.method == "logon") {
+    if (authMethod == AuthMethod::Logon) {
         // Authenticate against UserRoleStore (password verification + role lookup)
         auto authResult = m_roleStore.authenticate(req_dto.username, req_dto.password);
         if (authResult.is_err()) {
@@ -114,7 +93,7 @@ void AuthController::handleLogin(const httplib::Request& req, httplib::Response&
         }
         role = authResult.value();
     }
-    else if (req_dto.method == "hub32-key") {
+    else if (authMethod == AuthMethod::Hub32Key) {
         // Hub32 key auth -- delegates to Hub32KeyAuth
         auto keyResult = m_keyAuth.authenticate({req_dto.keyName, req_dto.keyData});
         if (keyResult.is_err()) {
@@ -124,7 +103,7 @@ void AuthController::handleLogin(const httplib::Request& req, httplib::Response&
         }
         // Hub32 key users get "teacher" role by default
         // PHASE-3 TODO: allow key-to-role mapping in the store
-        role = "teacher";
+        role = to_string(UserRole::Teacher);
     }
     else {
         sendError(res, 400, tr(lang, "error.unsupported_auth_method"),
@@ -145,7 +124,7 @@ void AuthController::handleLogin(const httplib::Request& req, httplib::Response&
     //       value baked into AuthResponse (3600 s) as the config is not
     //       available here.  Controllers that need the real expiry should
     //       accept a ServerConfig reference.
-    const dto::AuthResponse resp{tokenResult.value(), "Bearer", 3600};
+    const dto::AuthResponse resp{tokenResult.value(), "Bearer", kDefaultTokenExpirySec};
     const nlohmann::json j = resp;
     res.status = 200;
     res.set_content(j.dump(), "application/json");
@@ -168,13 +147,13 @@ void AuthController::handleLogout(const httplib::Request& req, httplib::Response
 
     // --- Extract Bearer token from Authorization header ---
     const std::string authHeader = req.get_header_value("Authorization");
-    if (authHeader.empty() || authHeader.rfind("Bearer ", 0) != 0) {
+    if (authHeader.empty() || authHeader.substr(0, kBearerPrefixLen) != kBearerPrefix) {
         sendError(res, 401, tr(lang, "error.unauthorized"),
                   tr(lang, "error.missing_auth_header"));
         return;
     }
 
-    const std::string token = authHeader.substr(7); // strip "Bearer "
+    const std::string token = authHeader.substr(kBearerPrefixLen); // strip "Bearer "
     if (token.empty()) {
         sendError(res, 401, tr(lang, "error.unauthorized"),
                   tr(lang, "error.empty_bearer_token"));

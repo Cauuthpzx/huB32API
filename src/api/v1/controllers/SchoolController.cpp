@@ -7,8 +7,11 @@
 #include "db/ComputerRepository.hpp"
 #include "auth/JwtAuth.hpp"
 #include "core/internal/I18n.hpp"
+#include "api/common/HttpErrorUtil.hpp"
 
 #include <httplib.h>
+
+using hub32api::api::common::sendError;
 
 namespace {
 
@@ -16,19 +19,6 @@ std::string getLocale(const httplib::Request& req) {
     auto* i = hub32api::core::internal::I18n::instance();
     if (!i) return "en";
     return i->negotiate(req.get_header_value("Accept-Language"));
-}
-
-void sendError(httplib::Response& res,
-               int                status,
-               const std::string& title,
-               const std::string& detail = {})
-{
-    nlohmann::json j;
-    j["status"] = status;
-    j["title"]  = title;
-    j["detail"] = detail.empty() ? title : detail;
-    res.status  = status;
-    res.set_content(j.dump(), "application/json");
 }
 
 /**
@@ -41,14 +31,14 @@ bool requireAdmin(const httplib::Request& req, httplib::Response& res,
 {
     using hub32api::core::internal::tr;
     const std::string authHeader = req.get_header_value("Authorization");
-    if (authHeader.size() <= 7) {
+    if (authHeader.size() <= hub32api::kBearerPrefixLen) {
         sendError(res, 403, tr(lang, "error.forbidden"));
         return false;
     }
-    const std::string token = authHeader.substr(7);
+    const std::string token = authHeader.substr(hub32api::kBearerPrefixLen);
     auto result = jwtAuth.authenticate(token);
     if (result.is_err() || !result.value().token ||
-        result.value().token->role != "admin") {
+        hub32api::user_role_from_string(result.value().token->role) != hub32api::UserRole::Admin) {
         sendError(res, 403, tr(lang, "error.forbidden"));
         return false;
     }
@@ -154,6 +144,10 @@ void SchoolController::handleGetSchool(const httplib::Request& req, httplib::Res
 
     if (!requireAdmin(req, res, m_jwtAuth, lang)) return;
 
+    if (req.matches.size() <= 1) {
+        sendError(res, 400, tr(lang, "error.missing_path_param"));
+        return;
+    }
     const std::string id = req.matches[1].str();
     auto result = m_schoolRepo.findById(id);
     if (result.is_err()) {
@@ -180,6 +174,10 @@ void SchoolController::handleUpdateSchool(const httplib::Request& req, httplib::
 
     if (!requireAdmin(req, res, m_jwtAuth, lang)) return;
 
+    if (req.matches.size() <= 1) {
+        sendError(res, 400, tr(lang, "error.missing_path_param"));
+        return;
+    }
     const std::string id = req.matches[1].str();
 
     dto::CreateSchoolRequest dto;
@@ -228,6 +226,10 @@ void SchoolController::handleDeleteSchool(const httplib::Request& req, httplib::
 
     if (!requireAdmin(req, res, m_jwtAuth, lang)) return;
 
+    if (req.matches.size() <= 1) {
+        sendError(res, 400, tr(lang, "error.missing_path_param"));
+        return;
+    }
     const std::string id = req.matches[1].str();
     auto result = m_schoolRepo.remove(id);
     if (result.is_err()) {
@@ -326,6 +328,10 @@ void SchoolController::handleGetLocation(const httplib::Request& req, httplib::R
     const auto lang = getLocale(req);
 
     // Get single location — protected but not admin-only
+    if (req.matches.size() <= 1) {
+        sendError(res, 400, tr(lang, "error.missing_path_param"));
+        return;
+    }
     const std::string id = req.matches[1].str();
     auto result = m_locationRepo.findById(id);
     if (result.is_err()) {
@@ -355,6 +361,10 @@ void SchoolController::handleUpdateLocation(const httplib::Request& req, httplib
 
     if (!requireAdmin(req, res, m_jwtAuth, lang)) return;
 
+    if (req.matches.size() <= 1) {
+        sendError(res, 400, tr(lang, "error.missing_path_param"));
+        return;
+    }
     const std::string id = req.matches[1].str();
 
     dto::CreateLocationRequest dto;
@@ -406,6 +416,10 @@ void SchoolController::handleDeleteLocation(const httplib::Request& req, httplib
 
     if (!requireAdmin(req, res, m_jwtAuth, lang)) return;
 
+    if (req.matches.size() <= 1) {
+        sendError(res, 400, tr(lang, "error.missing_path_param"));
+        return;
+    }
     const std::string id = req.matches[1].str();
     auto result = m_locationRepo.remove(id);
     if (result.is_err()) {
@@ -422,6 +436,10 @@ void SchoolController::handleListLocationComputers(const httplib::Request& req, 
     const auto lang = getLocale(req);
 
     // Protected but not admin-only
+    if (req.matches.size() <= 1) {
+        sendError(res, 400, tr(lang, "error.missing_path_param"));
+        return;
+    }
     const std::string locationId = req.matches[1].str();
 
     // Verify location exists
