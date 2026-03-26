@@ -1,11 +1,10 @@
 #include "core/PrecompiledHeader.hpp"
 #include "FeaturePlugin.hpp"
 #include "core/internal/Hub32CoreWrapper.hpp"
+#include "core/internal/CryptoUtils.hpp"
 #include "agent/AgentRegistry.hpp"
 #include "hub32api/agent/AgentInfo.hpp"
 #include "hub32api/agent/AgentCommand.hpp"
-
-#include <random>
 
 namespace hub32api::plugins {
 
@@ -55,27 +54,6 @@ std::string FeaturePlugin::agentFeatureUid(const Uid& featureUid)
     if (featureUid == "feat-message")          return "message-display";
     if (featureUid == "feat-power-control")    return "power-control";
     return featureUid; // pass through if already in agent format
-}
-
-/**
- * @brief Generates a UUID v4 string for command IDs.
- * @return UUID v4 string.
- */
-std::string FeaturePlugin::generateCommandId()
-{
-    static thread_local std::mt19937_64 gen(std::random_device{}());
-    std::uniform_int_distribution<uint64_t> dist;
-    const auto r1 = dist(gen);
-    const auto r2 = dist(gen);
-    char buf[40];
-    std::snprintf(buf, sizeof(buf),
-        "%08x-%04x-%04x-%04x-%012llx",
-        static_cast<uint32_t>(r1 >> 32),
-        static_cast<uint16_t>((r1 >> 16) & 0xFFFF),
-        static_cast<uint16_t>(0x4000 | ((r1 & 0x0FFF))),
-        static_cast<uint16_t>(0x8000 | ((r2 >> 48) & 0x3FFF)),
-        static_cast<unsigned long long>(r2 & 0xFFFFFFFFFFFFULL));
-    return buf;
 }
 
 /**
@@ -209,7 +187,7 @@ Result<void> FeaturePlugin::controlFeature(
             if (agent.state == AgentState::Online || agent.state == AgentState::Busy) {
                 // Build and queue a command for the agent
                 AgentCommand cmd;
-                cmd.commandId  = generateCommandId();
+                cmd.commandId  = core::internal::CryptoUtils::generateUuid();
                 cmd.agentId    = computerUid;
                 cmd.featureUid = agentFeatureUid(featureUid);
                 cmd.operation  = (op == FeatureOperation::Start) ? "start" : "stop";

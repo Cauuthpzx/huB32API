@@ -12,11 +12,11 @@
 #include "hub32api/agent/AgentInfo.hpp"
 #include "hub32api/agent/AgentCommand.hpp"
 #include "core/internal/I18n.hpp"
+#include "core/internal/CryptoUtils.hpp"
 
 // cpp-httplib
 #include <httplib.h>
 
-#include <random>
 #include <cstdio>
 #include <ctime>
 
@@ -46,32 +46,6 @@ void sendError(httplib::Response& res,
     j["detail"] = detail.empty() ? title : detail;
     res.status  = status;
     res.set_content(j.dump(), "application/json");
-}
-
-/**
- * @brief Generates a random UUID v4 string.
- *
- * Uses a thread-local mt19937_64 engine seeded from std::random_device
- * to produce two 64-bit random numbers, then formats them as a UUID v4
- * (variant bits 10xx, version bits 0100).
- *
- * @return A UUID v4 string (e.g., "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d").
- */
-std::string generateUuid()
-{
-    static thread_local std::mt19937_64 gen(std::random_device{}());
-    std::uniform_int_distribution<uint64_t> dist;
-    auto r1 = dist(gen);
-    auto r2 = dist(gen);
-    char buf[40];
-    std::snprintf(buf, sizeof(buf),
-        "%08x-%04x-%04x-%04x-%012llx",
-        static_cast<uint32_t>(r1 >> 32),
-        static_cast<uint16_t>((r1 >> 16) & 0xFFFF),
-        static_cast<uint16_t>(0x4000 | ((r1 & 0x0FFF))),
-        static_cast<uint16_t>(0x8000 | ((r2 >> 48) & 0x3FFF)),
-        static_cast<unsigned long long>(r2 & 0xFFFFFFFFFFFFULL));
-    return buf;
 }
 
 /**
@@ -177,7 +151,7 @@ void AgentController::handleRegister(const httplib::Request& req, httplib::Respo
     }
 
     // --- Generate agent ID ---
-    const std::string agentId = generateUuid();
+    const std::string agentId = hub32api::core::internal::CryptoUtils::generateUuid();
 
     // --- Build AgentInfo ---
     AgentInfo info;
@@ -316,7 +290,7 @@ void AgentController::handlePushCommand(const httplib::Request& req, httplib::Re
     }
 
     // --- Build AgentCommand ---
-    const std::string commandId = generateUuid();
+    const std::string commandId = hub32api::core::internal::CryptoUtils::generateUuid();
     AgentCommand cmd;
     cmd.commandId  = commandId;
     cmd.agentId    = agentId;

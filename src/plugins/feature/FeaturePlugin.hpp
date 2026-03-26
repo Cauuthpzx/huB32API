@@ -76,11 +76,6 @@ private:
      * e.g., "feat-lock-screen" → "lock-screen" (matching agent handler featureUid).
      */
     static std::string agentFeatureUid(const Uid& featureUid);
-
-    /**
-     * @brief Generates a UUID v4 string for command IDs.
-     */
-    static std::string generateCommandId();
 };
 
 } // namespace hub32api::plugins

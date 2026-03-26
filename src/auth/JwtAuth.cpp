@@ -23,12 +23,10 @@
 #include "JwtAuth.hpp"
 #include "internal/JwtValidator.hpp"
 #include "internal/TokenStore.hpp"
+#include "../core/internal/CryptoUtils.hpp"
 
 #include <atomic>
 #include <fstream>
-#include <random>
-#include <sstream>
-#include <iomanip>
 
 namespace hub32api::auth {
 
@@ -39,38 +37,6 @@ namespace {
     constexpr const char* k_issuer   = "hub32api";
     constexpr const char* k_audience = "hub32api-clients";
 
-    /**
-     * @brief Generates a UUID v4 string using std::mt19937_64.
-     *
-     * The UUID is formatted as the standard 8-4-4-4-12 hex representation.
-     * Using a thread_local generator ensures thread safety without a mutex.
-     *
-     * @return A UUID string, e.g. "550e8400-e29b-41d4-a716-446655440000".
-     */
-    std::string generateUuid()
-    {
-        static thread_local std::mt19937_64 rng{std::random_device{}()};
-        std::uniform_int_distribution<uint64_t> dist;
-        const uint64_t hi = dist(rng);
-        const uint64_t lo = dist(rng);
-
-        // Set version 4 bits and variant bits per RFC 4122
-        const uint64_t hi4 = (hi & 0xFFFFFFFFFFFF0FFFULL) | 0x0000000000004000ULL;
-        const uint64_t lo4 = (lo & 0x3FFFFFFFFFFFFFFFULL) | 0x8000000000000000ULL;
-
-        std::ostringstream oss;
-        oss << std::hex << std::setfill('0')
-            << std::setw(8)  << ((hi4 >> 32) & 0xFFFFFFFFULL)
-            << '-'
-            << std::setw(4)  << ((hi4 >> 16) & 0xFFFFULL)
-            << '-'
-            << std::setw(4)  << (hi4 & 0xFFFFULL)
-            << '-'
-            << std::setw(4)  << ((lo4 >> 48) & 0xFFFFULL)
-            << '-'
-            << std::setw(12) << (lo4 & 0x0000FFFFFFFFFFFFULL);
-        return oss.str();
-    }
     /**
      * @brief Reads the entire content of a file into a string.
      *
@@ -242,7 +208,7 @@ Result<std::string> JwtAuth::issueToken(
     try {
         const auto now    = std::chrono::system_clock::now();
         const auto expiry = now + std::chrono::seconds(m_impl->expirySeconds);
-        const std::string jti = generateUuid();
+        const std::string jti = core::internal::CryptoUtils::generateUuid();
 
         auto builder = jwt::create()
             .set_type("JWT")
