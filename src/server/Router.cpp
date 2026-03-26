@@ -894,8 +894,9 @@ void Router::registerV1()
                     if (computer.is_ok() && !computer.value().locationId.empty()) {
                         auto teacher = m_svcs.teacherRepo->findByUsername(ctx.auth.token->subject);
                         if (teacher.is_ok()) {
-                            if (!m_svcs.teacherLocationRepo->hasAccess(
-                                    teacher.value().id, computer.value().locationId)) {
+                            auto accessResult = m_svcs.teacherLocationRepo->hasAccess(
+                                    teacher.value().id, computer.value().locationId);
+                            if (accessResult.is_err() || !accessResult.value()) {
                                 sendError(res, 403, tr(lang, "error.forbidden"));
                                 logger->logResponse(req, res);
                                 return;

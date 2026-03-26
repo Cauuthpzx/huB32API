@@ -78,8 +78,9 @@ TEST_F(TeacherLocationRepositoryTest, Assign)
     ASSERT_TRUE(assignResult.is_ok()) << "assign() must succeed";
 
     // Verify hasAccess returns true
-    bool hasAccess = repo->hasAccess(teacherId, locationId);
-    EXPECT_TRUE(hasAccess) << "hasAccess() must return true after assign";
+    auto accessResult = repo->hasAccess(teacherId, locationId);
+    ASSERT_TRUE(accessResult.is_ok());
+    EXPECT_TRUE(accessResult.value()) << "hasAccess() must return true after assign";
 }
 
 // ---------------------------------------------------------------------------
@@ -106,15 +107,20 @@ TEST_F(TeacherLocationRepositoryTest, Revoke)
     // Assign teacher to location
     auto assignResult = repo->assign(teacherId, locationId);
     ASSERT_TRUE(assignResult.is_ok());
-    EXPECT_TRUE(repo->hasAccess(teacherId, locationId));
+    {
+        auto accessResult = repo->hasAccess(teacherId, locationId);
+        ASSERT_TRUE(accessResult.is_ok());
+        EXPECT_TRUE(accessResult.value());
+    }
 
     // Revoke access
     auto revokeResult = repo->revoke(teacherId, locationId);
     ASSERT_TRUE(revokeResult.is_ok()) << "revoke() must succeed";
 
     // Verify hasAccess returns false
-    bool hasAccess = repo->hasAccess(teacherId, locationId);
-    EXPECT_FALSE(hasAccess) << "hasAccess() must return false after revoke";
+    auto accessResult = repo->hasAccess(teacherId, locationId);
+    ASSERT_TRUE(accessResult.is_ok());
+    EXPECT_FALSE(accessResult.value()) << "hasAccess() must return false after revoke";
 }
 
 // ---------------------------------------------------------------------------
@@ -139,8 +145,9 @@ TEST_F(TeacherLocationRepositoryTest, HasAccessFalse)
     const std::string teacherId = teacherResult.value();
 
     // Verify hasAccess returns false (no assignment exists)
-    bool hasAccess = repo->hasAccess(teacherId, locationId);
-    EXPECT_FALSE(hasAccess) << "hasAccess() must return false when no assignment exists";
+    auto accessResult = repo->hasAccess(teacherId, locationId);
+    ASSERT_TRUE(accessResult.is_ok());
+    EXPECT_FALSE(accessResult.value()) << "hasAccess() must return false when no assignment exists";
 }
 
 // ---------------------------------------------------------------------------
@@ -175,7 +182,9 @@ TEST_F(TeacherLocationRepositoryTest, GetLocationsForTeacher)
     ASSERT_TRUE(assign2Result.is_ok());
 
     // Get locations for teacher
-    std::vector<std::string> locationIds = repo->getLocationIdsForTeacher(teacherId);
+    auto locResult = repo->getLocationIdsForTeacher(teacherId);
+    ASSERT_TRUE(locResult.is_ok());
+    std::vector<std::string> locationIds = locResult.value();
     EXPECT_EQ(locationIds.size(), size_t{2}) << "getLocationIdsForTeacher() must return 2 locations";
 }
 
@@ -211,6 +220,8 @@ TEST_F(TeacherLocationRepositoryTest, GetTeachersForLocation)
     ASSERT_TRUE(assign2Result.is_ok());
 
     // Get teachers for location
-    std::vector<std::string> teacherIds = repo->getTeacherIdsForLocation(locationId);
+    auto teacherIdsResult = repo->getTeacherIdsForLocation(locationId);
+    ASSERT_TRUE(teacherIdsResult.is_ok());
+    std::vector<std::string> teacherIds = teacherIdsResult.value();
     EXPECT_EQ(teacherIds.size(), size_t{2}) << "getTeacherIdsForLocation() must return 2 teachers";
 }

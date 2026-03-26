@@ -174,20 +174,32 @@ TEST_F(AgentDbIntegrationTest, LocationAccessControl)
     ASSERT_TRUE(computerResult.is_ok());
 
     // Step 4: Initially hasAccess must be false.
-    EXPECT_FALSE(teacherLocationRepo->hasAccess(teacherId, locationId))
-        << "Teacher must NOT have access before assignment";
+    {
+        auto access = teacherLocationRepo->hasAccess(teacherId, locationId);
+        ASSERT_TRUE(access.is_ok());
+        EXPECT_FALSE(access.value())
+            << "Teacher must NOT have access before assignment";
+    }
 
     // Step 5: Assign and verify access.
     auto assignResult = teacherLocationRepo->assign(teacherId, locationId);
     ASSERT_TRUE(assignResult.is_ok()) << "assign() must succeed";
-    EXPECT_TRUE(teacherLocationRepo->hasAccess(teacherId, locationId))
-        << "Teacher must have access after assignment";
+    {
+        auto access = teacherLocationRepo->hasAccess(teacherId, locationId);
+        ASSERT_TRUE(access.is_ok());
+        EXPECT_TRUE(access.value())
+            << "Teacher must have access after assignment";
+    }
 
     // Step 6: Revoke and verify access is removed.
     auto revokeResult = teacherLocationRepo->revoke(teacherId, locationId);
     ASSERT_TRUE(revokeResult.is_ok()) << "revoke() must succeed";
-    EXPECT_FALSE(teacherLocationRepo->hasAccess(teacherId, locationId))
-        << "Teacher must NOT have access after revoke";
+    {
+        auto access = teacherLocationRepo->hasAccess(teacherId, locationId);
+        ASSERT_TRUE(access.is_ok());
+        EXPECT_FALSE(access.value())
+            << "Teacher must NOT have access after revoke";
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -225,8 +237,12 @@ TEST_F(AgentDbIntegrationTest, AdminBypassesLocationCheck)
 
     // Step 4: Admin has no explicit location assignment yet.
     // The TeacherLocationRepository reflects this — admin bypass is in Router.
-    EXPECT_FALSE(teacherLocationRepo->hasAccess(adminId, locationId))
-        << "No DB-level assignment exists; Router-level bypass handles admin access";
+    {
+        auto access = teacherLocationRepo->hasAccess(adminId, locationId);
+        ASSERT_TRUE(access.is_ok());
+        EXPECT_FALSE(access.value())
+            << "No DB-level assignment exists; Router-level bypass handles admin access";
+    }
 }
 
 // ---------------------------------------------------------------------------
