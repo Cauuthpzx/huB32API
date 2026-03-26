@@ -34,8 +34,8 @@ protected:
         dir = "test_data_location_" + std::to_string(reinterpret_cast<uintptr_t>(this));
         dm         = std::make_unique<DatabaseManager>(dir);
         ASSERT_TRUE(dm->isOpen()) << "DatabaseManager failed to open";
-        schoolRepo = std::make_unique<SchoolRepository>(dm->schoolDb());
-        repo       = std::make_unique<LocationRepository>(dm->schoolDb());
+        schoolRepo = std::make_unique<SchoolRepository>(*dm);
+        repo       = std::make_unique<LocationRepository>(*dm);
 
         // Create prerequisite schools used by multiple tests
         auto rA = schoolRepo->create("School A", "1 Alpha St");

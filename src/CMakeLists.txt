@@ -1,5 +1,6 @@
 add_subdirectory(core)
 add_subdirectory(db)
+add_subdirectory(media)
 add_subdirectory(auth)
 add_subdirectory(config)
 add_subdirectory(api)

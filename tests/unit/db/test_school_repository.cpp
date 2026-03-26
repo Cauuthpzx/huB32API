@@ -27,7 +27,7 @@ protected:
         dir = "test_data_school_" + std::to_string(reinterpret_cast<uintptr_t>(this));
         dm   = std::make_unique<DatabaseManager>(dir);
         ASSERT_TRUE(dm->isOpen()) << "DatabaseManager failed to open";
-        repo = std::make_unique<SchoolRepository>(dm->schoolDb());
+        repo = std::make_unique<SchoolRepository>(*dm);
     }
 
     void TearDown() override {

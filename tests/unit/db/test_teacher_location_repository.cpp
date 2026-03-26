@@ -36,10 +36,10 @@ protected:
         dm = std::make_unique<DatabaseManager>(dir);
         ASSERT_TRUE(dm->isOpen()) << "DatabaseManager failed to open";
 
-        schoolRepo = std::make_unique<SchoolRepository>(dm->schoolDb());
-        locationRepo = std::make_unique<LocationRepository>(dm->schoolDb());
-        teacherRepo = std::make_unique<TeacherRepository>(dm->schoolDb());
-        repo = std::make_unique<TeacherLocationRepository>(dm->schoolDb());
+        schoolRepo = std::make_unique<SchoolRepository>(*dm);
+        locationRepo = std::make_unique<LocationRepository>(*dm);
+        teacherRepo = std::make_unique<TeacherRepository>(*dm);
+        repo = std::make_unique<TeacherLocationRepository>(*dm);
     }
 
     void TearDown() override {

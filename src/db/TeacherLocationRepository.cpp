@@ -9,13 +9,15 @@
 
 #include "../core/PrecompiledHeader.hpp"
 #include "TeacherLocationRepository.hpp"
+#include "DatabaseManager.hpp"
 
 #include <sqlite3.h>
 
 namespace hub32api::db {
 
-TeacherLocationRepository::TeacherLocationRepository(sqlite3* db)
-    : m_db(db)
+TeacherLocationRepository::TeacherLocationRepository(DatabaseManager& dbManager)
+    : m_dbManager(dbManager)
+    , m_db(dbManager.schoolDb())
 {
 }
 
@@ -35,6 +37,8 @@ TeacherLocationRepository::TeacherLocationRepository(sqlite3* db)
 Result<void> TeacherLocationRepository::assign(const std::string& teacherId,
                                                const std::string& locationId)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     constexpr const char* k_sql =
         "INSERT OR IGNORE INTO teacher_locations(teacher_id, location_id) VALUES(?, ?);";
 
@@ -79,6 +83,8 @@ Result<void> TeacherLocationRepository::assign(const std::string& teacherId,
 Result<void> TeacherLocationRepository::revoke(const std::string& teacherId,
                                                const std::string& locationId)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     constexpr const char* k_sql =
         "DELETE FROM teacher_locations WHERE teacher_id = ? AND location_id = ?;";
 
@@ -121,8 +127,10 @@ Result<void> TeacherLocationRepository::revoke(const std::string& teacherId,
  * @return true if the teacher has access, false otherwise.
  */
 bool TeacherLocationRepository::hasAccess(const std::string& teacherId,
-                                          const std::string& locationId) const
+                                          const std::string& locationId)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     constexpr const char* k_sql =
         "SELECT 1 FROM teacher_locations WHERE teacher_id = ? AND location_id = ? LIMIT 1;";
 
@@ -152,8 +160,10 @@ bool TeacherLocationRepository::hasAccess(const std::string& teacherId,
  * @return Vector of location IDs (possibly empty).
  */
 std::vector<std::string> TeacherLocationRepository::getLocationIdsForTeacher(
-    const std::string& teacherId) const
+    const std::string& teacherId)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     constexpr const char* k_sql =
         "SELECT location_id FROM teacher_locations WHERE teacher_id = ? ORDER BY location_id;";
 
@@ -196,8 +206,10 @@ std::vector<std::string> TeacherLocationRepository::getLocationIdsForTeacher(
  * @return Vector of teacher IDs (possibly empty).
  */
 std::vector<std::string> TeacherLocationRepository::getTeacherIdsForLocation(
-    const std::string& locationId) const
+    const std::string& locationId)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     constexpr const char* k_sql =
         "SELECT teacher_id FROM teacher_locations WHERE location_id = ? ORDER BY teacher_id;";
 

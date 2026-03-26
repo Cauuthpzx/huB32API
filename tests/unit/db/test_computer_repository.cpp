@@ -37,9 +37,9 @@ protected:
         dir = "test_data_computer_" + std::to_string(reinterpret_cast<uintptr_t>(this));
         dm           = std::make_unique<DatabaseManager>(dir);
         ASSERT_TRUE(dm->isOpen()) << "DatabaseManager failed to open";
-        schoolRepo   = std::make_unique<SchoolRepository>(dm->schoolDb());
-        locationRepo = std::make_unique<LocationRepository>(dm->schoolDb());
-        repo         = std::make_unique<ComputerRepository>(dm->schoolDb());
+        schoolRepo   = std::make_unique<SchoolRepository>(*dm);
+        locationRepo = std::make_unique<LocationRepository>(*dm);
+        repo         = std::make_unique<ComputerRepository>(*dm);
 
         // Create a school to satisfy the FK on locations
         auto schoolResult = schoolRepo->create("Test School", "1 Test Ave");

@@ -129,11 +129,11 @@ HttpServer::HttpServer(const ServerConfig& cfg)
 
     // 4.1 Database
     m_impl->dbManager = std::make_unique<db::DatabaseManager>(cfg.databaseDir);
-    m_impl->schoolRepo = std::make_unique<db::SchoolRepository>(m_impl->dbManager->schoolDb());
-    m_impl->locationRepo = std::make_unique<db::LocationRepository>(m_impl->dbManager->schoolDb());
-    m_impl->computerRepo = std::make_unique<db::ComputerRepository>(m_impl->dbManager->schoolDb());
-    m_impl->teacherRepo = std::make_unique<db::TeacherRepository>(m_impl->dbManager->schoolDb());
-    m_impl->teacherLocationRepo = std::make_unique<db::TeacherLocationRepository>(m_impl->dbManager->schoolDb());
+    m_impl->schoolRepo = std::make_unique<db::SchoolRepository>(*m_impl->dbManager);
+    m_impl->locationRepo = std::make_unique<db::LocationRepository>(*m_impl->dbManager);
+    m_impl->computerRepo = std::make_unique<db::ComputerRepository>(*m_impl->dbManager);
+    m_impl->teacherRepo = std::make_unique<db::TeacherRepository>(*m_impl->dbManager);
+    m_impl->teacherLocationRepo = std::make_unique<db::TeacherLocationRepository>(*m_impl->dbManager);
 
     // 4a. Wire AgentRegistry into plugins for live agent routing
     if (auto* compPlugin = m_impl->registry->computerPlugin()) {
@@ -209,7 +209,10 @@ HttpServer::~HttpServer()
 
 bool HttpServer::start()
 {
-    m_impl->running.store(true);
+    if (m_impl->running.exchange(true)) {
+        spdlog::warn("[HttpServer] already running — ignoring duplicate start()");
+        return false;
+    }
     spdlog::info("[HttpServer] listening on {}:{}", m_impl->cfg.bindAddress, m_impl->cfg.httpPort);
 
     // Blocks until stop() or error
@@ -223,8 +226,10 @@ bool HttpServer::start()
 
 void HttpServer::stop()
 {
-    if (m_impl->running.load() && m_impl->httpServer) {
-        m_impl->httpServer->stop();
+    if (m_impl->running.exchange(false)) {
+        if (m_impl->httpServer) {
+            m_impl->httpServer->stop();
+        }
     }
 }
 
