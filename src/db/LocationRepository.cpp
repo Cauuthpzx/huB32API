@@ -9,6 +9,7 @@
 
 #include "../core/PrecompiledHeader.hpp"
 #include "LocationRepository.hpp"
+#include "DatabaseManager.hpp"
 
 #include <sqlite3.h>
 #include "core/internal/CryptoUtils.hpp"
@@ -17,8 +18,9 @@ namespace hub32api::db {
 
 using hub32api::core::internal::CryptoUtils;
 
-LocationRepository::LocationRepository(sqlite3* db)
-    : m_db(db)
+LocationRepository::LocationRepository(DatabaseManager& dbManager)
+    : m_dbManager(dbManager)
+    , m_db(dbManager.schoolDb())
 {
 }
 
@@ -44,16 +46,17 @@ Result<std::string> LocationRepository::create(const std::string& schoolId,
                                                 int capacity,
                                                 const std::string& type)
 {
-    std::string id;
-    try {
-        id = CryptoUtils::generateUuid();
-    } catch (const std::exception& ex) {
-        spdlog::error("[LocationRepository] UUID generation failed: {}", ex.what());
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
+    auto uuidResult = CryptoUtils::generateUuid();
+    if (uuidResult.is_err()) {
+        spdlog::error("[LocationRepository] UUID generation failed: {}", uuidResult.error().message);
         return Result<std::string>::fail(ApiError{
             ErrorCode::InternalError,
             "UUID generation failed"
         });
     }
+    const std::string id = uuidResult.take();
 
     constexpr const char* k_sql =
         "INSERT INTO locations(id, school_id, name, building, floor, capacity, type) "
@@ -103,6 +106,8 @@ Result<std::string> LocationRepository::create(const std::string& schoolId,
  */
 Result<LocationRecord> LocationRepository::findById(const std::string& id)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     constexpr const char* k_sql =
         "SELECT id, school_id, name, building, floor, capacity, type "
         "FROM locations WHERE id = ? LIMIT 1;";
@@ -164,6 +169,8 @@ Result<LocationRecord> LocationRepository::findById(const std::string& id)
  */
 Result<std::vector<LocationRecord>> LocationRepository::listBySchool(const std::string& schoolId)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     constexpr const char* k_sql =
         "SELECT id, school_id, name, building, floor, capacity, type "
         "FROM locations WHERE school_id = ? ORDER BY name ASC;";
@@ -220,6 +227,8 @@ Result<std::vector<LocationRecord>> LocationRepository::listBySchool(const std::
  */
 Result<std::vector<LocationRecord>> LocationRepository::listAll()
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     constexpr const char* k_sql =
         "SELECT id, school_id, name, building, floor, capacity, type "
         "FROM locations ORDER BY school_id ASC, name ASC;";
@@ -286,6 +295,8 @@ Result<void> LocationRepository::update(const std::string& id,
                                          int capacity,
                                          const std::string& type)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     constexpr const char* k_sql =
         "UPDATE locations SET name = ?, building = ?, floor = ?, capacity = ?, type = ? "
         "WHERE id = ?;";
@@ -339,6 +350,8 @@ Result<void> LocationRepository::update(const std::string& id,
  */
 Result<void> LocationRepository::remove(const std::string& id)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     constexpr const char* k_sql =
         "DELETE FROM locations WHERE id = ?;";
 

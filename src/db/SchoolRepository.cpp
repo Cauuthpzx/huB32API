@@ -8,6 +8,7 @@
 
 #include "../core/PrecompiledHeader.hpp"
 #include "SchoolRepository.hpp"
+#include "DatabaseManager.hpp"
 
 #include <sqlite3.h>
 #include "core/internal/CryptoUtils.hpp"
@@ -16,8 +17,9 @@ namespace hub32api::db {
 
 using hub32api::core::internal::CryptoUtils;
 
-SchoolRepository::SchoolRepository(sqlite3* db)
-    : m_db(db)
+SchoolRepository::SchoolRepository(DatabaseManager& dbManager)
+    : m_dbManager(dbManager)
+    , m_db(dbManager.schoolDb())
 {
 }
 
@@ -34,16 +36,17 @@ SchoolRepository::SchoolRepository(sqlite3* db)
  */
 Result<std::string> SchoolRepository::create(const std::string& name, const std::string& address)
 {
-    std::string id;
-    try {
-        id = CryptoUtils::generateUuid();
-    } catch (const std::exception& ex) {
-        spdlog::error("[SchoolRepository] UUID generation failed: {}", ex.what());
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
+    auto uuidResult = CryptoUtils::generateUuid();
+    if (uuidResult.is_err()) {
+        spdlog::error("[SchoolRepository] UUID generation failed: {}", uuidResult.error().message);
         return Result<std::string>::fail(ApiError{
             ErrorCode::InternalError,
             "UUID generation failed"
         });
     }
+    const std::string id = uuidResult.take();
 
     const int64_t now = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
@@ -92,6 +95,8 @@ Result<std::string> SchoolRepository::create(const std::string& name, const std:
  */
 Result<SchoolRecord> SchoolRepository::findById(const std::string& id)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     constexpr const char* k_sql =
         "SELECT id, name, address, created_at FROM schools WHERE id = ? LIMIT 1;";
 
@@ -148,6 +153,8 @@ Result<SchoolRecord> SchoolRepository::findById(const std::string& id)
  */
 Result<std::vector<SchoolRecord>> SchoolRepository::listAll()
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     constexpr const char* k_sql =
         "SELECT id, name, address, created_at FROM schools ORDER BY created_at ASC;";
 
@@ -204,6 +211,8 @@ Result<void> SchoolRepository::update(const std::string& id,
                                        const std::string& name,
                                        const std::string& address)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     constexpr const char* k_sql =
         "UPDATE schools SET name = ?, address = ? WHERE id = ?;";
 
@@ -256,6 +265,8 @@ Result<void> SchoolRepository::update(const std::string& id,
  */
 Result<void> SchoolRepository::remove(const std::string& id)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     constexpr const char* k_sql =
         "DELETE FROM schools WHERE id = ?;";
 

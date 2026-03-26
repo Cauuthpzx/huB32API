@@ -187,7 +187,12 @@ Result<void> FeaturePlugin::controlFeature(
             if (agent.state == AgentState::Online || agent.state == AgentState::Busy) {
                 // Build and queue a command for the agent
                 AgentCommand cmd;
-                cmd.commandId  = core::internal::CryptoUtils::generateUuid();
+                auto cmdIdResult = core::internal::CryptoUtils::generateUuid();
+                if (cmdIdResult.is_err()) {
+                    spdlog::error("[FeaturePlugin] UUID generation failed: {}", cmdIdResult.error().message);
+                    return Result<void>::fail(ApiError{ErrorCode::InternalError, "UUID generation failed"});
+                }
+                cmd.commandId  = cmdIdResult.take();
                 cmd.agentId    = computerUid;
                 cmd.featureUid = agentFeatureUid(featureUid);
                 cmd.operation  = (op == FeatureOperation::Start) ? "start" : "stop";

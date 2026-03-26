@@ -9,6 +9,7 @@
 
 #include "../core/PrecompiledHeader.hpp"
 #include "ComputerRepository.hpp"
+#include "DatabaseManager.hpp"
 
 #include <sqlite3.h>
 #include "core/internal/CryptoUtils.hpp"
@@ -49,8 +50,9 @@ constexpr const char* k_selectCols =
     "SELECT id, location_id, hostname, mac_address, "
     "ip_last_seen, agent_version, last_heartbeat, state, position_x, position_y ";
 
-ComputerRepository::ComputerRepository(sqlite3* db)
-    : m_db(db)
+ComputerRepository::ComputerRepository(DatabaseManager& dbManager)
+    : m_dbManager(dbManager)
+    , m_db(dbManager.schoolDb())
 {
 }
 
@@ -70,16 +72,17 @@ Result<std::string> ComputerRepository::create(const std::string& locationId,
                                                 const std::string& hostname,
                                                 const std::string& macAddress)
 {
-    std::string id;
-    try {
-        id = CryptoUtils::generateUuid();
-    } catch (const std::exception& ex) {
-        spdlog::error("[ComputerRepository] UUID generation failed: {}", ex.what());
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
+    auto uuidResult = CryptoUtils::generateUuid();
+    if (uuidResult.is_err()) {
+        spdlog::error("[ComputerRepository] UUID generation failed: {}", uuidResult.error().message);
         return Result<std::string>::fail(ApiError{
             ErrorCode::InternalError,
             "UUID generation failed"
         });
     }
+    const std::string id = uuidResult.take();
 
     constexpr const char* k_sql =
         "INSERT INTO computers(id, location_id, hostname, mac_address, "
@@ -149,6 +152,8 @@ Result<std::string> ComputerRepository::createUnassigned(const std::string& host
  */
 Result<ComputerRecord> ComputerRepository::findById(const std::string& id)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     const std::string k_sql = std::string(k_selectCols) +
         "FROM computers WHERE id = ? LIMIT 1;";
 
@@ -198,6 +203,8 @@ Result<ComputerRecord> ComputerRepository::findById(const std::string& id)
  */
 Result<ComputerRecord> ComputerRepository::findByHostname(const std::string& hostname)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     const std::string k_sql = std::string(k_selectCols) +
         "FROM computers WHERE hostname = ? LIMIT 1;";
 
@@ -247,6 +254,8 @@ Result<ComputerRecord> ComputerRepository::findByHostname(const std::string& hos
  */
 Result<ComputerRecord> ComputerRepository::findByMac(const std::string& mac)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     const std::string k_sql = std::string(k_selectCols) +
         "FROM computers WHERE mac_address = ? LIMIT 1;";
 
@@ -296,6 +305,8 @@ Result<ComputerRecord> ComputerRepository::findByMac(const std::string& mac)
  */
 Result<std::vector<ComputerRecord>> ComputerRepository::listByLocation(const std::string& locationId)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     const std::string k_sql = std::string(k_selectCols) +
         "FROM computers WHERE location_id = ? ORDER BY hostname ASC;";
 
@@ -339,6 +350,8 @@ Result<std::vector<ComputerRecord>> ComputerRepository::listByLocation(const std
  */
 Result<std::vector<ComputerRecord>> ComputerRepository::listAll()
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     const std::string k_sql = std::string(k_selectCols) +
         "FROM computers ORDER BY hostname ASC;";
 
@@ -388,6 +401,8 @@ Result<void> ComputerRepository::update(const std::string& id,
                                          int posX,
                                          int posY)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     constexpr const char* k_sql =
         "UPDATE computers SET location_id = ?, hostname = ?, position_x = ?, position_y = ? "
         "WHERE id = ?;";
@@ -445,6 +460,8 @@ Result<void> ComputerRepository::update(const std::string& id,
  */
 Result<void> ComputerRepository::updateState(const std::string& id, const std::string& state)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     constexpr const char* k_sql =
         "UPDATE computers SET state = ? WHERE id = ?;";
 
@@ -498,6 +515,8 @@ Result<void> ComputerRepository::updateHeartbeat(const std::string& id,
                                                   const std::string& ip,
                                                   const std::string& agentVersion)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     const int64_t now = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
 
@@ -552,6 +571,8 @@ Result<void> ComputerRepository::updateHeartbeat(const std::string& id,
  */
 Result<void> ComputerRepository::remove(const std::string& id)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     constexpr const char* k_sql = "DELETE FROM computers WHERE id = ?;";
 
     sqlite3_stmt* stmt = nullptr;

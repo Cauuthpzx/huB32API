@@ -16,7 +16,12 @@ namespace {
 /// Generate a lowercase hex string of `byteCount` random bytes.
 std::string randomHex(size_t byteCount)
 {
-    auto bytes = CryptoUtils::randomBytes(byteCount);
+    auto bytesResult = CryptoUtils::randomBytes(byteCount);
+    if (bytesResult.is_err()) {
+        spdlog::error("[MockSfuBackend] randomBytes failed: {}", bytesResult.error().message);
+        return std::string(byteCount * 2, '0');  // fallback
+    }
+    auto bytes = bytesResult.take();
     std::ostringstream oss;
     oss << std::hex << std::setfill('0');
     for (auto b : bytes) {
@@ -117,17 +122,16 @@ std::string MockSfuBackend::backendName() const
 
 Result<std::string> MockSfuBackend::createRouter(const std::string& roomId)
 {
-    try {
-        const std::string routerId = CryptoUtils::generateUuid();
-        m_routers[routerId] = RouterState{ roomId };
-        spdlog::debug("[MockSfuBackend] createRouter: roomId={} routerId={}", roomId, routerId);
-        return Result<std::string>::ok(routerId);
-    }
-    catch (const std::exception& ex) {
-        spdlog::error("[MockSfuBackend] createRouter failed: {}", ex.what());
+    auto uuidResult = CryptoUtils::generateUuid();
+    if (uuidResult.is_err()) {
+        spdlog::error("[MockSfuBackend] createRouter failed: {}", uuidResult.error().message);
         return Result<std::string>::fail(
-            ApiError{ErrorCode::InternalError, std::string("createRouter failed: ") + ex.what()});
+            ApiError{ErrorCode::InternalError, "createRouter failed: " + uuidResult.error().message});
     }
+    const std::string routerId = uuidResult.take();
+    m_routers[routerId] = RouterState{ roomId };
+    spdlog::debug("[MockSfuBackend] createRouter: roomId={} routerId={}", roomId, routerId);
+    return Result<std::string>::ok(routerId);
 }
 
 void MockSfuBackend::closeRouter(const std::string& routerId)
@@ -156,20 +160,19 @@ Result<TransportInfo> MockSfuBackend::createWebRtcTransport(const std::string& r
         return Result<TransportInfo>::fail(
             ApiError{ErrorCode::NotFound, "Router not found: " + routerId});
     }
-    try {
-        const std::string transportId = CryptoUtils::generateUuid();
-        m_transports[transportId] = TransportState{ routerId, false };
-        TransportInfo info = makeFakeTransport(transportId);
-        spdlog::debug("[MockSfuBackend] createWebRtcTransport: routerId={} transportId={}",
-                      routerId, transportId);
-        return Result<TransportInfo>::ok(std::move(info));
-    }
-    catch (const std::exception& ex) {
-        spdlog::error("[MockSfuBackend] createWebRtcTransport failed: {}", ex.what());
+    auto uuidResult = CryptoUtils::generateUuid();
+    if (uuidResult.is_err()) {
+        spdlog::error("[MockSfuBackend] createWebRtcTransport failed: {}", uuidResult.error().message);
         return Result<TransportInfo>::fail(
             ApiError{ErrorCode::InternalError,
-                     std::string("createWebRtcTransport failed: ") + ex.what()});
+                     "createWebRtcTransport failed: " + uuidResult.error().message});
     }
+    const std::string transportId = uuidResult.take();
+    m_transports[transportId] = TransportState{ routerId, false };
+    TransportInfo info = makeFakeTransport(transportId);
+    spdlog::debug("[MockSfuBackend] createWebRtcTransport: routerId={} transportId={}",
+                  routerId, transportId);
+    return Result<TransportInfo>::ok(std::move(info));
 }
 
 Result<void> MockSfuBackend::connectTransport(const std::string& transportId,
@@ -205,22 +208,21 @@ Result<ProducerInfo> MockSfuBackend::produce(const std::string& transportId,
         return Result<ProducerInfo>::fail(
             ApiError{ErrorCode::NotFound, "Transport not found: " + transportId});
     }
-    try {
-        const std::string producerId = CryptoUtils::generateUuid();
-        m_producers[producerId] = ProducerState{ transportId, kind, false };
-        ProducerInfo info;
-        info.id   = producerId;
-        info.kind = kind;
-        info.type = "simple";
-        spdlog::debug("[MockSfuBackend] produce: transportId={} kind={} producerId={}",
-                      transportId, kind, producerId);
-        return Result<ProducerInfo>::ok(std::move(info));
-    }
-    catch (const std::exception& ex) {
-        spdlog::error("[MockSfuBackend] produce failed: {}", ex.what());
+    auto uuidResult = CryptoUtils::generateUuid();
+    if (uuidResult.is_err()) {
+        spdlog::error("[MockSfuBackend] produce failed: {}", uuidResult.error().message);
         return Result<ProducerInfo>::fail(
-            ApiError{ErrorCode::InternalError, std::string("produce failed: ") + ex.what()});
+            ApiError{ErrorCode::InternalError, "produce failed: " + uuidResult.error().message});
     }
+    const std::string producerId = uuidResult.take();
+    m_producers[producerId] = ProducerState{ transportId, kind, false };
+    ProducerInfo info;
+    info.id   = producerId;
+    info.kind = kind;
+    info.type = "simple";
+    spdlog::debug("[MockSfuBackend] produce: transportId={} kind={} producerId={}",
+                  transportId, kind, producerId);
+    return Result<ProducerInfo>::ok(std::move(info));
 }
 
 Result<void> MockSfuBackend::pauseProducer(const std::string& producerId)
@@ -266,58 +268,57 @@ Result<ConsumerInfo> MockSfuBackend::consume(const std::string& transportId,
             ApiError{ErrorCode::NotFound, "Producer not found: " + producerId});
     }
 
-    try {
-        const std::string consumerId = CryptoUtils::generateUuid();
-        const std::string kind = prodIt->second.kind;
-        m_consumers[consumerId] = ConsumerState{ transportId, producerId, kind };
-
-        ConsumerInfo info;
-        info.id         = consumerId;
-        info.producerId = producerId;
-        info.kind       = kind;
-        // Minimal RTP parameters matching the codec kind
-        if (kind == "video") {
-            info.rtpParameters = {
-                {"codecs", nlohmann::json::array({
-                    {
-                        {"mimeType",        "video/H264"},
-                        {"payloadType",     96},
-                        {"clockRate",       90000},
-                        {"parameters", {
-                            {"packetization-mode", 1},
-                            {"profile-level-id",   "42e01f"}
-                        }}
-                    }
-                })},
-                {"encodings", nlohmann::json::array({
-                    {{"ssrc", 100000}}
-                })}
-            };
-        } else {
-            info.rtpParameters = {
-                {"codecs", nlohmann::json::array({
-                    {
-                        {"mimeType",    "audio/opus"},
-                        {"payloadType", 111},
-                        {"clockRate",   48000},
-                        {"channels",    2}
-                    }
-                })},
-                {"encodings", nlohmann::json::array({
-                    {{"ssrc", 200000}}
-                })}
-            };
-        }
-
-        spdlog::debug("[MockSfuBackend] consume: transportId={} producerId={} consumerId={}",
-                      transportId, producerId, consumerId);
-        return Result<ConsumerInfo>::ok(std::move(info));
-    }
-    catch (const std::exception& ex) {
-        spdlog::error("[MockSfuBackend] consume failed: {}", ex.what());
+    auto uuidResult = CryptoUtils::generateUuid();
+    if (uuidResult.is_err()) {
+        spdlog::error("[MockSfuBackend] consume failed: {}", uuidResult.error().message);
         return Result<ConsumerInfo>::fail(
-            ApiError{ErrorCode::InternalError, std::string("consume failed: ") + ex.what()});
+            ApiError{ErrorCode::InternalError, "consume failed: " + uuidResult.error().message});
     }
+    const std::string consumerId = uuidResult.take();
+    const std::string kind = prodIt->second.kind;
+    m_consumers[consumerId] = ConsumerState{ transportId, producerId, kind };
+
+    ConsumerInfo info;
+    info.id         = consumerId;
+    info.producerId = producerId;
+    info.kind       = kind;
+    // Minimal RTP parameters matching the codec kind
+    if (kind == "video") {
+        info.rtpParameters = {
+            {"codecs", nlohmann::json::array({
+                {
+                    {"mimeType",        "video/H264"},
+                    {"payloadType",     96},
+                    {"clockRate",       90000},
+                    {"parameters", {
+                        {"packetization-mode", 1},
+                        {"profile-level-id",   "42e01f"}
+                    }}
+                }
+            })},
+            {"encodings", nlohmann::json::array({
+                {{"ssrc", 100000}}
+            })}
+        };
+    } else {
+        info.rtpParameters = {
+            {"codecs", nlohmann::json::array({
+                {
+                    {"mimeType",    "audio/opus"},
+                    {"payloadType", 111},
+                    {"clockRate",   48000},
+                    {"channels",    2}
+                }
+            })},
+            {"encodings", nlohmann::json::array({
+                {{"ssrc", 200000}}
+            })}
+        };
+    }
+
+    spdlog::debug("[MockSfuBackend] consume: transportId={} producerId={} consumerId={}",
+                  transportId, producerId, consumerId);
+    return Result<ConsumerInfo>::ok(std::move(info));
 }
 
 Result<void> MockSfuBackend::requestKeyFrame(const std::string& consumerId)

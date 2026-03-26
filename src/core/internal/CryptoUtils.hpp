@@ -2,19 +2,25 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include "hub32api/core/Result.hpp"
 #include "hub32api/export.h"
 
 namespace hub32api::core::internal {
 
-/// @note EXCEPTION POLICY: CryptoUtils is an internal utility that throws
-/// std::runtime_error on CSPRNG failure (extremely rare — indicates broken
-/// OpenSSL or OS entropy exhaustion). All PUBLIC API callers MUST catch
-/// exceptions and convert to Result::fail().
+/// @brief Cryptographic utilities using OpenSSL CSPRNG.
+/// All methods return Result<T> instead of throwing on failure.
 class HUB32API_EXPORT CryptoUtils
 {
 public:
-    static std::string generateUuid();
-    static std::vector<uint8_t> randomBytes(size_t count);
+    /// @brief Generates a RFC 4122 v4 UUID string.
+    /// @return Result containing UUID string, or CryptoFailure error.
+    static Result<std::string> generateUuid();
+
+    /// @brief Generates cryptographically secure random bytes.
+    /// @param count Number of random bytes to generate.
+    /// @return Result containing byte vector, or CryptoFailure error.
+    static Result<std::vector<uint8_t>> randomBytes(size_t count);
+
     CryptoUtils() = delete;
 };
 

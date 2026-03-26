@@ -208,7 +208,14 @@ Result<std::string> JwtAuth::issueToken(
     try {
         const auto now    = std::chrono::system_clock::now();
         const auto expiry = now + std::chrono::seconds(m_impl->expirySeconds);
-        const std::string jti = core::internal::CryptoUtils::generateUuid();
+        auto jtiResult = core::internal::CryptoUtils::generateUuid();
+        if (jtiResult.is_err()) {
+            return Result<std::string>::fail(ApiError{
+                ErrorCode::InternalError,
+                "JWT ID generation failed: " + jtiResult.error().message
+            });
+        }
+        const std::string jti = jtiResult.take();
 
         auto builder = jwt::create()
             .set_type("JWT")

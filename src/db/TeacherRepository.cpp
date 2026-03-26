@@ -10,6 +10,7 @@
 
 #include "../core/PrecompiledHeader.hpp"
 #include "TeacherRepository.hpp"
+#include "DatabaseManager.hpp"
 
 #include <sqlite3.h>
 #include "core/internal/CryptoUtils.hpp"
@@ -40,8 +41,9 @@ static TeacherRecord recordFromStmt(sqlite3_stmt* stmt)
     return rec;
 }
 
-TeacherRepository::TeacherRepository(sqlite3* db)
-    : m_db(db)
+TeacherRepository::TeacherRepository(DatabaseManager& dbManager)
+    : m_dbManager(dbManager)
+    , m_db(dbManager.schoolDb())
 {
 }
 
@@ -63,16 +65,17 @@ Result<std::string> TeacherRepository::create(const std::string& username,
                                                const std::string& fullName,
                                                const std::string& role)
 {
-    std::string id;
-    try {
-        id = CryptoUtils::generateUuid();
-    } catch (const std::exception& ex) {
-        spdlog::error("[TeacherRepository] UUID generation failed: {}", ex.what());
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
+    auto uuidResult = CryptoUtils::generateUuid();
+    if (uuidResult.is_err()) {
+        spdlog::error("[TeacherRepository] UUID generation failed: {}", uuidResult.error().message);
         return Result<std::string>::fail(ApiError{
             ErrorCode::InternalError,
             "UUID generation failed"
         });
     }
+    const std::string id = uuidResult.take();
 
     const std::string passwordHash = UserRoleStore::hashPassword(password);
 
@@ -126,6 +129,8 @@ Result<std::string> TeacherRepository::create(const std::string& username,
  */
 Result<TeacherRecord> TeacherRepository::findById(const std::string& id)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     constexpr const char* k_sql =
         "SELECT id, username, full_name, role, created_at "
         "FROM teachers WHERE id = ? LIMIT 1;";
@@ -176,6 +181,8 @@ Result<TeacherRecord> TeacherRepository::findById(const std::string& id)
  */
 Result<TeacherRecord> TeacherRepository::findByUsername(const std::string& username)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     constexpr const char* k_sql =
         "SELECT id, username, full_name, role, created_at "
         "FROM teachers WHERE username = ? LIMIT 1;";
@@ -231,6 +238,8 @@ Result<TeacherRecord> TeacherRepository::findByUsername(const std::string& usern
 Result<std::string> TeacherRepository::authenticate(const std::string& username,
                                                       const std::string& password)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     constexpr const char* k_sql =
         "SELECT password_hash, role FROM teachers WHERE username = ? LIMIT 1;";
 
@@ -288,6 +297,8 @@ Result<std::string> TeacherRepository::authenticate(const std::string& username,
  */
 Result<std::vector<TeacherRecord>> TeacherRepository::listAll()
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     constexpr const char* k_sql =
         "SELECT id, username, full_name, role, created_at "
         "FROM teachers ORDER BY username ASC;";
@@ -334,6 +345,8 @@ Result<void> TeacherRepository::update(const std::string& id,
                                         const std::string& fullName,
                                         const std::string& role)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     constexpr const char* k_sql =
         "UPDATE teachers SET full_name = ?, role = ? WHERE id = ?;";
 
@@ -385,6 +398,8 @@ Result<void> TeacherRepository::update(const std::string& id,
 Result<void> TeacherRepository::changePassword(const std::string& id,
                                                 const std::string& newPassword)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     const std::string newHash = UserRoleStore::hashPassword(newPassword);
 
     constexpr const char* k_sql =
@@ -438,6 +453,8 @@ Result<void> TeacherRepository::changePassword(const std::string& id,
  */
 Result<void> TeacherRepository::remove(const std::string& id)
 {
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
     constexpr const char* k_sql = "DELETE FROM teachers WHERE id = ?;";
 
     sqlite3_stmt* stmt = nullptr;

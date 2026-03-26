@@ -102,15 +102,14 @@ Result<Uid> ConnectionPool::acquire(const std::string& hostname, Port port)
 
     // Generate a UUID token and create the entry
     const auto now = std::chrono::steady_clock::now();
-    Uid token;
-    try {
-        token = CryptoUtils::generateUuid();
-    } catch (const std::exception& ex) {
-        spdlog::error("[ConnectionPool] UUID generation failed: {}", ex.what());
+    auto uuidResult = CryptoUtils::generateUuid();
+    if (uuidResult.is_err()) {
+        spdlog::error("[ConnectionPool] UUID generation failed: {}", uuidResult.error().message);
         return Result<Uid>::fail(ApiError{
             ErrorCode::InternalError, "UUID generation failed"
         });
     }
+    Uid token = uuidResult.take();
 
     auto entry = std::make_unique<Entry>();
     entry->hostname   = hostname;

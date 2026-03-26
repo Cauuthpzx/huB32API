@@ -14,6 +14,7 @@
 #include "core/internal/I18n.hpp"
 #include "core/internal/CryptoUtils.hpp"
 #include "db/ComputerRepository.hpp"
+#include "api/common/HttpErrorUtil.hpp"
 
 // cpp-httplib
 #include <httplib.h>
@@ -21,32 +22,14 @@
 #include <cstdio>
 #include <ctime>
 
+using hub32api::api::common::sendError;
+
 namespace {
 
 std::string getLocale(const httplib::Request& req) {
     auto* i = hub32api::core::internal::I18n::instance();
     if (!i) return "en";
     return i->negotiate(req.get_header_value("Accept-Language"));
-}
-
-/**
- * @brief Sends an RFC-7807-style JSON error response.
- * @param res    The httplib response to populate.
- * @param status HTTP status code to set.
- * @param title  Short human-readable problem title.
- * @param detail Longer explanation; defaults to @p title when empty.
- */
-void sendError(httplib::Response& res,
-               int                status,
-               const std::string& title,
-               const std::string& detail = {})
-{
-    nlohmann::json j;
-    j["status"] = status;
-    j["title"]  = title;
-    j["detail"] = detail.empty() ? title : detail;
-    res.status  = status;
-    res.set_content(j.dump(), "application/json");
 }
 
 /**
@@ -58,7 +41,13 @@ std::string timestampToIso(hub32api::Timestamp ts)
 {
     auto t = std::chrono::system_clock::to_time_t(ts);
     char buf[32];
-    std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&t));
+    struct tm tmBuf{};
+#ifdef _WIN32
+    gmtime_s(&tmBuf, &t);
+#else
+    gmtime_r(&t, &tmBuf);
+#endif
+    std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tmBuf);
     return buf;
 }
 
@@ -161,7 +150,12 @@ void AgentController::handleRegister(const httplib::Request& req, httplib::Respo
     }
 
     // --- Generate agent ID ---
-    const std::string agentId = hub32api::core::internal::CryptoUtils::generateUuid();
+    auto agentIdResult = hub32api::core::internal::CryptoUtils::generateUuid();
+    if (agentIdResult.is_err()) {
+        sendError(res, 500, tr(lang, "error.internal"), "UUID generation failed");
+        return;
+    }
+    const std::string agentId = agentIdResult.take();
 
     // --- Build AgentInfo ---
     AgentInfo info;
@@ -201,7 +195,7 @@ void AgentController::handleRegister(const httplib::Request& req, httplib::Respo
     // --- Build and return response ---
     const dto::AgentRegisterResponse resp{agentId, tokenResult.value(), 5000};
     const nlohmann::json j = resp;
-    res.status = 200;
+    res.status = 201;  // 201 Created — new resource was created
     res.set_content(j.dump(), "application/json");
 }
 
@@ -311,8 +305,20 @@ void AgentController::handlePushCommand(const httplib::Request& req, httplib::Re
         return;
     }
 
+    // --- Verify target agent exists before queuing ---
+    auto targetAgent = m_registry.findAgent(agentId);
+    if (targetAgent.is_err()) {
+        sendError(res, 404, tr(lang, "error.agent_not_found"), targetAgent.error().message);
+        return;
+    }
+
     // --- Build AgentCommand ---
-    const std::string commandId = hub32api::core::internal::CryptoUtils::generateUuid();
+    auto commandIdResult = hub32api::core::internal::CryptoUtils::generateUuid();
+    if (commandIdResult.is_err()) {
+        sendError(res, 500, tr(lang, "error.internal"), "UUID generation failed");
+        return;
+    }
+    const std::string commandId = commandIdResult.take();
     AgentCommand cmd;
     cmd.commandId  = commandId;
     cmd.agentId    = agentId;
@@ -327,7 +333,7 @@ void AgentController::handlePushCommand(const httplib::Request& req, httplib::Re
     // --- Return response ---
     const dto::AgentCommandResponse resp{commandId, "pending"};
     const nlohmann::json j = resp;
-    res.status = 200;
+    res.status = 201;  // 201 Created — new command resource was created
     res.set_content(j.dump(), "application/json");
 }
 
