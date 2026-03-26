@@ -131,7 +131,7 @@ ServerConfig ServerConfig::defaults()
  * @param path Filesystem path to the JSON configuration file.
  * @return A populated ServerConfig, or defaults() on error.
  */
-ServerConfig ServerConfig::from_file(const std::string& path)
+Result<ServerConfig> ServerConfig::from_file(const std::string& path)
 {
     spdlog::info("[ServerConfig] loading from file: {}", path);
 
@@ -139,7 +139,8 @@ ServerConfig ServerConfig::from_file(const std::string& path)
     if (!ifs.is_open())
     {
         spdlog::error("[ServerConfig] failed to open config file: {}", path);
-        return defaults();
+        return Result<ServerConfig>::fail(
+            ApiError{ErrorCode::InvalidConfig, "failed to open config file: " + path});
     }
 
     std::string content((std::istreambuf_iterator<char>(ifs)),
@@ -153,7 +154,8 @@ ServerConfig ServerConfig::from_file(const std::string& path)
     catch (const nlohmann::json::parse_error& e)
     {
         spdlog::error("[ServerConfig] JSON parse error in {}: {}", path, e.what());
-        return defaults();
+        return Result<ServerConfig>::fail(
+            ApiError{ErrorCode::InvalidConfig, "JSON parse error: " + std::string(e.what())});
     }
 
     ServerConfig cfg{};
@@ -251,7 +253,7 @@ ServerConfig ServerConfig::from_file(const std::string& path)
     auto validationResult = validator.validate(cfg);
     if (validationResult.is_err()) {
         spdlog::error("[ServerConfig] CRITICAL: {}", validationResult.error().message);
-        return defaults();
+        return Result<ServerConfig>::fail(validationResult.error());
     }
     for (const auto& err : validationResult.value()) {
         spdlog::warn("[ServerConfig] validation: {}", err);
@@ -259,7 +261,7 @@ ServerConfig ServerConfig::from_file(const std::string& path)
 
     spdlog::info("[ServerConfig] loaded config from file: {} (httpPort={}, bindAddress={})",
                  path, cfg.httpPort, cfg.bindAddress);
-    return cfg;
+    return Result<ServerConfig>::ok(std::move(cfg));
 }
 
 /**
@@ -274,7 +276,7 @@ ServerConfig ServerConfig::from_file(const std::string& path)
  *
  * @return A populated ServerConfig from registry values, or defaults() on failure.
  */
-ServerConfig ServerConfig::from_registry()
+Result<ServerConfig> ServerConfig::from_registry()
 {
     spdlog::info("[ServerConfig] loading from Windows Registry");
 
@@ -287,9 +289,10 @@ ServerConfig ServerConfig::from_registry()
 
     if (openResult != ERROR_SUCCESS)
     {
-        spdlog::info("[ServerConfig] registry key HKLM\\SOFTWARE\\hub32api not found "
-                     "(error={}); using defaults", openResult);
-        return defaults();
+        spdlog::error("[ServerConfig] registry key HKLM\\SOFTWARE\\hub32api not found "
+                      "(error={})", openResult);
+        return Result<ServerConfig>::fail(
+            ApiError{ErrorCode::InvalidConfig, "registry key not found"});
     }
 
     ServerConfig cfg{};
@@ -343,7 +346,7 @@ ServerConfig ServerConfig::from_registry()
     auto validationResult = validator.validate(cfg);
     if (validationResult.is_err()) {
         spdlog::error("[ServerConfig] CRITICAL: {}", validationResult.error().message);
-        return defaults();
+        return Result<ServerConfig>::fail(validationResult.error());
     }
     for (const auto& err : validationResult.value()) {
         spdlog::warn("[ServerConfig] validation: {}", err);
@@ -351,7 +354,7 @@ ServerConfig ServerConfig::from_registry()
 
     spdlog::info("[ServerConfig] loaded config from registry (httpPort={}, bindAddress={})",
                  cfg.httpPort, cfg.bindAddress);
-    return cfg;
+    return Result<ServerConfig>::ok(std::move(cfg));
 }
 
 } // namespace hub32api

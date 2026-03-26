@@ -75,11 +75,17 @@ int runServer(const hub32api::ServerConfig& cfg)
                     // NOTE: Full hot-reload would require reconstructing HttpServer.
                     // For now, we reload the log level as a safe runtime change.
                     try {
-                        auto newCfg = hub32api::ServerConfig::from_file(g_configPath);
-                        auto lvl = spdlog::level::from_str(newCfg.logLevel);
-                        if (lvl != spdlog::get_level()) {
-                            spdlog::set_level(lvl);
-                            spdlog::info("[main] log level hot-reloaded to '{}'", newCfg.logLevel);
+                        auto newCfgResult = hub32api::ServerConfig::from_file(g_configPath);
+                        if (newCfgResult.is_err()) {
+                            spdlog::warn("[main] config reload failed: {}",
+                                         newCfgResult.error().message);
+                        } else {
+                            auto newCfg = newCfgResult.take();
+                            auto lvl = spdlog::level::from_str(newCfg.logLevel);
+                            if (lvl != spdlog::get_level()) {
+                                spdlog::set_level(lvl);
+                                spdlog::info("[main] log level hot-reloaded to '{}'", newCfg.logLevel);
+                            }
                         }
                     } catch (const std::exception& ex) {
                         spdlog::warn("[main] config reload failed: {}", ex.what());
@@ -127,9 +133,15 @@ int main(int argc, char* argv[])
 
     // Load configuration
     g_configPath = configPath;
-    auto cfg = configPath.empty()
+    auto cfgResult = configPath.empty()
         ? hub32api::ServerConfig::from_registry()
         : hub32api::ServerConfig::from_file(configPath);
+
+    if (cfgResult.is_err()) {
+        spdlog::critical("[main] configuration error: {}", cfgResult.error().message);
+        return 1;
+    }
+    auto cfg = cfgResult.take();
 
     if (asService) {
         return hub32api::WinServiceAdapter::runAsService([&cfg]{ return runServer(cfg); });

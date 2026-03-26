@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <string>
 #include "hub32api/export.h"
+#include "hub32api/core/Result.hpp"
 
 namespace hub32api {
 
@@ -78,9 +79,9 @@ struct HUB32API_EXPORT ServerConfig
     bool metricsEnabled            = false;
     uint16_t metricsPort           = 9091;
 
-    // Load from JSON file; returns false on parse error
-    HUB32API_EXPORT static ServerConfig from_file(const std::string& path);
-    HUB32API_EXPORT static ServerConfig from_registry();  // Windows Registry
+    // Load from JSON file or Windows Registry; returns error on invalid config
+    HUB32API_EXPORT static Result<ServerConfig> from_file(const std::string& path);
+    HUB32API_EXPORT static Result<ServerConfig> from_registry();  // Windows Registry
     HUB32API_EXPORT static ServerConfig defaults();
 };
 

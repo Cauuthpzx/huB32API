@@ -103,6 +103,14 @@ HttpServer::HttpServer(const ServerConfig& cfg)
 {
     m_impl->cfg = cfg;
 
+    // Validate TLS config early — fail fast if misconfigured
+    if (cfg.tlsEnabled) {
+        if (cfg.tlsCertFile.empty() || cfg.tlsKeyFile.empty()) {
+            throw std::runtime_error(
+                "[HttpServer] TLS is enabled but tlsCertFile or tlsKeyFile is empty");
+        }
+    }
+
     // 1. Boot Hub32 core
     m_impl->hub32Core = std::make_unique<core::internal::Hub32CoreWrapper>(cfg);
 

@@ -1,0 +1,1059 @@
+﻿================ include\hub32api\core\Constants.hpp ================
+
+#pragma once
+
+#include <cstdint>
+#include <string>
+#include <string_view>
+#include "hub32api/export.h"
+
+namespace hub32api {
+
+// -----------------------------------------------------------------------
+// Network constants
+// -----------------------------------------------------------------------
+constexpr uint16_t kDefaultHttpPort       = 11081;  // port â€” hub32api HTTP server
+constexpr uint16_t kDefaultAgentPort      = 11082;  // port â€” agent listener
+constexpr uint16_t kDefaultVncPort        = 11100;  // port â€” VNC server
+constexpr uint16_t kDefaultMetricsPort    = 9091;   // port â€” Prometheus metrics
+constexpr int      kTcpPingTimeoutMs      = 1500;   // milliseconds â€” TCP connect timeout
+constexpr int      kIcmpPingTimeoutMs     = 500;    // milliseconds â€” ICMP echo timeout
+
+// -----------------------------------------------------------------------
+// Authentication constants
+// -----------------------------------------------------------------------
+constexpr std::string_view kBearerPrefix   = "Bearer ";
+constexpr size_t kBearerPrefixLen          = 7;      // bytes â€” length of "Bearer "
+constexpr int    kDefaultTokenExpirySec    = 3600;   // seconds â€” 1 hour JWT lifetime
+constexpr int    kTokenPurgeIntervalCalls  = 100;    // calls â€” purge denylist every N authenticate() calls
+constexpr std::string_view kJwtIssuer      = "hub32api";
+constexpr std::string_view kJwtAudience    = "hub32api-clients";
+
+// Veyon-compatible auth method UUIDs
+constexpr std::string_view kAuthMethodHub32KeyUuid = "0c69b301-81b4-42d6-8fae-128cdd113314";
+constexpr std::string_view kAuthMethodLogonUuid    = "63611f7c-b457-42c7-832e-67d0f9281085";
+
+// -----------------------------------------------------------------------
+// Agent constants
+// -----------------------------------------------------------------------
+constexpr int    kDefaultHeartbeatTimeoutMs     = 90000;  // milliseconds â€” 90s agent timeout
+constexpr int    kDefaultCommandPollIntervalMs  = 5000;   // milliseconds â€” agent poll interval
+constexpr int    kDefaultHeartbeatIntervalMs    = 30000;  // milliseconds â€” agent heartbeat interval
+constexpr size_t kMaxCommandHistory             = 10000;  // items â€” command history ring buffer
+constexpr size_t kCommandHistoryPruneCount      = 1000;   // items â€” prune batch size
+
+// -----------------------------------------------------------------------
+// Service constants (Windows)
+// -----------------------------------------------------------------------
+constexpr int kServicePollIntervalMs    = 200;   // milliseconds â€” service main loop sleep
+constexpr int kServiceStartWaitMs       = 3000;  // milliseconds â€” SCM start pending hint
+constexpr int kServiceStopWaitMs        = 5000;  // milliseconds â€” SCM stop pending hint
+
+// -----------------------------------------------------------------------
+// Cache & CORS
+// -----------------------------------------------------------------------
+constexpr int kDefaultCacheMaxAgeSec   = 3600;   // seconds â€” Cache-Control max-age
+constexpr int kDefaultCorsMaxAgeSec    = 3600;   // seconds â€” CORS preflight cache
+
+// -----------------------------------------------------------------------
+// Rate limiting
+// -----------------------------------------------------------------------
+constexpr int    kDefaultRequestsPerMinute    = 120;   // requests â€” rate limit window
+constexpr int    kDefaultBurstSize            = 20;    // requests â€” token bucket burst
+constexpr size_t kRateLimitCleanupInterval    = 1000;  // calls â€” bucket cleanup frequency
+
+// -----------------------------------------------------------------------
+// Pagination
+// -----------------------------------------------------------------------
+constexpr int kDefaultPageSize   = 50;    // items â€” default page size
+constexpr int kMaxPageSize       = 200;   // items â€” maximum page size
+
+// -----------------------------------------------------------------------
+// Input validation
+// -----------------------------------------------------------------------
+constexpr size_t kDefaultMaxBodySize     = 1 * 1024 * 1024;  // bytes â€” 1 MB
+constexpr size_t kDefaultMaxFieldLength  = 1000;              // characters
+constexpr size_t kDefaultMaxArraySize    = 500;               // elements
+constexpr int    kDefaultMaxPathDepth    = 10;                // levels
+
+// -----------------------------------------------------------------------
+// Crypto / buffer sizes
+// -----------------------------------------------------------------------
+constexpr size_t kSecretKeyBytes     = 32;   // bytes â€” JWT secret key length (256 bits)
+constexpr size_t kUuidBytes          = 16;   // bytes â€” UUID v4 raw bytes
+constexpr size_t kTimestampBufSize   = 32;   // bytes â€” ISO 8601 timestamp buffer
+constexpr int    kPbkdf2Iterations   = 310000;  // rounds â€” OWASP 2024 minimum for PBKDF2-SHA256
+constexpr size_t kPbkdf2SaltBytes   = 16;    // bytes â€” PBKDF2 salt length
+constexpr size_t kPbkdf2HashBytes   = 32;    // bytes â€” PBKDF2 derived key length
+
+// -----------------------------------------------------------------------
+// ICMP
+// -----------------------------------------------------------------------
+constexpr size_t kIcmpReplyPadding   = 32;   // bytes â€” extra buffer after ICMP_ECHO_REPLY
+
+// -----------------------------------------------------------------------
+// Feature UIDs (API-level, prefixed with "feat-")
+// -----------------------------------------------------------------------
+constexpr std::string_view kFeatureLockScreen      = "feat-lock-screen";
+constexpr std::string_view kFeatureScreenBroadcast = "feat-screen-broadcast";
+constexpr std::string_view kFeatureInputLock       = "feat-input-lock";
+constexpr std::string_view kFeatureMessage         = "feat-message";
+constexpr std::string_view kFeaturePowerControl    = "feat-power-control";
+
+// Agent-level handler UIDs (without "feat-" prefix)
+constexpr std::string_view kHandlerLockScreen     = "lock-screen";
+constexpr std::string_view kHandlerScreenCapture  = "screen-capture";
+constexpr std::string_view kHandlerInputLock      = "input-lock";
+constexpr std::string_view kHandlerMessageDisplay = "message-display";
+constexpr std::string_view kHandlerPowerControl   = "power-control";
+
+// -----------------------------------------------------------------------
+// UserRole â€” role of an authenticated user
+// -----------------------------------------------------------------------
+enum class UserRole
+{
+    Admin,
+    Teacher,
+    Readonly,
+    Agent,       // agent registration token role
+};
+
+HUB32API_EXPORT std::string to_string(UserRole role);
+HUB32API_EXPORT UserRole user_role_from_string(const std::string& s);
+
+// -----------------------------------------------------------------------
+// JwtAlgorithm â€” supported JWT signing algorithms
+// -----------------------------------------------------------------------
+enum class JwtAlgorithm
+{
+    RS256,
+    HS256,
+};
+
+HUB32API_EXPORT std::string to_string(JwtAlgorithm alg);
+HUB32API_EXPORT JwtAlgorithm jwt_algorithm_from_string(const std::string& s);
+
+// -----------------------------------------------------------------------
+// AuthMethod â€” authentication method identifiers
+// -----------------------------------------------------------------------
+enum class AuthMethod
+{
+    Logon,       // username/password
+    Hub32Key,    // Hub32 public key auth
+};
+
+HUB32API_EXPORT std::string to_string(AuthMethod m);
+HUB32API_EXPORT AuthMethod auth_method_from_string(const std::string& s);
+
+// -----------------------------------------------------------------------
+// PowerAction â€” power control operations
+// -----------------------------------------------------------------------
+enum class PowerAction
+{
+    Shutdown,
+    Reboot,
+    Logoff,
+};
+
+HUB32API_EXPORT std::string to_string(PowerAction a);
+HUB32API_EXPORT PowerAction power_action_from_string(const std::string& s);
+
+// -----------------------------------------------------------------------
+// MediaKind â€” WebRTC media track types
+// -----------------------------------------------------------------------
+enum class MediaKind
+{
+    Audio,
+    Video,
+};
+
+HUB32API_EXPORT std::string to_string(MediaKind k);
+HUB32API_EXPORT MediaKind media_kind_from_string(const std::string& s);
+
+} // namespace hub32api
+
+
+
+================ include\hub32api\core\Types.hpp ================
+
+#pragma once
+
+#include <cstdint>
+#include <string>
+#include <vector>
+#include <chrono>
+
+#include "hub32api/export.h"
+
+namespace hub32api {
+
+// -----------------------------------------------------------------------
+// Basic aliases
+// -----------------------------------------------------------------------
+using Uid       = std::string;   // UUID string, e.g. "ccb535a2-..."
+using Port      = uint16_t;
+using Timestamp = std::chrono::system_clock::time_point;
+
+// -----------------------------------------------------------------------
+// Computer state
+// -----------------------------------------------------------------------
+enum class ComputerState
+{
+    Unknown,
+    Offline,
+    Online,
+    Connecting,
+    Connected,
+    Disconnecting,
+};
+
+HUB32API_EXPORT std::string to_string(ComputerState state);
+HUB32API_EXPORT ComputerState computer_state_from_string(const std::string& s);
+
+// -----------------------------------------------------------------------
+// Feature operation (mirrors Hub32 FeatureProviderInterface::Operation)
+// -----------------------------------------------------------------------
+enum class FeatureOperation
+{
+    Start,
+    Stop,
+    Initialize,
+};
+
+HUB32API_EXPORT std::string to_string(FeatureOperation op);
+
+// -----------------------------------------------------------------------
+// Screen geometry
+// -----------------------------------------------------------------------
+struct HUB32API_EXPORT ScreenRect
+{
+    int x = 0;
+    int y = 0;
+    int width  = 0;
+    int height = 0;
+};
+
+// -----------------------------------------------------------------------
+// Image format for framebuffer endpoint
+// -----------------------------------------------------------------------
+enum class ImageFormat
+{
+    Png,
+    Jpeg,
+};
+
+HUB32API_EXPORT ImageFormat image_format_from_string(const std::string& s);
+HUB32API_EXPORT std::string to_string(ImageFormat fmt);
+
+} // namespace hub32api
+
+
+
+================ include\hub32api\core\Error.hpp ================
+
+#pragma once
+
+#include <string>
+#include <stdexcept>
+#include "hub32api/export.h"
+
+namespace hub32api {
+
+// -----------------------------------------------------------------------
+// Error codes (maps to HTTP status codes in the API layer)
+// -----------------------------------------------------------------------
+enum class ErrorCode
+{
+    None                          = 0,
+    // 400
+    InvalidRequest                = 400,
+    InvalidCredentials            = 4001,
+    InvalidFeature                = 4002,
+    InvalidConnection             = 4003,
+    AuthMethodNotAvailable        = 4004,
+    // 401
+    Unauthorized                  = 401,
+    AuthenticationFailed          = 4011,
+    TokenExpired                  = 4012,
+    // 404
+    NotFound                      = 404,
+    ComputerNotFound              = 4041,
+    // 408
+    RequestTimeout                = 408,
+    ConnectionTimeout             = 4081,
+    // 429
+    TooManyRequests               = 429,
+    ConnectionLimitReached        = 4291,
+    // 500
+    InternalError                 = 500,
+    FramebufferEncodingError      = 5001,
+    PluginError                   = 5002,
+    // 501
+    NotImplemented                = 501,
+    ProtocolMismatch              = 5011,
+    // 413
+    PayloadTooLarge               = 413,
+    // 415
+    UnsupportedMediaType          = 415,
+    // 422
+    UnprocessableEntity           = 422,
+    ValidationFailed              = 4221,
+    // 503
+    ServiceUnavailable            = 503,
+    FramebufferNotAvailable       = 5031,
+
+    // Crypto errors
+    CryptoFailure                 = 5003,    // Maps to HTTP 500
+
+    // Config errors
+    InvalidConfig                 = 5004,    // Maps to HTTP 500
+
+    // File errors
+    FileReadError                 = 5005,    // Maps to HTTP 500
+};
+
+/**
+ * @brief Maps an internal ErrorCode to an HTTP status integer.
+ *
+ * Codes in the range [4000, 5000) are "packed" codes of the form
+ * HTTP_STATUS * 10 + sub-index, e.g. 4041 -> 404.
+ * Codes already in the standard HTTP range [400, 600) are returned as-is.
+ * Any other code maps to 500 (Internal Server Error).
+ */
+inline int http_status_for(ErrorCode code)
+{
+    int c = static_cast<int>(code);
+    if (c >= 4000 && c < 6000) return c / 10;  // packed: 4001â†’400, 4011â†’401, 5001â†’500, 5031â†’503
+    if (c >= 400  && c < 600)  return c;        // exact HTTP codes (400, 401, 404, 500â€¦)
+    return 500;
+}
+
+/**
+ * @brief Returns a human-readable string for the given ErrorCode.
+ */
+HUB32API_EXPORT std::string to_string(ErrorCode code);
+
+// -----------------------------------------------------------------------
+// ApiError â€” thrown internally, caught by the HTTP layer
+// -----------------------------------------------------------------------
+struct HUB32API_EXPORT ApiError : std::exception
+{
+    ErrorCode   code;
+    std::string message;
+
+    explicit ApiError(ErrorCode c, std::string msg = {})
+        : code(c), message(std::move(msg)) {}
+
+    const char* what() const noexcept override { return message.c_str(); }
+};
+
+} // namespace hub32api
+
+
+
+================ include\hub32api\core\Result.hpp ================
+
+#pragma once
+
+#include <stdexcept>
+#include <variant>
+#include <functional>
+#include "hub32api/core/Error.hpp"
+
+namespace hub32api {
+
+// -----------------------------------------------------------------------
+// Result<T> â€” value-or-error return type used throughout the API
+// -----------------------------------------------------------------------
+template<typename T>
+class Result
+{
+public:
+    static Result ok(T value)          { return Result(std::move(value)); }
+    static Result fail(ApiError error) { return Result(std::move(error)); }
+
+    bool is_ok()  const noexcept { return std::holds_alternative<T>(m_data); }
+    bool is_err() const noexcept { return !is_ok(); }
+
+    /// @brief Returns the contained value; throws if this is an error result.
+    const T& value() const {
+        if (!is_ok()) throw std::logic_error("Result::value() called on error result");
+        return std::get<T>(m_data);
+    }
+    /// @brief Moves the contained value out; throws if this is an error result.
+    T&& take() {
+        if (!is_ok()) throw std::logic_error("Result::take() called on error result");
+        return std::move(std::get<T>(m_data));
+    }
+    /// @brief Returns the contained error; throws if this is an ok result.
+    const ApiError& error() const {
+        if (!is_err()) throw std::logic_error("Result::error() called on ok result");
+        return std::get<ApiError>(m_data);
+    }
+
+    // Map value if ok, propagate error otherwise
+    template<typename U, typename F>
+    Result<U> map(F&& fn) const
+    {
+        if (is_ok()) return Result<U>::ok(fn(value()));
+        return Result<U>::fail(error());
+    }
+
+private:
+    explicit Result(T v)         : m_data(std::move(v)) {}
+    explicit Result(ApiError e)  : m_data(std::move(e)) {}
+
+    std::variant<T, ApiError> m_data;
+};
+
+// Specialisation for void (success/failure only)
+template<>
+class Result<void>
+{
+public:
+    static Result ok()             { return Result(true);  }
+    static Result fail(ApiError e) { return Result(std::move(e)); }
+
+    bool is_ok()  const noexcept { return m_ok; }
+    bool is_err() const noexcept { return !m_ok; }
+    const ApiError& error() const {
+        if (!is_err()) throw std::logic_error("Result<void>::error() called on ok result");
+        return m_error;
+    }
+
+private:
+    explicit Result(bool ok)       : m_ok(ok)  {}
+    explicit Result(ApiError e)    : m_ok(false), m_error(std::move(e)) {}
+
+    bool     m_ok = true;
+    ApiError m_error{ ErrorCode::None };
+};
+
+} // namespace hub32api
+
+
+
+================ src\api\v1\dto\AuthDto.hpp ================
+
+#pragma once
+
+#include <string>
+#include <nlohmann/json.hpp>
+
+#include "hub32api/core/Constants.hpp"
+
+namespace hub32api::api::v1::dto {
+
+struct AuthRequest
+{
+    std::string method;       // "hub32-key" | "logon"
+    std::string username;
+    std::string password;
+    std::string keyName;
+    std::string keyData;
+};
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(AuthRequest, method, username, password, keyName, keyData)
+
+struct AuthResponse
+{
+    std::string token;       // JWT Bearer token
+    std::string tokenType = "Bearer";
+    int         expiresIn = 3600;  // kDefaultTokenExpirySec â€” literal required by NLOHMANN macro
+};
+
+static_assert(hub32api::kDefaultTokenExpirySec == 3600, "Update AuthResponse::expiresIn default if this changes");
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(AuthResponse, token, tokenType, expiresIn)
+
+struct LogoutRequest
+{
+    std::string jti;         // token identifier to revoke
+};
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LogoutRequest, jti)
+
+} // namespace hub32api::api::v1::dto
+
+
+
+================ src\api\v1\dto\ComputerDto.hpp ================
+
+#pragma once
+
+#include <string>
+#include <vector>
+#include <nlohmann/json.hpp>
+#include "hub32api/core/Types.hpp"
+#include "hub32api/plugins/ComputerPluginInterface.hpp"
+
+namespace hub32api::api::v1::dto {
+
+// -----------------------------------------------------------------------
+// ComputerDto â€” JSON schema for computer resources in v1 API responses.
+// All serialization lives here (no .cpp needed; header-only DTOs).
+// -----------------------------------------------------------------------
+
+/**
+ * @brief Data Transfer Object representing a single computer resource.
+ *
+ * Flat JSON-serialisable view of a @ref ComputerInfo value object.
+ */
+struct ComputerDto
+{
+    std::string id;
+    std::string name;
+    std::string hostname;
+    std::string location;
+    std::string state;
+
+    /**
+     * @brief Constructs a ComputerDto from a domain ComputerInfo value.
+     * @param info The plugin-layer computer descriptor.
+     * @return A populated ComputerDto ready for JSON serialisation.
+     */
+    static ComputerDto from(const ComputerInfo& info)
+    {
+        const auto stateStr = [&]() -> std::string {
+            switch (info.state) {
+                case ComputerState::Online:  return "online";
+                case ComputerState::Offline: return "offline";
+                case ComputerState::Connected:    return "connected";
+                case ComputerState::Connecting:   return "connecting";
+                case ComputerState::Disconnecting: return "disconnecting";
+                default:                     return "unknown";
+            }
+        }();
+        return ComputerDto{info.uid, info.name, info.hostname, info.location, stateStr};
+    }
+};
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ComputerDto, id, name, hostname, location, state)
+
+struct ComputerListDto
+{
+    std::vector<ComputerDto> computers;
+    int total = 0;
+};
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ComputerListDto, computers, total)
+
+} // namespace hub32api::api::v1::dto
+
+
+
+================ src\api\v1\dto\SchoolDto.hpp ================
+
+#pragma once
+#include <nlohmann/json.hpp>
+#include <string>
+
+namespace hub32api::api::v1::dto {
+
+struct CreateSchoolRequest {
+    std::string name;
+    std::string address;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(CreateSchoolRequest, name, address)
+
+struct SchoolResponse {
+    std::string id;
+    std::string name;
+    std::string address;
+    int64_t     createdAt = 0;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(SchoolResponse, id, name, address, createdAt)
+
+struct CreateLocationRequest {
+    std::string schoolId;
+    std::string name;
+    std::string building;
+    int         floor = 0;
+    int         capacity = 0;
+    std::string type = "classroom";
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(CreateLocationRequest, schoolId, name, building, floor, capacity, type)
+
+struct LocationResponse {
+    std::string id;
+    std::string schoolId;
+    std::string name;
+    std::string building;
+    int         floor = 0;
+    int         capacity = 0;
+    std::string type;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(LocationResponse, id, schoolId, name, building, floor, capacity, type)
+
+} // namespace hub32api::api::v1::dto
+
+
+
+================ src\api\v1\dto\TeacherDto.hpp ================
+
+#pragma once
+#include <nlohmann/json.hpp>
+#include <string>
+#include <vector>
+
+namespace hub32api::api::v1::dto {
+
+struct CreateTeacherRequest {
+    std::string username;
+    std::string password;
+    std::string fullName;
+    std::string role = "teacher";
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(CreateTeacherRequest, username, password, fullName, role)
+
+struct TeacherResponse {
+    std::string id;
+    std::string username;
+    std::string fullName;
+    std::string role;
+    int64_t     createdAt = 0;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(TeacherResponse, id, username, fullName, role, createdAt)
+
+struct AssignLocationRequest {
+    std::string locationId;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(AssignLocationRequest, locationId)
+
+} // namespace hub32api::api::v1::dto
+
+
+
+================ src\api\v1\dto\SessionDto.hpp ================
+
+#pragma once
+
+#include <string>
+#include <vector>
+#include <nlohmann/json.hpp>
+#include "hub32api/plugins/SessionPluginInterface.hpp"
+
+namespace hub32api::api::v1::dto {
+
+/**
+ * @brief Data Transfer Object representing the currently logged-in user.
+ */
+struct UserDto
+{
+    std::string login;
+    std::string fullName;
+    std::string domain;
+
+    /**
+     * @brief Constructs a UserDto from a domain UserInfo value.
+     * @param u The user information returned by the session plugin.
+     * @return A populated UserDto ready for JSON serialisation.
+     */
+    static UserDto from(const UserInfo& u)
+    {
+        return UserDto{u.login, u.fullName, u.domain};
+    }
+};
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(UserDto, login, fullName, domain)
+
+/**
+ * @brief Data Transfer Object representing an active remote session on a computer.
+ */
+struct SessionDto
+{
+    int         sessionId    = -1;
+    std::string userLogin;
+    std::string userFullName;
+    std::string clientAddress;
+    int64_t     uptimeSeconds = 0;
+    std::string sessionType;
+    std::string sessionClientName;
+    std::string sessionHostName;
+
+    /**
+     * @brief Constructs a SessionDto from a domain SessionInfo value.
+     * @param s The session information returned by the session plugin.
+     * @return A populated SessionDto ready for JSON serialisation.
+     */
+    static SessionDto from(const SessionInfo& s)
+    {
+        SessionDto d;
+        d.sessionId = s.sessionId;
+        d.userLogin = s.userLogin;
+        d.userFullName = s.userFullName;
+        d.clientAddress = s.clientAddress;
+        d.uptimeSeconds = s.uptimeSeconds;
+        d.sessionType = s.sessionType;
+        d.sessionClientName = s.sessionClientName;
+        d.sessionHostName = s.sessionHostName;
+        return d;
+    }
+};
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(SessionDto,
+    sessionId, userLogin, userFullName, clientAddress, uptimeSeconds, sessionType,
+    sessionClientName, sessionHostName)
+
+struct ScreenDto
+{
+    int x=0, y=0, width=0, height=0;
+};
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ScreenDto, x, y, width, height)
+
+} // namespace hub32api::api::v1::dto
+
+
+
+================ src\api\v1\dto\FeatureDto.hpp ================
+
+#pragma once
+
+#include <string>
+#include <map>
+#include <vector>
+#include <nlohmann/json.hpp>
+#include "hub32api/plugins/FeaturePluginInterface.hpp"
+
+namespace hub32api::api::v1::dto {
+
+/**
+ * @brief Data Transfer Object representing a single Hub32 feature.
+ *
+ * Carries metadata and runtime state for one feature exposed to API consumers.
+ */
+struct FeatureDto
+{
+    std::string uid;
+    std::string parentUid;
+    std::string name;
+    std::string description;
+    bool        isActive       = false;
+    bool        isMasterSide   = false;
+    bool        isServiceSide  = false;
+
+    /**
+     * @brief Constructs a FeatureDto from a domain FeatureDescriptor.
+     * @param fd The descriptor returned by the feature plugin.
+     * @return A populated FeatureDto ready for JSON serialisation.
+     */
+    static FeatureDto from(const FeatureDescriptor& fd)
+    {
+        return FeatureDto{fd.uid, fd.parentUid, fd.name, fd.description,
+                          fd.isActive, fd.isMasterSide, fd.isServiceSide};
+    }
+};
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(FeatureDto,
+    uid, parentUid, name, description, isActive, isMasterSide, isServiceSide)
+
+struct FeatureListDto
+{
+    std::vector<FeatureDto> features;
+};
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(FeatureListDto, features)
+
+struct FeatureControlRequest
+{
+    bool                        active = false;
+    std::map<std::string,std::string> arguments;
+};
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(FeatureControlRequest, active, arguments)
+
+} // namespace hub32api::api::v1::dto
+
+
+
+================ src\api\v1\dto\StreamDto.hpp ================
+
+#pragma once
+#include <nlohmann/json.hpp>
+#include <string>
+#include <vector>
+
+namespace hub32api::api::v1::dto {
+
+struct CreateTransportRequest {
+    std::string locationId;
+    std::string direction; // "send" or "recv"
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(CreateTransportRequest, locationId, direction)
+
+struct CreateTransportResponse {
+    std::string id;
+    nlohmann::json iceParameters;
+    nlohmann::json iceCandidates;
+    nlohmann::json dtlsParameters;
+};
+
+inline void to_json(nlohmann::json& j, const CreateTransportResponse& r) {
+    j = {{"id", r.id}, {"iceParameters", r.iceParameters},
+         {"iceCandidates", r.iceCandidates}, {"dtlsParameters", r.dtlsParameters}};
+}
+
+struct ConnectTransportRequest {
+    nlohmann::json dtlsParameters;
+};
+
+inline void from_json(const nlohmann::json& j, ConnectTransportRequest& r) {
+    r.dtlsParameters = j.value("dtlsParameters", nlohmann::json{});
+}
+
+struct ProduceRequest {
+    std::string transportId;
+    std::string kind; // "video" or "audio"
+    nlohmann::json rtpParameters;
+};
+
+inline void from_json(const nlohmann::json& j, ProduceRequest& r) {
+    r.transportId = j.value("transportId", "");
+    r.kind = j.value("kind", "");
+    r.rtpParameters = j.value("rtpParameters", nlohmann::json{});
+}
+
+struct ProduceResponse {
+    std::string id;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(ProduceResponse, id)
+
+struct ConsumeRequest {
+    std::string transportId;
+    std::string producerId;
+    nlohmann::json rtpCapabilities;
+};
+
+inline void from_json(const nlohmann::json& j, ConsumeRequest& r) {
+    r.transportId = j.value("transportId", "");
+    r.producerId = j.value("producerId", "");
+    r.rtpCapabilities = j.value("rtpCapabilities", nlohmann::json{});
+}
+
+struct ConsumeResponse {
+    std::string id;
+    std::string producerId;
+    std::string kind;
+    nlohmann::json rtpParameters;
+};
+
+inline void to_json(nlohmann::json& j, const ConsumeResponse& r) {
+    j = {{"id", r.id}, {"producerId", r.producerId}, {"kind", r.kind},
+         {"rtpParameters", r.rtpParameters}};
+}
+
+struct IceServer {
+    std::vector<std::string> urls;
+    std::string username;
+    std::string credential;
+};
+
+inline void to_json(nlohmann::json& j, const IceServer& s) {
+    j = {{"urls", s.urls}};
+    if (!s.username.empty()) j["username"] = s.username;
+    if (!s.credential.empty()) j["credential"] = s.credential;
+}
+
+} // namespace hub32api::api::v1::dto
+
+
+
+================ src\server\internal\Router.hpp ================
+
+#pragma once
+
+#include <memory>
+#include <string>
+
+// Forward declarations
+namespace httplib { class Server; }
+namespace hub32api::core::internal { class PluginRegistry; class ConnectionPool; }
+namespace hub32api::auth { class JwtAuth; class Hub32KeyAuth; class UserRoleStore; }
+namespace hub32api::agent { class AgentRegistry; }
+namespace hub32api::db { class SchoolRepository; class LocationRepository; class ComputerRepository;
+                         class TeacherRepository; class TeacherLocationRepository; }
+namespace hub32api::media { class SfuBackend; class RoomManager; }
+namespace hub32api::api::v1::middleware { class RateLimitMiddleware; }
+namespace hub32api::server { class SseManager; }
+
+namespace hub32api::server::internal {
+
+// -----------------------------------------------------------------------
+// Router â€” registers all API routes on the httplib::Server instance.
+// Single entry point: call registerAll() once at startup.
+// -----------------------------------------------------------------------
+class Router
+{
+public:
+    struct Services
+    {
+        core::internal::PluginRegistry& registry;
+        core::internal::ConnectionPool& pool;
+        auth::JwtAuth&                  jwtAuth;
+        auth::Hub32KeyAuth&             keyAuth;
+        auth::UserRoleStore&            roleStore;
+        agent::AgentRegistry&           agentRegistry;
+        std::string                     agentKeyHash;  ///< PBKDF2-SHA256 hash of agent registration key
+        db::SchoolRepository*           schoolRepo = nullptr;
+        db::LocationRepository*         locationRepo = nullptr;
+        db::ComputerRepository*         computerRepo = nullptr;
+        db::TeacherRepository*          teacherRepo = nullptr;
+        db::TeacherLocationRepository*  teacherLocationRepo = nullptr;
+        media::RoomManager*             roomManager = nullptr;
+        media::SfuBackend*              sfuBackend = nullptr;
+        std::string                     turnSecret;
+        std::string                     turnServerUrl;
+    };
+
+    explicit Router(httplib::Server& server, Services svcs);
+
+    void registerAll();
+
+private:
+    void registerV1();
+    void registerV2();
+    void registerHealthAndMetrics();
+    void registerOpenApi();
+    void registerAgentRoutes();
+    void registerSchoolRoutes();
+    void registerTeacherRoutes();
+    void registerStreamRoutes();
+    void registerSse();
+    void registerDebug();
+
+    httplib::Server& m_server;
+    Services         m_svcs;
+    std::shared_ptr<server::SseManager> m_sse;
+    std::shared_ptr<api::v1::middleware::RateLimitMiddleware> m_rl;
+};
+
+} // namespace hub32api::server::internal
+
+
+
+================ include\hub32api\auth\AuthContext.hpp ================
+
+#pragma once
+
+#include <optional>
+#include "hub32api/auth/JwtToken.hpp"
+#include "hub32api/export.h"
+
+namespace hub32api {
+
+/**
+ * @brief Per-request authentication context bound to every HTTP request.
+ *
+ * Populated by AuthMiddleware after successful JWT validation.
+ * Controllers receive this via ApiContext and use the role-check helpers
+ * to enforce access control without touching raw JWT claims directly.
+ */
+struct HUB32API_EXPORT AuthContext
+{
+    /** @brief True when the request carries a valid, non-expired, non-revoked JWT. */
+    bool authenticated = false;
+
+    /** @brief The validated token, or std::nullopt for anonymous requests. */
+    std::optional<JwtToken> token;
+
+    /**
+     * @brief Returns true if the authenticated user holds the "admin" role.
+     * @return @c true when @c token is present and @c token->role == "admin".
+     */
+    bool is_admin() const noexcept { return token && token->has_role("admin"); }
+
+    /**
+     * @brief Returns true if the authenticated user holds the "teacher" role.
+     * @return @c true when @c token is present and @c token->role == "teacher".
+     */
+    bool is_teacher() const noexcept { return token && token->has_role("teacher"); }
+
+    /**
+     * @brief Returns true if the authenticated user holds the "readonly" role.
+     * @return @c true when @c token is present and @c token->role == "readonly".
+     */
+    bool is_readonly() const noexcept { return token && token->has_role("readonly"); }
+
+    /**
+     * @brief Returns the subject (username) of the authenticated user.
+     *
+     * Returns a reference to a static empty string when the context is
+     * anonymous (no token present), so callers never receive a dangling ref.
+     *
+     * @return Reference to @c token->subject, or a static empty string.
+     */
+    const std::string& subject() const noexcept {
+        static std::string empty;
+        return token ? token->subject : empty;
+    }
+
+    /**
+     * @brief Factory method that constructs an unauthenticated AuthContext.
+     * @return A default-constructed AuthContext with @c authenticated == false.
+     */
+    static AuthContext anonymous() noexcept { return AuthContext{}; }
+};
+
+} // namespace hub32api
+
+
+
+================ include\hub32api\auth\JwtToken.hpp ================
+
+#pragma once
+
+#include <string>
+#include <chrono>
+#include "hub32api/export.h"
+
+namespace hub32api {
+
+/**
+ * @brief Parsed JWT payload for per-request authentication.
+ *
+ * Populated by JwtValidator::validate() after successful signature
+ * verification and claims extraction.  Carried inside AuthContext for
+ * the lifetime of a single HTTP request.
+ */
+struct HUB32API_EXPORT JwtToken
+{
+    /** @brief Subject claim ("sub") â€” typically the authenticated username. */
+    std::string subject;
+
+    /** @brief Issuer claim ("iss") â€” expected to equal "hub32api". */
+    std::string issuer;
+
+    /** @brief Custom role claim â€” one of "admin", "teacher", "readonly". */
+    std::string role;
+
+    /** @brief JWT ID claim ("jti") â€” unique token identifier used for revocation. */
+    std::string jti;
+
+    /** @brief Issued-at claim ("iat") converted to a system_clock time_point. */
+    std::chrono::system_clock::time_point issuedAt;
+
+    /** @brief Expiry claim ("exp") converted to a system_clock time_point. */
+    std::chrono::system_clock::time_point expiresAt;
+
+    /**
+     * @brief Returns true if the token has expired relative to the current wall clock.
+     * @return @c true when @c now() > expiresAt.
+     */
+    bool is_expired() const noexcept {
+        return std::chrono::system_clock::now() > expiresAt;
+    }
+
+    /**
+     * @brief Checks whether this token carries a specific role.
+     * @param required The role string to compare against (e.g. "admin").
+     * @return @c true when @c role == @p required.
+     */
+    bool has_role(const std::string& required) const noexcept {
+        return role == required;
+    }
+};
+
+} // namespace hub32api
+
+
+
