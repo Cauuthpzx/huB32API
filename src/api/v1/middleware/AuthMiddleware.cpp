@@ -12,8 +12,11 @@
 #include "auth/JwtAuth.hpp"
 #include "core/internal/ApiContext.hpp"
 #include "core/internal/I18n.hpp"
+#include "api/common/HttpErrorUtil.hpp"
 
 #include <httplib.h>
+
+using hub32api::api::common::sendError;
 
 namespace hub32api::api::v1::middleware {
 
@@ -23,30 +26,6 @@ std::string getLocale(const httplib::Request& req) {
     auto* i = hub32api::core::internal::I18n::instance();
     if (!i) return "en";
     return i->negotiate(req.get_header_value("Accept-Language"));
-}
-
-/**
- * @brief Sends an RFC-7807 Problem Details JSON error response.
- *
- * Sets the HTTP status code and writes a JSON body with @c status,
- * @c title, and @c detail fields matching the project-wide error format.
- *
- * @param res     The httplib response object to populate.
- * @param status  HTTP status code (e.g. 401).
- * @param title   Short human-readable problem title.
- * @param detail  Longer explanation; falls back to @p title when empty.
- */
-void sendError(httplib::Response& res,
-               int                status,
-               const std::string& title,
-               const std::string& detail = {})
-{
-    nlohmann::json j;
-    j["status"] = status;
-    j["title"]  = title;
-    j["detail"] = detail.empty() ? title : detail;
-    res.status  = status;
-    res.set_content(j.dump(), "application/json");
 }
 
 } // anonymous namespace
@@ -110,7 +89,7 @@ bool AuthMiddleware::process(
     // ------------------------------------------------------------------
     // 2. Verify the "Bearer " scheme prefix
     // ------------------------------------------------------------------
-    if (authHeader.rfind("Bearer ", 0) != 0) {
+    if (authHeader.substr(0, hub32api::kBearerPrefixLen) != hub32api::kBearerPrefix) {
         spdlog::debug("[AuthMiddleware] Authorization header does not use Bearer scheme");
         sendError(res, 401, tr(lang, "error.unauthorized"),
                   tr(lang, "error.bearer_scheme_required"));

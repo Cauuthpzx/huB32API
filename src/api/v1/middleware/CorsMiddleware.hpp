@@ -12,7 +12,7 @@ struct CorsConfig {
     std::vector<std::string> allowedMethods = {"GET","POST","PUT","DELETE","OPTIONS"};
     std::vector<std::string> allowedHeaders = {"Authorization","Content-Type","X-Request-ID"};
     bool allowCredentials = false;
-    int  maxAgeSec = 3600;
+    int  maxAgeSec = hub32api::kDefaultCorsMaxAgeSec;  // seconds
 };
 
 class CorsMiddleware

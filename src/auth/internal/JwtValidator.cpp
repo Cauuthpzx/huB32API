@@ -18,6 +18,7 @@
 
 #include "../../core/PrecompiledHeader.hpp"
 #include "JwtValidator.hpp"
+#include "../../utils/string_utils.hpp"
 
 namespace hub32api::auth::internal {
 
@@ -25,14 +26,6 @@ namespace hub32api::auth::internal {
 // Internal type alias
 // ---------------------------------------------------------------------------
 using JwtDecoded = jwt::decoded_jwt<jwt::traits::nlohmann_json>;
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-namespace {
-    constexpr const char* k_issuer   = "hub32api";
-    constexpr const char* k_audience = "hub32api-clients";
-} // anonymous namespace
 
 // ---------------------------------------------------------------------------
 // Construction
@@ -132,7 +125,8 @@ Result<JwtToken> JwtValidator::validate(const std::string& rawToken) const
             tokenAlg = header.at("alg").template get<std::string>();
         }
 
-        if (tokenAlg == "none" || tokenAlg == "None" || tokenAlg == "NONE") {
+        auto lowerAlg = hub32api::utils::to_lower(tokenAlg);
+        if (lowerAlg == "none") {
             spdlog::warn("[JwtValidator] REJECTED: token uses 'none' algorithm — possible attack");
             return Result<JwtToken>::fail(ApiError{
                 ErrorCode::Unauthorized,
@@ -155,10 +149,10 @@ Result<JwtToken> JwtValidator::validate(const std::string& rawToken) const
     // ------------------------------------------------------------------
     try {
         auto verifier = jwt::verify()
-            .with_issuer(k_issuer)
-            .with_audience(k_audience);
+            .with_issuer(std::string(kJwtIssuer))
+            .with_audience(std::string(kJwtAudience));
 
-        if (m_algorithm == "RS256") {
+        if (m_algorithm == hub32api::to_string(hub32api::JwtAlgorithm::RS256)) {
             verifier.allow_algorithm(jwt::algorithm::rs256{m_publicKey, "", "", ""});
         } else {
             verifier.allow_algorithm(jwt::algorithm::hs256{m_secret});
@@ -216,7 +210,7 @@ Result<JwtToken> JwtValidator::validate(const std::string& rawToken) const
         token.issuer = decoded->get_issuer();
     }
     catch (const std::exception&) {
-        token.issuer = k_issuer;
+        token.issuer = std::string(kJwtIssuer);
     }
 
     // Required custom claim: role

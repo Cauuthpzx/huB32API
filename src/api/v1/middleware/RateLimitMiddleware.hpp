@@ -10,8 +10,8 @@ namespace httplib { class Request; class Response; }
 namespace hub32api::api::v1::middleware {
 
 struct RateLimitConfig {
-    int requestsPerMinute = 120;
-    int burstSize         = 20;
+    int requestsPerMinute = hub32api::kDefaultRequestsPerMinute;  // requests
+    int burstSize         = hub32api::kDefaultBurstSize;          // requests
 };
 
 // Token-bucket rate limiter per client IP
