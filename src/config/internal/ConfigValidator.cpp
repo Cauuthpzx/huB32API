@@ -15,8 +15,12 @@ namespace hub32api::config::internal {
 /**
  * @brief Validates the given ServerConfig and returns any error messages.
  *
- * Performs the following checks:
- *  - httpPort is within the valid TCP port range (1-65535).
+ * CRITICAL FIELDS (throw on error):
+ *  - httpPort must be in the valid TCP port range (1-65535).
+ *  - bindAddress must not be empty.
+ *  - jwtAlgorithm must be "RS256" or "HS256".
+ *
+ * NON-CRITICAL FIELDS (warn on error with sensible defaults):
  *  - metricsPort is within the valid TCP port range (1-65535) when metrics
  *    are enabled.
  *  - jwtSecret is not empty.
@@ -27,36 +31,53 @@ namespace hub32api::config::internal {
  *  - When TLS is enabled, tlsCertFile and tlsKeyFile are not empty.
  *
  * @param cfg  The ServerConfig to validate.
- * @return A vector of error strings.  Empty if the configuration is valid.
+ * @return A vector of error strings for non-critical issues. Empty if the configuration is valid.
+ * @throws std::runtime_error if critical fields are invalid (prevents startup).
  */
 std::vector<std::string> ConfigValidator::validate(const ServerConfig& cfg) const
 {
     std::vector<std::string> errors;
 
-    // --- Port range checks ---
-    if (cfg.httpPort == 0) {
-        errors.emplace_back("httpPort must be in the range 1-65535");
+    // --- CRITICAL: Port range checks ---
+    if (cfg.httpPort == 0 || cfg.httpPort > 65535) {
+        throw std::runtime_error(
+            "CRITICAL: httpPort must be in the range 1-65535 (got " +
+            std::to_string(cfg.httpPort) + ")");
     }
 
+    // --- CRITICAL: Bind address must not be empty ---
+    if (cfg.bindAddress.empty()) {
+        throw std::runtime_error("CRITICAL: bindAddress must not be empty");
+    }
+
+    // --- CRITICAL: JWT algorithm must be RS256 or HS256 ---
+    if (cfg.jwtAlgorithm != "RS256" && cfg.jwtAlgorithm != "HS256") {
+        throw std::runtime_error(
+            "CRITICAL: jwtAlgorithm must be \"RS256\" or \"HS256\" (got \"" +
+            cfg.jwtAlgorithm + "\")");
+    }
+
+    // --- NON-CRITICAL: Metrics port (when enabled) ---
     if (cfg.metricsEnabled && cfg.metricsPort == 0) {
         errors.emplace_back("metricsPort must be in the range 1-65535 when metrics are enabled");
     }
 
-    // --- JWT ---
+    // --- NON-CRITICAL: JWT secret ---
     if (cfg.jwtSecret.empty()) {
         errors.emplace_back("jwtSecret must not be empty");
     }
 
+    // --- NON-CRITICAL: JWT expiry ---
     if (cfg.jwtExpirySeconds <= 0) {
         errors.emplace_back("jwtExpirySeconds must be positive");
     }
 
-    // --- Threads ---
+    // --- NON-CRITICAL: Threads ---
     if (cfg.workerThreads < 1) {
         errors.emplace_back("workerThreads must be at least 1");
     }
 
-    // --- Connection limits ---
+    // --- NON-CRITICAL: Connection limits ---
     if (cfg.connectionLimitPerHost < 1) {
         errors.emplace_back("connectionLimitPerHost must be at least 1");
     }
@@ -65,7 +86,7 @@ std::vector<std::string> ConfigValidator::validate(const ServerConfig& cfg) cons
         errors.emplace_back("globalConnectionLimit must be >= connectionLimitPerHost");
     }
 
-    // --- TLS ---
+    // --- NON-CRITICAL: TLS ---
     if (cfg.tlsEnabled) {
         if (cfg.tlsCertFile.empty()) {
             errors.emplace_back("tlsCertFile must not be empty when TLS is enabled");
