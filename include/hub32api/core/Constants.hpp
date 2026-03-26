@@ -58,6 +58,7 @@ constexpr int kDefaultCorsMaxAgeSec    = 3600;   // seconds — CORS preflight c
 // -----------------------------------------------------------------------
 constexpr int    kDefaultRequestsPerMinute    = 120;   // requests — rate limit window
 constexpr int    kDefaultBurstSize            = 20;    // requests — token bucket burst
+constexpr int    kAuthRateRequestsPerMinute   = 10;    // requests — auth endpoint brute force protection
 constexpr size_t kRateLimitCleanupInterval    = 1000;  // calls — bucket cleanup frequency
 
 // -----------------------------------------------------------------------
@@ -85,6 +86,15 @@ constexpr size_t kTimestampBufSize   = 32;   // bytes — ISO 8601 timestamp buf
 constexpr int    kPbkdf2Iterations   = 310000;  // rounds — OWASP 2024 minimum for PBKDF2-SHA256
 constexpr size_t kPbkdf2SaltBytes   = 16;    // bytes — PBKDF2 salt length
 constexpr size_t kPbkdf2HashBytes   = 32;    // bytes — PBKDF2 derived key length
+
+// -----------------------------------------------------------------------
+// Argon2id password hashing (OWASP 2024 recommended)
+// -----------------------------------------------------------------------
+constexpr int kArgon2TimeCost    = 3;      // iterations
+constexpr int kArgon2MemoryCost  = 65536;  // KiB — 64 MB
+constexpr int kArgon2Parallelism = 1;      // threads — single-threaded (ARGON2_NO_THREADS)
+constexpr int kArgon2HashBytes   = 32;     // bytes — output hash length
+constexpr int kArgon2SaltBytes   = 16;     // bytes — salt length
 
 // -----------------------------------------------------------------------
 // ICMP

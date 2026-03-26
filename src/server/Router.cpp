@@ -685,7 +685,11 @@ nlohmann::json buildOpenApiSpec()
 Router::Router(httplib::Server& server, Services svcs)
     : m_server(server), m_svcs(svcs), m_sse(std::make_shared<server::SseManager>()),
       m_rl(std::make_shared<api::v1::middleware::RateLimitMiddleware>(
-               api::v1::middleware::RateLimitConfig{ 120, 20 })) {}
+               api::v1::middleware::RateLimitConfig{
+                   hub32api::kDefaultRequestsPerMinute,
+                   hub32api::kDefaultBurstSize,
+                   {{ "/api/v1/auth", hub32api::kAuthRateRequestsPerMinute }}
+               })) {}
 
 /**
  * @brief Registers all routes. Call once before Server::listen().

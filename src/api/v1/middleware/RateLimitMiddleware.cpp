@@ -43,16 +43,30 @@ RateLimitMiddleware::RateLimitMiddleware(RateLimitConfig cfg) : m_cfg(cfg) {}
  */
 bool RateLimitMiddleware::process(const httplib::Request& req, httplib::Response& res)
 {
+    // DESIGN NOTE — Clock Selection:
+    // steady_clock for rate calculations (immune to NTP adjustments, leap seconds).
+    // system_clock ONLY for X-RateLimit-Reset header (Unix timestamp for HTTP clients).
+    // These are intentionally different clocks serving different purposes:
+    //   - steady_clock: monotonic, reliable elapsed-time measurement for token refill
+    //   - system_clock: wall-clock time that clients can interpret as Unix timestamp
+
     using Clock     = std::chrono::steady_clock;
     using SysClock  = std::chrono::system_clock;
     using Seconds   = std::chrono::duration<double>;
 
-    // Requests-per-second derived from the per-minute configuration
-    const double ratePerSecond =
-        static_cast<double>(m_cfg.requestsPerMinute) / 60.0;
+    const std::string key = req.remote_addr + ":" + req.path;
+
+    // Resolve per-endpoint rate limit
+    int effectiveRpm = m_cfg.requestsPerMinute;
+    for (const auto& [prefix, rpm] : m_cfg.endpointLimits) {
+        if (req.path.rfind(prefix, 0) == 0) {
+            effectiveRpm = rpm;
+            break;
+        }
+    }
+    const double ratePerSecond = static_cast<double>(effectiveRpm) / 60.0;
     const double burstSize = static_cast<double>(m_cfg.burstSize);
 
-    const std::string key = req.remote_addr;
     const auto now        = Clock::now();
 
     std::lock_guard<std::mutex> lock(m_mutex);

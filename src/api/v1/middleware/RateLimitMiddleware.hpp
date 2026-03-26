@@ -14,6 +14,8 @@ namespace hub32api::api::v1::middleware {
 struct RateLimitConfig {
     int requestsPerMinute = hub32api::kDefaultRequestsPerMinute;  // requests
     int burstSize         = hub32api::kDefaultBurstSize;          // requests
+    /// @brief Per-path overrides. Key is path prefix (e.g., "/api/v1/auth").
+    std::unordered_map<std::string, int> endpointLimits;
 };
 
 // Token-bucket rate limiter per client IP
