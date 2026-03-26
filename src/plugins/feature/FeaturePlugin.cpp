@@ -48,11 +48,11 @@ void FeaturePlugin::setAgentRegistry(agent::AgentRegistry* registry)
  */
 std::string FeaturePlugin::agentFeatureUid(const Uid& featureUid)
 {
-    if (featureUid == "feat-lock-screen")      return "lock-screen";
-    if (featureUid == "feat-screen-broadcast") return "screen-capture";
-    if (featureUid == "feat-input-lock")       return "input-lock";
-    if (featureUid == "feat-message")          return "message-display";
-    if (featureUid == "feat-power-control")    return "power-control";
+    if (featureUid == kFeatureLockScreen)      return std::string(kHandlerLockScreen);
+    if (featureUid == kFeatureScreenBroadcast) return std::string(kHandlerScreenCapture);
+    if (featureUid == kFeatureInputLock)       return std::string(kHandlerInputLock);
+    if (featureUid == kFeatureMessage)         return std::string(kHandlerMessageDisplay);
+    if (featureUid == kFeaturePowerControl)    return std::string(kHandlerPowerControl);
     return featureUid; // pass through if already in agent format
 }
 
@@ -70,7 +70,7 @@ Result<std::vector<FeatureDescriptor>> FeaturePlugin::listFeatures(const Uid& co
     // Build the static feature catalog
     std::vector<FeatureDescriptor> features = {
         FeatureDescriptor{
-            "feat-lock-screen",
+            std::string(kFeatureLockScreen),
             "",                // parentUid (top-level)
             "Lock Screen",
             "Lock computer screen",
@@ -80,7 +80,7 @@ Result<std::vector<FeatureDescriptor>> FeaturePlugin::listFeatures(const Uid& co
             ""       // iconUrl
         },
         FeatureDescriptor{
-            "feat-screen-broadcast",
+            std::string(kFeatureScreenBroadcast),
             "",                // parentUid (top-level)
             "Screen Broadcast",
             "Broadcast teacher screen",
@@ -90,8 +90,8 @@ Result<std::vector<FeatureDescriptor>> FeaturePlugin::listFeatures(const Uid& co
             ""
         },
         FeatureDescriptor{
-            "feat-input-lock",
-            "feat-lock-screen", // parentUid (sub-feature of lock)
+            std::string(kFeatureInputLock),
+            std::string(kFeatureLockScreen), // parentUid (sub-feature of lock)
             "Input Lock",
             "Lock keyboard and mouse",
             false,
@@ -100,7 +100,7 @@ Result<std::vector<FeatureDescriptor>> FeaturePlugin::listFeatures(const Uid& co
             ""
         },
         FeatureDescriptor{
-            "feat-message",
+            std::string(kFeatureMessage),
             "",                // parentUid (top-level)
             "Show Message",
             "Display message on screen",
@@ -110,7 +110,7 @@ Result<std::vector<FeatureDescriptor>> FeaturePlugin::listFeatures(const Uid& co
             ""
         },
         FeatureDescriptor{
-            "feat-power-control",
+            std::string(kFeaturePowerControl),
             "",                // parentUid (top-level)
             "Power Control",
             "Power on/off/reboot",

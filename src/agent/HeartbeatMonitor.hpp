@@ -7,6 +7,7 @@
 #include <thread>
 #include <atomic>
 #include "hub32api/core/Types.hpp"
+#include "hub32api/core/Constants.hpp"
 #include "hub32api/export.h"
 
 namespace hub32api::agent {
@@ -34,7 +35,7 @@ private:
 
     AgentRegistry&             m_registry;
     std::chrono::milliseconds  m_checkInterval;
-    std::chrono::milliseconds  m_timeout{90000};
+    std::chrono::milliseconds  m_timeout{std::chrono::milliseconds(hub32api::kDefaultHeartbeatTimeoutMs)};  // milliseconds
     OfflineCallback            m_onOffline;
     std::thread                m_thread;
     std::atomic<bool>          m_running{false};
