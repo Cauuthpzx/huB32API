@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cassert>
+#include <stdexcept>
 #include <variant>
 #include <functional>
 #include "hub32api/core/Error.hpp"
@@ -20,12 +20,21 @@ public:
     bool is_ok()  const noexcept { return std::holds_alternative<T>(m_data); }
     bool is_err() const noexcept { return !is_ok(); }
 
-    /// @brief Returns the contained value; asserts is_ok() in debug builds.
-    const T&        value() const { assert(is_ok() && "Result::value() called on error result"); return std::get<T>(m_data); }
-    /// @brief Moves the contained value out; asserts is_ok() in debug builds.
-    T&&             take()        { assert(is_ok() && "Result::take() called on error result"); return std::move(std::get<T>(m_data)); }
-    /// @brief Returns the contained error; asserts is_err() in debug builds.
-    const ApiError& error() const { assert(is_err() && "Result::error() called on ok result"); return std::get<ApiError>(m_data); }
+    /// @brief Returns the contained value; throws if this is an error result.
+    const T& value() const {
+        if (!is_ok()) throw std::logic_error("Result::value() called on error result");
+        return std::get<T>(m_data);
+    }
+    /// @brief Moves the contained value out; throws if this is an error result.
+    T&& take() {
+        if (!is_ok()) throw std::logic_error("Result::take() called on error result");
+        return std::move(std::get<T>(m_data));
+    }
+    /// @brief Returns the contained error; throws if this is an ok result.
+    const ApiError& error() const {
+        if (!is_err()) throw std::logic_error("Result::error() called on ok result");
+        return std::get<ApiError>(m_data);
+    }
 
     // Map value if ok, propagate error otherwise
     template<typename U, typename F>
@@ -52,7 +61,10 @@ public:
 
     bool is_ok()  const noexcept { return m_ok; }
     bool is_err() const noexcept { return !m_ok; }
-    const ApiError& error() const { return m_error; }
+    const ApiError& error() const {
+        if (!is_err()) throw std::logic_error("Result<void>::error() called on ok result");
+        return m_error;
+    }
 
 private:
     explicit Result(bool ok)       : m_ok(ok)  {}

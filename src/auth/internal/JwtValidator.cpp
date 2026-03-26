@@ -72,9 +72,8 @@ Result<JwtToken> JwtValidator::validate(const std::string& rawToken) const
     // 1. Strip optional "Bearer " prefix
     // ------------------------------------------------------------------
     std::string tokenStr = rawToken;
-    constexpr std::string_view kBearer = "Bearer ";
-    if (tokenStr.rfind("Bearer ", 0) == 0) {
-        tokenStr = tokenStr.substr(kBearer.size());
+    if (tokenStr.rfind(kBearerPrefix, 0) == 0) {
+        tokenStr = tokenStr.substr(kBearerPrefixLen);
     }
 
     if (tokenStr.empty()) {

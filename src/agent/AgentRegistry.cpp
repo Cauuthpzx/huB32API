@@ -1,6 +1,10 @@
 #include "AgentRegistry.hpp"
+#include <spdlog/spdlog.h>
 
 namespace hub32api::agent {
+
+static constexpr size_t k_maxCommandHistory = 10000;
+static constexpr size_t k_commandHistoryPruneCount = 1000;
 
 /**
  * @brief Registers a new agent or updates an existing one.
@@ -18,6 +22,10 @@ Result<Uid> AgentRegistry::registerAgent(const AgentInfo& info)
     std::lock_guard<std::mutex> lock(m_mutex);
 
     auto now = std::chrono::system_clock::now();
+
+    if (m_agents.find(info.agentId) != m_agents.end()) {
+        spdlog::warn("[AgentRegistry] overwriting existing agent: {}", info.agentId);
+    }
 
     AgentInfo entry = info;
     entry.registeredAt  = now;
@@ -139,6 +147,12 @@ void AgentRegistry::queueCommand(const AgentCommand& cmd)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
+    // Validate that the target agent exists
+    if (m_agents.find(cmd.agentId) == m_agents.end()) {
+        spdlog::warn("[AgentRegistry] queueCommand: agent not found: {}", cmd.agentId);
+        return;
+    }
+
     AgentCommand entry = cmd;
 
     // Set createdAt if it hasn't been set (epoch / zero timepoint)
@@ -148,6 +162,16 @@ void AgentRegistry::queueCommand(const AgentCommand& cmd)
 
     m_commandQueues[entry.agentId].push_back(entry);
     m_commandHistory[entry.commandId] = entry;
+
+    // Prune command history if it exceeds the maximum size
+    if (m_commandHistory.size() > k_maxCommandHistory) {
+        spdlog::info("[AgentRegistry] command history size {} exceeds limit {}, pruning {} oldest entries",
+                     m_commandHistory.size(), k_maxCommandHistory, k_commandHistoryPruneCount);
+        auto it = m_commandHistory.begin();
+        for (size_t i = 0; i < k_commandHistoryPruneCount && it != m_commandHistory.end(); ++i) {
+            it = m_commandHistory.erase(it);
+        }
+    }
 }
 
 /**

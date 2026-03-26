@@ -48,6 +48,19 @@ AgentClient::AgentClient(const AgentConfig& cfg)
     m_client->set_read_timeout(30, 0);        // 30 seconds
     m_client->set_write_timeout(10, 0);       // 10 seconds
 
+    // Enable TLS verification if server URL is HTTPS
+    if (url.rfind("https://", 0) == 0) {
+        #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+        if (!m_cfg.caCertPath.empty()) {
+            m_client->set_ca_cert_path(m_cfg.caCertPath);
+        }
+        m_client->enable_server_certificate_verification(true);
+        spdlog::info("[AgentClient] TLS enabled with server certificate verification");
+        #else
+        spdlog::warn("[AgentClient] HTTPS URL but OpenSSL support not compiled in");
+        #endif
+    }
+
     spdlog::debug("[AgentClient] created client for server: {}", url);
 }
 
@@ -387,8 +400,13 @@ std::string AgentClient::getOsVersion()
 
     HMODULE ntdll = GetModuleHandleA("ntdll.dll");
     if (ntdll) {
+        // Suppress -Wcast-function-type: GetProcAddress returns FARPROC which
+        // has a different calling convention signature; the cast is safe here.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcast-function-type"
         auto rtlGetVersion = reinterpret_cast<RtlGetVersionFn>(
             GetProcAddress(ntdll, "RtlGetVersion"));
+#pragma GCC diagnostic pop
 
         if (rtlGetVersion) {
             RTL_OSVERSIONINFOW osvi{};

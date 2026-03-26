@@ -5,6 +5,8 @@
 #include <unordered_map>
 #include <chrono>
 
+#include "hub32api/core/Constants.hpp"
+
 namespace httplib { class Request; class Response; }
 
 namespace hub32api::api::v1::middleware {

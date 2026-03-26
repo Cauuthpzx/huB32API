@@ -89,6 +89,7 @@ struct DatabaseManager::Impl
 {
     sqlite3*    db = nullptr;
     std::string dataDir;
+    std::mutex  dbMutex;
 };
 
 // ---------------------------------------------------------------------------
@@ -131,6 +132,7 @@ DatabaseManager::DatabaseManager(const std::string& dataDir)
     sqlite3_exec(m_impl->db, "PRAGMA journal_mode=WAL;",      nullptr, nullptr, nullptr);
     sqlite3_exec(m_impl->db, "PRAGMA synchronous=NORMAL;",    nullptr, nullptr, nullptr);
     sqlite3_exec(m_impl->db, "PRAGMA foreign_keys=ON;",       nullptr, nullptr, nullptr);
+    sqlite3_exec(m_impl->db, "PRAGMA busy_timeout=5000;",     nullptr, nullptr, nullptr);
 
     createSchema();
 
@@ -164,10 +166,21 @@ bool DatabaseManager::isOpen() const noexcept
  * @brief Returns the raw sqlite3* handle for school.db.
  *
  * May return nullptr if the database failed to open.
+ * IMPORTANT: Callers MUST hold dbMutex() during any sqlite3 operations.
  */
 sqlite3* DatabaseManager::schoolDb() noexcept
 {
     return m_impl->db;
+}
+
+/**
+ * @brief Returns the mutex that protects all sqlite3 operations.
+ *
+ * All repository methods must lock this before sqlite3_prepare/step/finalize.
+ */
+std::mutex& DatabaseManager::dbMutex() noexcept
+{
+    return m_impl->dbMutex;
 }
 
 // ---------------------------------------------------------------------------

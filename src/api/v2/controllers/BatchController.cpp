@@ -3,7 +3,10 @@
 #include "../dto/BatchDto.hpp"
 #include "core/internal/PluginRegistry.hpp"
 #include "core/internal/I18n.hpp"
+#include "api/common/HttpErrorUtil.hpp"
 #include <httplib.h>
+
+using hub32api::api::common::sendError;
 
 namespace {
 
@@ -60,34 +63,19 @@ void BatchController::handleBatchFeature(
         const auto j = nlohmann::json::parse(req.body);
         batchReq = j.get<dto::BatchFeatureRequest>();
     } catch (const nlohmann::json::exception& ex) {
-        nlohmann::json err;
-        err["status"] = 400;
-        err["title"]  = tr(lang, "error.invalid_request_body");
-        err["detail"] = std::string(ex.what());
-        res.status = 400;
-        res.set_content(err.dump(), "application/json");
+        sendError(res, 400, tr(lang, "error.invalid_request_body"), std::string(ex.what()));
         return;
     }
 
     // Validate computerIds
     if (batchReq.computerIds.empty()) {
-        nlohmann::json err;
-        err["status"] = 400;
-        err["title"]  = tr(lang, "error.invalid_request_body");
-        err["detail"] = tr(lang, "error.missing_computer_ids");
-        res.status = 400;
-        res.set_content(err.dump(), "application/json");
+        sendError(res, 400, tr(lang, "error.invalid_request_body"), tr(lang, "error.missing_computer_ids"));
         return;
     }
 
     // Validate featureUid
     if (batchReq.featureUid.empty()) {
-        nlohmann::json err;
-        err["status"] = 400;
-        err["title"]  = tr(lang, "error.invalid_request_body");
-        err["detail"] = tr(lang, "error.missing_feature_uid");
-        res.status = 400;
-        res.set_content(err.dump(), "application/json");
+        sendError(res, 400, tr(lang, "error.invalid_request_body"), tr(lang, "error.missing_feature_uid"));
         return;
     }
 
@@ -98,12 +86,7 @@ void BatchController::handleBatchFeature(
     } else if (batchReq.operation == "stop") {
         op = FeatureOperation::Stop;
     } else {
-        nlohmann::json err;
-        err["status"] = 400;
-        err["title"]  = tr(lang, "error.invalid_request_body");
-        err["detail"] = tr(lang, "error.invalid_operation", {batchReq.operation});
-        res.status = 400;
-        res.set_content(err.dump(), "application/json");
+        sendError(res, 400, tr(lang, "error.invalid_request_body"), tr(lang, "error.invalid_operation", {batchReq.operation}));
         return;
     }
 
@@ -112,12 +95,7 @@ void BatchController::handleBatchFeature(
     // -----------------------------------------------------------------------
     auto* featurePlugin = m_registry.featurePlugin();
     if (!featurePlugin) {
-        nlohmann::json err;
-        err["status"] = 503;
-        err["title"]  = tr(lang, "error.feature_plugin_unavailable");
-        err["detail"] = tr(lang, "error.feature_plugin_unavailable");
-        res.status = 503;
-        res.set_content(err.dump(), "application/json");
+        sendError(res, 503, tr(lang, "error.feature_plugin_unavailable"));
         return;
     }
 

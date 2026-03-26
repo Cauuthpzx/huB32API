@@ -53,7 +53,7 @@ Result<std::vector<std::string>> ConfigValidator::validate(const ServerConfig& c
     }
 
     // --- CRITICAL: JWT algorithm must be RS256 or HS256 ---
-    if (cfg.jwtAlgorithm != "RS256" && cfg.jwtAlgorithm != "HS256") {
+    if (cfg.jwtAlgorithm != to_string(JwtAlgorithm::RS256) && cfg.jwtAlgorithm != to_string(JwtAlgorithm::HS256)) {
         return Result<std::vector<std::string>>::fail(ApiError{
             ErrorCode::InvalidConfig,
             "jwtAlgorithm must be \"RS256\" or \"HS256\" (got \"" + cfg.jwtAlgorithm + "\")"

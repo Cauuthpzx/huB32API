@@ -4,8 +4,11 @@
 #include "../dto/ErrorDto.hpp"
 #include "core/internal/PluginRegistry.hpp"
 #include "core/internal/I18n.hpp"
+#include "api/common/HttpErrorUtil.hpp"
 
 #include <httplib.h>
+
+using hub32api::api::common::sendError;
 
 namespace {
 
@@ -13,26 +16,6 @@ std::string getLocale(const httplib::Request& req) {
     auto* i = hub32api::core::internal::I18n::instance();
     if (!i) return "en";
     return i->negotiate(req.get_header_value("Accept-Language"));
-}
-
-/**
- * @brief Sends an RFC-7807-style JSON error response.
- * @param res    The httplib response to populate.
- * @param status HTTP status code to set.
- * @param title  Short human-readable problem title.
- * @param detail Longer explanation; defaults to @p title when empty.
- */
-void sendError(httplib::Response& res,
-               int                status,
-               const std::string& title,
-               const std::string& detail = {})
-{
-    nlohmann::json j;
-    j["status"] = status;
-    j["title"]  = title;
-    j["detail"] = detail.empty() ? title : detail;
-    res.status  = status;
-    res.set_content(j.dump(), "application/json");
 }
 
 } // anonymous namespace
@@ -64,6 +47,11 @@ void FeatureController::handleList(const httplib::Request& req, httplib::Respons
 {
     using hub32api::core::internal::tr;
     const auto lang = getLocale(req);
+
+    if (req.matches.size() <= 1) {
+        sendError(res, 400, tr(lang, "error.missing_path_param"));
+        return;
+    }
     const std::string computerId = req.matches[1].str();
 
     auto* plugin = m_registry.featurePlugin();
@@ -105,6 +93,11 @@ void FeatureController::handleGetOne(const httplib::Request& req, httplib::Respo
 {
     using hub32api::core::internal::tr;
     const auto lang = getLocale(req);
+
+    if (req.matches.size() <= 2) {
+        sendError(res, 400, tr(lang, "error.missing_path_param"));
+        return;
+    }
     const std::string computerId = req.matches[1].str();
     const std::string featureUid = req.matches[2].str();
 
@@ -169,6 +162,11 @@ void FeatureController::handleControl(const httplib::Request& req, httplib::Resp
 {
     using hub32api::core::internal::tr;
     const auto lang = getLocale(req);
+
+    if (req.matches.size() <= 2) {
+        sendError(res, 400, tr(lang, "error.missing_path_param"));
+        return;
+    }
     const std::string computerId = req.matches[1].str();
     const std::string featureUid = req.matches[2].str();
 

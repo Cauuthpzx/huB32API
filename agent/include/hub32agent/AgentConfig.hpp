@@ -26,6 +26,7 @@ struct AgentConfig
     int heartbeatIntervalMs = 30000;                    ///< Heartbeat interval (ms)
     std::string logLevel = "info";                      ///< Log level (trace/debug/info/warn/error)
     std::string logFile;                                ///< Log file path (empty = stdout)
+    std::string caCertPath;                             ///< CA certificate path for TLS verification
 
     /**
      * @brief Loads configuration from a JSON file.

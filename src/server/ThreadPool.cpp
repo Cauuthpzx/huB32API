@@ -18,6 +18,10 @@ void ThreadPool::enqueue(std::function<void()> task)
 {
     {
         std::lock_guard lock(m_mutex);
+        if (m_stopping.load()) {
+            spdlog::warn("[ThreadPool] task enqueued after shutdown — ignoring");
+            return;
+        }
         m_tasks.push(std::move(task));
     }
     m_cv.notify_one();
@@ -25,7 +29,10 @@ void ThreadPool::enqueue(std::function<void()> task)
 
 void ThreadPool::shutdown()
 {
-    m_stopping = true;
+    bool expected = false;
+    if (!m_stopping.compare_exchange_strong(expected, true)) {
+        return;  // Already shutting down — prevent double-join
+    }
     m_cv.notify_all();
     for (auto& t : m_workers)
         if (t.joinable()) t.join();

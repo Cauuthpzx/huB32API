@@ -192,6 +192,27 @@ std::string ScreenCapture::execute(const std::string& operation,
  */
 namespace {
 
+/**
+ * @brief Lightweight RAII wrapper for COM interface pointers.
+ *
+ * Calls Release() on destruction. Non-copyable.
+ */
+template<typename T>
+class ComPtr {
+public:
+    ComPtr() = default;
+    ~ComPtr() { if (m_ptr) m_ptr->Release(); }
+    ComPtr(const ComPtr&) = delete;
+    ComPtr& operator=(const ComPtr&) = delete;
+    T** addressOf() { return &m_ptr; }
+    T* get() const { return m_ptr; }
+    T* operator->() const { return m_ptr; }
+    explicit operator bool() const { return m_ptr != nullptr; }
+    void reset() { if (m_ptr) { m_ptr->Release(); m_ptr = nullptr; } }
+private:
+    T* m_ptr = nullptr;
+};
+
 struct ComScope
 {
     HRESULT hr;
@@ -225,7 +246,7 @@ struct ComScope
  *   6. Copy to a CPU-readable staging texture.
  *   7. Map and read BGRA pixel data.
  *
- * All COM pointers are released manually to avoid CComPtr dependency.
+ * All COM pointers use the local ComPtr RAII wrapper for automatic cleanup.
  *
  * @param monitor   Monitor index.
  * @param outWidth  Receives image width.
@@ -244,9 +265,9 @@ std::vector<uint8_t> ScreenCapture::captureDxgi(int monitor,
     }
 
     // --- Step 1: Create D3D11 device ---
-    ID3D11Device*        device  = nullptr;
-    ID3D11DeviceContext* context = nullptr;
-    D3D_FEATURE_LEVEL    featureLevel;
+    ComPtr<ID3D11Device>        device;
+    ComPtr<ID3D11DeviceContext>  context;
+    D3D_FEATURE_LEVEL           featureLevel;
 
     HRESULT hr = D3D11CreateDevice(
         nullptr,                    // default adapter
@@ -255,9 +276,9 @@ std::vector<uint8_t> ScreenCapture::captureDxgi(int monitor,
         0,                          // flags
         nullptr, 0,                 // default feature levels
         D3D11_SDK_VERSION,
-        &device,
+        device.addressOf(),
         &featureLevel,
-        &context
+        context.addressOf()
     );
 
     if (FAILED(hr) || !device) {
@@ -266,87 +287,66 @@ std::vector<uint8_t> ScreenCapture::captureDxgi(int monitor,
     }
 
     // --- Step 2: Get DXGI device and adapter ---
-    IDXGIDevice* dxgiDevice = nullptr;
-    hr = device->QueryInterface(IID_IDXGIDevice, reinterpret_cast<void**>(&dxgiDevice));
+    ComPtr<IDXGIDevice> dxgiDevice;
+    hr = device->QueryInterface(IID_IDXGIDevice, reinterpret_cast<void**>(dxgiDevice.addressOf()));
     if (FAILED(hr) || !dxgiDevice) {
         spdlog::debug("[ScreenCapture] QueryInterface(IDXGIDevice) failed");
-        context->Release();
-        device->Release();
         return result;
     }
 
-    IDXGIAdapter* adapter = nullptr;
-    hr = dxgiDevice->GetAdapter(&adapter);
-    dxgiDevice->Release();
+    ComPtr<IDXGIAdapter> adapter;
+    hr = dxgiDevice->GetAdapter(adapter.addressOf());
 
     if (FAILED(hr) || !adapter) {
         spdlog::debug("[ScreenCapture] GetAdapter failed");
-        context->Release();
-        device->Release();
         return result;
     }
 
     // --- Step 3: Enumerate outputs, select requested monitor ---
-    IDXGIOutput* output = nullptr;
-    hr = adapter->EnumOutputs(static_cast<UINT>(monitor), &output);
-    adapter->Release();
+    ComPtr<IDXGIOutput> output;
+    hr = adapter->EnumOutputs(static_cast<UINT>(monitor), output.addressOf());
 
     if (FAILED(hr) || !output) {
         spdlog::debug("[ScreenCapture] EnumOutputs({}) failed", monitor);
-        context->Release();
-        device->Release();
         return result;
     }
 
     // --- Step 4: QueryInterface for IDXGIOutput1 (requires Win8+) ---
-    IDXGIOutput1* output1 = nullptr;
-    hr = output->QueryInterface(IID_IDXGIOutput1, reinterpret_cast<void**>(&output1));
-    output->Release();
+    ComPtr<IDXGIOutput1> output1;
+    hr = output->QueryInterface(IID_IDXGIOutput1, reinterpret_cast<void**>(output1.addressOf()));
 
     if (FAILED(hr) || !output1) {
         spdlog::debug("[ScreenCapture] QueryInterface(IDXGIOutput1) failed — pre-Win8?");
-        context->Release();
-        device->Release();
         return result;
     }
 
     // --- Step 5: Duplicate output ---
-    IDXGIOutputDuplication* duplication = nullptr;
-    hr = output1->DuplicateOutput(device, &duplication);
-    output1->Release();
+    ComPtr<IDXGIOutputDuplication> duplication;
+    hr = output1->DuplicateOutput(device.get(), duplication.addressOf());
 
     if (FAILED(hr) || !duplication) {
         spdlog::debug("[ScreenCapture] DuplicateOutput failed: 0x{:08X}", static_cast<unsigned>(hr));
-        context->Release();
-        device->Release();
         return result;
     }
 
     // --- Step 6: Acquire next frame ---
     DXGI_OUTDUPL_FRAME_INFO frameInfo{};
-    IDXGIResource*          desktopResource = nullptr;
-    hr = duplication->AcquireNextFrame(500, &frameInfo, &desktopResource);
+    ComPtr<IDXGIResource>   desktopResource;
+    hr = duplication->AcquireNextFrame(500, &frameInfo, desktopResource.addressOf());
 
     if (FAILED(hr) || !desktopResource) {
         spdlog::debug("[ScreenCapture] AcquireNextFrame failed: 0x{:08X}", static_cast<unsigned>(hr));
-        duplication->Release();
-        context->Release();
-        device->Release();
         return result;
     }
 
     // --- Step 7: Get the desktop texture ---
-    ID3D11Texture2D* desktopTexture = nullptr;
+    ComPtr<ID3D11Texture2D> desktopTexture;
     hr = desktopResource->QueryInterface(IID_ID3D11Texture2D,
-                                          reinterpret_cast<void**>(&desktopTexture));
-    desktopResource->Release();
+                                          reinterpret_cast<void**>(desktopTexture.addressOf()));
 
     if (FAILED(hr) || !desktopTexture) {
         spdlog::debug("[ScreenCapture] QueryInterface(ID3D11Texture2D) failed");
         duplication->ReleaseFrame();
-        duplication->Release();
-        context->Release();
-        device->Release();
         return result;
     }
 
@@ -370,34 +370,25 @@ std::vector<uint8_t> ScreenCapture::captureDxgi(int monitor,
     stagingDesc.BindFlags          = 0;
     stagingDesc.MiscFlags          = 0;
 
-    ID3D11Texture2D* stagingTexture = nullptr;
-    hr = device->CreateTexture2D(&stagingDesc, nullptr, &stagingTexture);
+    ComPtr<ID3D11Texture2D> stagingTexture;
+    hr = device->CreateTexture2D(&stagingDesc, nullptr, stagingTexture.addressOf());
 
     if (FAILED(hr) || !stagingTexture) {
         spdlog::debug("[ScreenCapture] CreateTexture2D (staging) failed");
-        desktopTexture->Release();
         duplication->ReleaseFrame();
-        duplication->Release();
-        context->Release();
-        device->Release();
         return result;
     }
 
     // --- Step 10: Copy desktop texture to staging ---
-    context->CopyResource(stagingTexture, desktopTexture);
-    desktopTexture->Release();
+    context->CopyResource(stagingTexture.get(), desktopTexture.get());
 
     // --- Step 11: Map staging texture and read pixels ---
     D3D11_MAPPED_SUBRESOURCE mapped{};
-    hr = context->Map(stagingTexture, 0, D3D11_MAP_READ, 0, &mapped);
+    hr = context->Map(stagingTexture.get(), 0, D3D11_MAP_READ, 0, &mapped);
 
     if (FAILED(hr)) {
         spdlog::debug("[ScreenCapture] Map staging texture failed");
-        stagingTexture->Release();
         duplication->ReleaseFrame();
-        duplication->Release();
-        context->Release();
-        device->Release();
         return result;
     }
 
@@ -414,13 +405,9 @@ std::vector<uint8_t> ScreenCapture::captureDxgi(int monitor,
         dstRow += rowBytes;
     }
 
-    // --- Cleanup ---
-    context->Unmap(stagingTexture, 0);
-    stagingTexture->Release();
+    // --- Cleanup (ComPtr handles Release; just unmap and release frame) ---
+    context->Unmap(stagingTexture.get(), 0);
     duplication->ReleaseFrame();
-    duplication->Release();
-    context->Release();
-    device->Release();
 
     spdlog::debug("[ScreenCapture] DXGI capture {}x{} succeeded", outWidth, outHeight);
     return result;

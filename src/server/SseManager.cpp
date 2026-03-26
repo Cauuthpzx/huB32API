@@ -33,33 +33,59 @@ void SseManager::unsubscribe(const std::string& channel, const std::string& clie
 
 int SseManager::broadcast(const std::string& channel, const std::string& event, const std::string& data)
 {
-    // Format SSE message
+    // Format SSE message — each data line must be prefixed with "data: "
     std::string msg;
     msg.reserve(event.size() + data.size() + 32);
     msg += "event: " + event + "\n";
-    msg += "data: " + data + "\n\n";
 
-    std::lock_guard lock(m_mutex);
-    auto it = m_channels.find(channel);
-    if (it == m_channels.end()) return 0;
+    // Handle multiline data correctly per SSE spec
+    std::istringstream stream(data);
+    std::string line;
+    while (std::getline(stream, line)) {
+        msg += "data: " + line + "\n";
+    }
+    if (data.empty()) {
+        msg += "data: \n";
+    }
+    msg += "\n";
 
-    auto& clients = it->second;
+    // Copy clients under lock, send outside lock to avoid blocking
+    std::vector<Client> snapshot;
+    {
+        std::lock_guard lock(m_mutex);
+        auto it = m_channels.find(channel);
+        if (it == m_channels.end()) return 0;
+        snapshot = it->second;
+    }
+
+    // Send to all clients outside lock — avoids blocking on slow I/O
     int sent = 0;
+    std::vector<std::string> failedIds;
+    for (auto& c : snapshot) {
+        if (c.sink(msg)) {
+            ++sent;
+        } else {
+            spdlog::debug("[SseManager] client '{}' disconnected from '{}'", c.id, channel);
+            failedIds.push_back(c.id);
+        }
+    }
 
-    // Send to all clients, remove disconnected ones
-    clients.erase(
-        std::remove_if(clients.begin(), clients.end(),
-            [&](Client& c) {
-                if (c.sink(msg)) {
-                    ++sent;
-                    return false;  // keep
-                }
-                spdlog::debug("[SseManager] client '{}' disconnected from '{}'", c.id, channel);
-                return true;  // remove
-            }),
-        clients.end());
+    // Remove failed clients under lock
+    if (!failedIds.empty()) {
+        std::lock_guard lock(m_mutex);
+        auto it = m_channels.find(channel);
+        if (it != m_channels.end()) {
+            auto& clients = it->second;
+            clients.erase(
+                std::remove_if(clients.begin(), clients.end(),
+                    [&](const Client& c) {
+                        return std::find(failedIds.begin(), failedIds.end(), c.id) != failedIds.end();
+                    }),
+                clients.end());
+            if (clients.empty()) m_channels.erase(it);
+        }
+    }
 
-    if (clients.empty()) m_channels.erase(it);
     return sent;
 }
 

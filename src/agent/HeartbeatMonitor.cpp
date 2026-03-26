@@ -20,6 +20,10 @@ HeartbeatMonitor::~HeartbeatMonitor()
 
 void HeartbeatMonitor::start(std::chrono::milliseconds timeout)
 {
+    if (m_running.load()) {
+        spdlog::warn("[HeartbeatMonitor] already running — ignoring duplicate start()");
+        return;
+    }
     m_timeout  = timeout;
     m_running  = true;
     m_thread   = std::thread(&HeartbeatMonitor::monitorLoop, this);

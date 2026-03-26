@@ -1,4 +1,5 @@
 #pragma once
+#include <mutex>
 #include <string>
 #include <vector>
 #include "hub32api/core/Result.hpp"
@@ -7,6 +8,8 @@
 struct sqlite3;
 
 namespace hub32api::db {
+
+class DatabaseManager;
 
 struct LocationRecord {
     std::string id;
@@ -21,7 +24,7 @@ struct LocationRecord {
 class HUB32API_EXPORT LocationRepository
 {
 public:
-    explicit LocationRepository(sqlite3* db);
+    explicit LocationRepository(DatabaseManager& dbManager);
 
     Result<std::string> create(const std::string& schoolId, const std::string& name,
                                 const std::string& building, int floor, int capacity,
@@ -35,6 +38,7 @@ public:
     Result<void> remove(const std::string& id);
 
 private:
+    DatabaseManager& m_dbManager;
     sqlite3* m_db;
 };
 

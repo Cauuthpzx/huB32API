@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <memory>
+#include <mutex>
 
 #include "hub32api/export.h"
 
@@ -18,6 +19,10 @@ public:
 
     bool isOpen() const noexcept;
     sqlite3* schoolDb() noexcept;
+
+    /// @brief Returns a mutex that MUST be held during any sqlite3 operation.
+    /// All repositories must lock this before calling sqlite3_prepare/step/etc.
+    std::mutex& dbMutex() noexcept;
 
 private:
     struct Impl;

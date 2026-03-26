@@ -11,7 +11,7 @@ namespace hub32api {
 /**
  * @brief Status of a command sent to an agent.
  */
-enum class HUB32API_EXPORT CommandStatus
+enum class CommandStatus
 {
     Pending,    ///< Command queued, waiting for agent to pick up
     Running,    ///< Agent is currently executing the command

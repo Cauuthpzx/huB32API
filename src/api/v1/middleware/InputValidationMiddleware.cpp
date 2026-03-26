@@ -59,10 +59,11 @@ bool InputValidationMiddleware::process(const httplib::Request& req, httplib::Re
     const std::string& method = req.method;
     if ((method == "POST" || method == "PUT" || method == "PATCH") && !req.body.empty()) {
         const std::string ct = req.get_header_value("Content-Type");
-        const bool valid =
-            ct.find("application/json") != std::string::npos ||
+        const bool isJson =
+            ct.find("application/json") != std::string::npos;
+        const bool isOctet =
             ct.find("application/octet-stream") != std::string::npos;
-        if (!valid) {
+        if (!isJson && !isOctet) {
             nlohmann::json body;
             body["status"] = 415;
             body["title"]  = tr(lang, "error.unsupported_media_type");
@@ -70,6 +71,91 @@ bool InputValidationMiddleware::process(const httplib::Request& req, httplib::Re
             res.status = 415;
             res.set_content(body.dump(), "application/json");
             return false;
+        }
+
+        // -------------------------------------------------------------------
+        // 3. Deep JSON value validation (field length, array size, depth)
+        // -------------------------------------------------------------------
+        if (isJson) {
+            nlohmann::json parsed;
+            try {
+                parsed = nlohmann::json::parse(req.body);
+            } catch (const nlohmann::json::parse_error&) {
+                nlohmann::json body;
+                body["status"] = 400;
+                body["title"]  = tr(lang, "error.bad_request");
+                body["detail"] = tr(lang, "error.invalid_json");
+                res.status = 400;
+                res.set_content(body.dump(), "application/json");
+                return false;
+            }
+
+            std::string violation;
+            if (!validateJsonValue(parsed, 0, violation)) {
+                nlohmann::json body;
+                body["status"] = 422;
+                body["title"]  = tr(lang, "error.unprocessable_entity");
+                body["detail"] = violation;
+                res.status = 422;
+                res.set_content(body.dump(), "application/json");
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+/**
+ * @brief Recursively validates a parsed JSON value against the configured limits.
+ *
+ * Checks:
+ *  - String values do not exceed @c m_cfg.maxFieldLength.
+ *  - Object keys do not exceed @c m_cfg.maxFieldLength.
+ *  - Arrays do not exceed @c m_cfg.maxArraySize elements.
+ *  - Nesting depth does not exceed @c m_cfg.maxPathDepth.
+ *
+ * @param j          The JSON value to validate.
+ * @param depth      Current nesting depth (0 at the root).
+ * @param violation  Populated with a human-readable reason on failure.
+ * @return @c true if the value passes all checks; @c false otherwise.
+ */
+bool InputValidationMiddleware::validateJsonValue(const nlohmann::json& j,
+                                                  int depth,
+                                                  std::string& violation) const
+{
+    if (depth > m_cfg.maxPathDepth) {
+        violation = "JSON nesting depth exceeds maximum of "
+                    + std::to_string(m_cfg.maxPathDepth);
+        return false;
+    }
+
+    if (j.is_string()) {
+        if (j.get<std::string>().size() > m_cfg.maxFieldLength) {
+            violation = "String value exceeds maximum length of "
+                        + std::to_string(m_cfg.maxFieldLength);
+            return false;
+        }
+    } else if (j.is_array()) {
+        if (j.size() > m_cfg.maxArraySize) {
+            violation = "Array exceeds maximum size of "
+                        + std::to_string(m_cfg.maxArraySize);
+            return false;
+        }
+        for (const auto& elem : j) {
+            if (!validateJsonValue(elem, depth + 1, violation))
+                return false;
+        }
+    } else if (j.is_object()) {
+        for (auto it = j.begin(); it != j.end(); ++it) {
+            if (it.key().size() > m_cfg.maxFieldLength) {
+                violation = "Object key '" + it.key()
+                            + "' exceeds maximum length of "
+                            + std::to_string(m_cfg.maxFieldLength);
+                return false;
+            }
+            if (!validateJsonValue(it.value(), depth + 1, violation))
+                return false;
         }
     }
 

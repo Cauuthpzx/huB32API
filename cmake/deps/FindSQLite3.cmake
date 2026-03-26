@@ -7,6 +7,7 @@ find_package(SQLite3 QUIET)
 set(CMAKE_MODULE_PATH "${_hub32_saved_module_path}")
 unset(_hub32_saved_module_path)
 if(NOT SQLite3_FOUND)
+    # TODO: Add URL_HASH SHA256=<hash> for supply-chain security verification
     FetchContent_Declare(sqlite3
         URL https://www.sqlite.org/2024/sqlite-amalgamation-3450000.zip
     )

@@ -3,6 +3,8 @@
 #include <string>
 #include <nlohmann/json.hpp>
 
+#include "hub32api/core/Constants.hpp"
+
 namespace hub32api::api::v1::dto {
 
 struct AuthRequest
@@ -23,6 +25,7 @@ struct AuthResponse
     int         expiresIn = 3600;  // kDefaultTokenExpirySec — literal required by NLOHMANN macro
 };
 
+static_assert(hub32api::kDefaultTokenExpirySec == 3600, "Update AuthResponse::expiresIn default if this changes");
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(AuthResponse, token, tokenType, expiresIn)
 
 struct LogoutRequest

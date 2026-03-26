@@ -11,7 +11,7 @@ namespace hub32api {
 /**
  * @brief Represents the operational state of an agent.
  */
-enum class HUB32API_EXPORT AgentState
+enum class AgentState
 {
     Offline,    ///< Agent is not connected
     Online,     ///< Agent is connected and idle

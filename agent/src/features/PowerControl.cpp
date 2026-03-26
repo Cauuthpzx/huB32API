@@ -22,8 +22,11 @@
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
+#include <chrono>
 #include <stdexcept>
 #include <string>
+#include <thread>
 
 namespace hub32agent::features {
 
@@ -55,7 +58,8 @@ std::string PowerControl::name() const
  * For "start":
  *   - Extracts args["action"] (required: "shutdown", "reboot", or "logoff").
  *   - Enables the SE_SHUTDOWN_NAME privilege.
- *   - Calls ExitWindowsEx with the appropriate flags and EWX_FORCE.
+ *   - Calls ExitWindowsEx with the appropriate flags and EWX_FORCEIFHUNG
+ *     (kills only hung applications, not responsive ones).
  *   - Returns {"status":"executing","action":"<action>"}.
  *
  * For "stop":
@@ -91,15 +95,26 @@ std::string PowerControl::execute(const std::string& operation,
     DWORD reason = SHTDN_REASON_MAJOR_OTHER;
 
     if (action == "shutdown") {
-        flags = EWX_SHUTDOWN | EWX_FORCE;
+        flags = EWX_SHUTDOWN | EWX_FORCEIFHUNG;
     } else if (action == "reboot") {
-        flags = EWX_REBOOT | EWX_FORCE;
+        flags = EWX_REBOOT | EWX_FORCEIFHUNG;
     } else if (action == "logoff") {
-        flags  = EWX_LOGOFF | EWX_FORCE;
+        flags  = EWX_LOGOFF | EWX_FORCEIFHUNG;
         reason = 0;
     } else {
         throw std::runtime_error("Unknown power action: " + action +
                                   " (expected 'shutdown', 'reboot', or 'logoff')");
+    }
+
+    // Check for delay argument
+    int delaySec = 0;
+    if (auto it = args.find("delay"); it != args.end()) {
+        try { delaySec = std::clamp(std::stoi(it->second), 0, 300); }
+        catch (...) { /* ignore parse errors */ }
+    }
+    if (delaySec > 0) {
+        spdlog::info("[PowerControl] delaying {} seconds before {}", delaySec, action);
+        std::this_thread::sleep_for(std::chrono::seconds(delaySec));
     }
 
     // Enable shutdown privilege (required for shutdown/reboot)

@@ -34,6 +34,8 @@ target_link_libraries(hub32agent-service
         ole32
 )
 
+set_project_warnings(hub32agent-service)
+
 # Windows resources (optional version info)
 if(WIN32)
     target_compile_definitions(hub32agent-service PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)

@@ -128,6 +128,7 @@ AgentConfig AgentConfig::from_file(const std::string& path)
     cfg.heartbeatIntervalMs = j.value("heartbeatIntervalMs", cfg.heartbeatIntervalMs);
     cfg.logLevel          = j.value("logLevel",          cfg.logLevel);
     cfg.logFile           = j.value("logFile",           cfg.logFile);
+    cfg.caCertPath        = j.value("caCertPath",        cfg.caCertPath);
 
     spdlog::info("[AgentConfig] loaded config from file: {} (serverUrl={}, poll={}ms)",
                  path, cfg.serverUrl, cfg.pollIntervalMs);
@@ -170,6 +171,7 @@ AgentConfig AgentConfig::from_registry()
     readRegistryString(hKey, "agentKey",  cfg.agentKey);
     readRegistryString(hKey, "logLevel",  cfg.logLevel);
     readRegistryString(hKey, "logFile",   cfg.logFile);
+    readRegistryString(hKey, "caCertPath", cfg.caCertPath);
 
     // Integer fields (REG_DWORD)
     readRegistryDword(hKey, "pollIntervalMs",      cfg.pollIntervalMs);

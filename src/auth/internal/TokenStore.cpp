@@ -214,9 +214,10 @@ bool TokenStore::isRevoked(const std::string& jti) const
 
         sqlite3_stmt* stmt = nullptr;
         if (sqlite3_prepare_v2(m_db, k_sql, -1, &stmt, nullptr) != SQLITE_OK) {
-            spdlog::error("[TokenStore] isRevoked prepare failed: {}",
+            spdlog::error("[TokenStore] isRevoked prepare failed: {} "
+                          "— treating as revoked (fail-closed)",
                           sqlite3_errmsg(m_db));
-            return false;
+            return true;  // FAIL-CLOSED: deny access when DB is unavailable
         }
 
         const int64_t nowSec = toEpochSeconds(std::chrono::system_clock::now());

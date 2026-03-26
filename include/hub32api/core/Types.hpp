@@ -19,7 +19,7 @@ using Timestamp = std::chrono::system_clock::time_point;
 // -----------------------------------------------------------------------
 // Computer state
 // -----------------------------------------------------------------------
-enum class HUB32API_EXPORT ComputerState
+enum class ComputerState
 {
     Unknown,
     Offline,
@@ -35,7 +35,7 @@ HUB32API_EXPORT ComputerState computer_state_from_string(const std::string& s);
 // -----------------------------------------------------------------------
 // Feature operation (mirrors Hub32 FeatureProviderInterface::Operation)
 // -----------------------------------------------------------------------
-enum class HUB32API_EXPORT FeatureOperation
+enum class FeatureOperation
 {
     Start,
     Stop,
@@ -58,7 +58,7 @@ struct HUB32API_EXPORT ScreenRect
 // -----------------------------------------------------------------------
 // Image format for framebuffer endpoint
 // -----------------------------------------------------------------------
-enum class HUB32API_EXPORT ImageFormat
+enum class ImageFormat
 {
     Png,
     Jpeg,

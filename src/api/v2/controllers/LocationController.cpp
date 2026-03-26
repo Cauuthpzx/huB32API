@@ -3,7 +3,10 @@
 #include "../dto/LocationDto.hpp"
 #include "core/internal/PluginRegistry.hpp"
 #include "core/internal/I18n.hpp"
+#include "api/common/HttpErrorUtil.hpp"
 #include <httplib.h>
+
+using hub32api::api::common::sendError;
 
 namespace {
 
@@ -45,23 +48,13 @@ void LocationController::handleList(const httplib::Request& req, httplib::Respon
 
     auto* computerPlugin = m_registry.computerPlugin();
     if (!computerPlugin) {
-        nlohmann::json err;
-        err["status"] = 503;
-        err["title"]  = tr(lang, "error.computer_plugin_unavailable");
-        err["detail"] = tr(lang, "error.computer_plugin_unavailable");
-        res.status = 503;
-        res.set_content(err.dump(), "application/json");
+        sendError(res, 503, tr(lang, "error.computer_plugin_unavailable"));
         return;
     }
 
     auto result = computerPlugin->listComputers();
     if (result.is_err()) {
-        nlohmann::json err;
-        err["status"] = 503;
-        err["title"]  = tr(lang, "error.computer_plugin_unavailable");
-        err["detail"] = result.error().message;
-        res.status = 503;
-        res.set_content(err.dump(), "application/json");
+        sendError(res, 503, tr(lang, "error.computer_plugin_unavailable"), result.error().message);
         return;
     }
 
@@ -118,27 +111,21 @@ void LocationController::handleGetOne(const httplib::Request& req, httplib::Resp
     const auto lang = getLocale(req);
 
     // Extract the location id captured by the route regex
+    if (req.matches.size() <= 1) {
+        sendError(res, 400, tr(lang, "error.missing_path_param"));
+        return;
+    }
     const std::string locationId = req.matches[1].str();
 
     auto* computerPlugin = m_registry.computerPlugin();
     if (!computerPlugin) {
-        nlohmann::json err;
-        err["status"] = 503;
-        err["title"]  = tr(lang, "error.computer_plugin_unavailable");
-        err["detail"] = tr(lang, "error.computer_plugin_unavailable");
-        res.status = 503;
-        res.set_content(err.dump(), "application/json");
+        sendError(res, 503, tr(lang, "error.computer_plugin_unavailable"));
         return;
     }
 
     auto result = computerPlugin->listComputers();
     if (result.is_err()) {
-        nlohmann::json err;
-        err["status"] = 503;
-        err["title"]  = tr(lang, "error.computer_plugin_unavailable");
-        err["detail"] = result.error().message;
-        res.status = 503;
-        res.set_content(err.dump(), "application/json");
+        sendError(res, 503, tr(lang, "error.computer_plugin_unavailable"), result.error().message);
         return;
     }
 
@@ -156,12 +143,7 @@ void LocationController::handleGetOne(const httplib::Request& req, httplib::Resp
     }
 
     if (matchedIds.empty()) {
-        nlohmann::json err;
-        err["status"] = 404;
-        err["title"]  = tr(lang, "error.computer_not_found");
-        err["detail"] = tr(lang, "error.computer_not_found");
-        res.status = 404;
-        res.set_content(err.dump(), "application/json");
+        sendError(res, 404, tr(lang, "error.computer_not_found"));
         return;
     }
 
