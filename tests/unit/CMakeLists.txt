@@ -26,3 +26,9 @@ add_unit_test(test_agent_key_validation auth/test_agent_key_validation.cpp)
 add_unit_test(test_token_store_sqlite auth/test_token_store_sqlite.cpp)
 add_unit_test(test_database_manager  db/test_database_manager.cpp)
 target_link_libraries(test_database_manager PRIVATE SQLite::SQLite3)
+
+add_unit_test(test_school_repository   db/test_school_repository.cpp)
+target_link_libraries(test_school_repository PRIVATE SQLite::SQLite3)
+
+add_unit_test(test_location_repository db/test_location_repository.cpp)
+target_link_libraries(test_location_repository PRIVATE SQLite::SQLite3)
