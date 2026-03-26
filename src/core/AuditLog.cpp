@@ -70,15 +70,27 @@ AuditLog::AuditLog(const std::string& dbPath)
     }
 
     // Enable WAL mode for concurrent reads
-    sqlite3_exec(m_impl->db, "PRAGMA journal_mode=WAL;", nullptr, nullptr, nullptr);
-    sqlite3_exec(m_impl->db, "PRAGMA synchronous=NORMAL;", nullptr, nullptr, nullptr);
+    rc = sqlite3_exec(m_impl->db, "PRAGMA journal_mode=WAL;", nullptr, nullptr, nullptr);
+    if (rc != SQLITE_OK) {
+        spdlog::warn("[AuditLog] PRAGMA journal_mode=WAL failed: {} (non-fatal)",
+                     sqlite3_errmsg(m_impl->db));
+    }
+    rc = sqlite3_exec(m_impl->db, "PRAGMA synchronous=NORMAL;", nullptr, nullptr, nullptr);
+    if (rc != SQLITE_OK) {
+        spdlog::warn("[AuditLog] PRAGMA synchronous=NORMAL failed: {} (non-fatal)",
+                     sqlite3_errmsg(m_impl->db));
+    }
 
     // Create tables
     char* errMsg = nullptr;
     rc = sqlite3_exec(m_impl->db, k_createTableSql, nullptr, nullptr, &errMsg);
     if (rc != SQLITE_OK) {
-        spdlog::error("[AuditLog] failed to create tables: {}", errMsg ? errMsg : "unknown");
+        spdlog::error("[AuditLog] failed to create tables: {} — audit logging disabled",
+                      errMsg ? errMsg : "unknown");
         sqlite3_free(errMsg);
+        sqlite3_close(m_impl->db);
+        m_impl->db = nullptr;
+        return;
     }
 
     // Start background writer thread
@@ -165,6 +177,7 @@ void AuditLog::writerLoop()
             continue;
         }
 
+        bool batchFailed = false;
         while (!batch.empty()) {
             const auto& e = batch.front();
             sqlite3_bind_text(stmt, 1, e.level.c_str(), -1, SQLITE_TRANSIENT);
@@ -178,15 +191,24 @@ void AuditLog::writerLoop()
             if (rc != SQLITE_DONE) {
                 spdlog::error("[AuditLog] failed to insert row: {}",
                               sqlite3_errmsg(m_impl->db));
+                batchFailed = true;
+                sqlite3_reset(stmt);
+                break;
             }
             sqlite3_reset(stmt);
             batch.pop();
         }
 
-        rc = sqlite3_exec(m_impl->db, "COMMIT", nullptr, nullptr, nullptr);
-        if (rc != SQLITE_OK) {
-            spdlog::error("[AuditLog] failed to commit transaction: {}",
-                          sqlite3_errmsg(m_impl->db));
+        if (batchFailed) {
+            rc = sqlite3_exec(m_impl->db, "ROLLBACK", nullptr, nullptr, nullptr);
+            if (rc != SQLITE_OK) {
+                spdlog::error("[AuditLog] ROLLBACK failed: {}", sqlite3_errmsg(m_impl->db));
+            }
+        } else {
+            rc = sqlite3_exec(m_impl->db, "COMMIT", nullptr, nullptr, nullptr);
+            if (rc != SQLITE_OK) {
+                spdlog::error("[AuditLog] COMMIT failed: {}", sqlite3_errmsg(m_impl->db));
+            }
         }
     }
 
