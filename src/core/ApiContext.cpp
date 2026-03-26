@@ -10,6 +10,31 @@ namespace hub32api::core::internal {
 
 namespace hub32api {
 
+/** @brief Converts ComputerState enum to string. */
+std::string to_string(ComputerState state)
+{
+    switch (state) {
+        case ComputerState::Unknown:       return "unknown";
+        case ComputerState::Offline:       return "offline";
+        case ComputerState::Online:        return "online";
+        case ComputerState::Connecting:    return "connecting";
+        case ComputerState::Connected:     return "connected";
+        case ComputerState::Disconnecting: return "disconnecting";
+    }
+    return "unknown";
+}
+
+/** @brief Parses a string to ComputerState. */
+ComputerState computer_state_from_string(const std::string& s)
+{
+    if (s == "offline")       return ComputerState::Offline;
+    if (s == "online")        return ComputerState::Online;
+    if (s == "connecting")    return ComputerState::Connecting;
+    if (s == "connected")     return ComputerState::Connected;
+    if (s == "disconnecting") return ComputerState::Disconnecting;
+    return ComputerState::Unknown;
+}
+
 /** @brief Converts FeatureOperation enum to string. */
 std::string to_string(FeatureOperation op)
 {

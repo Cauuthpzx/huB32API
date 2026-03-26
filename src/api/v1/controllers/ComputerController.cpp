@@ -227,14 +227,7 @@ void ComputerController::handleInfo(const httplib::Request& req, httplib::Respon
     std::string stateStr;
     const auto stateResult = plugin->getState(id);
     if (stateResult.is_ok()) {
-        switch (stateResult.value()) {
-            case ComputerState::Online:        stateStr = "online";        break;
-            case ComputerState::Offline:       stateStr = "offline";       break;
-            case ComputerState::Connected:     stateStr = "connected";     break;
-            case ComputerState::Connecting:    stateStr = "connecting";    break;
-            case ComputerState::Disconnecting: stateStr = "disconnecting"; break;
-            default:                           stateStr = "unknown";       break;
-        }
+        stateStr = to_string(stateResult.value());
     } else {
         // Fall back to the state embedded in ComputerInfo
         stateStr = dto::ComputerDto::from(compResult.value()).state;
