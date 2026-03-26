@@ -56,11 +56,11 @@ if(HUB32_WITH_FFMPEG)
 
     target_sources(hub32agent-service PRIVATE
         src/encode/X264Encoder.cpp
+        src/encode/NvencEncoder.cpp
     )
 
     # TODO: Add remaining encoder implementation sources when ready:
     # target_sources(hub32agent-service PRIVATE
-    #     src/encode/NvencEncoder.cpp
     #     src/encode/QsvEncoder.cpp
     #     src/encode/D3D11ColorConverter.cpp
     # )
@@ -97,6 +97,7 @@ if(BUILD_TESTS)
         add_executable(test_x264_encoder
             tests/test_x264_encoder.cpp
             src/encode/X264Encoder.cpp
+            src/encode/NvencEncoder.cpp
             src/encode/CpuColorConverter.cpp
             src/encode/EncoderFactory.cpp
         )

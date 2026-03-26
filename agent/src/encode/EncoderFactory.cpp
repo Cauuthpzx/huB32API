@@ -18,7 +18,7 @@
 
 // Encoder implementations — included conditionally
 #ifdef HUB32_WITH_FFMPEG
-// #include "NvencEncoder.hpp"
+#include "NvencEncoder.hpp"
 // #include "QsvEncoder.hpp"
 #include "X264Encoder.hpp"
 #endif
@@ -64,18 +64,16 @@ std::unique_ptr<H264Encoder> EncoderFactory::createEncoder(
     const std::string& name, const EncoderConfig& config)
 {
 #ifdef HUB32_WITH_FFMPEG
-    // TODO: Instantiate and initialize the requested encoder
-    // if (name == "nvenc") {
-    //     auto enc = std::make_unique<NvencEncoder>();
-    //     if (enc->initialize(config)) {
-    //         spdlog::info("[EncoderFactory] using NVENC encoder");
-    //         return enc;
-    //     }
-    //     spdlog::info("[EncoderFactory] NVENC not available, trying next");
-    // }
+    if (name == "nvenc") {
+        auto enc = std::make_unique<NvencEncoder>();
+        if (enc->initialize(config)) {
+            spdlog::info("[EncoderFactory] using NVENC hardware encoder");
+            return enc;
+        }
+        spdlog::info("[EncoderFactory] NVENC not available (no NVIDIA GPU or driver), trying next");
+    }
     // else if (name == "qsv") { ... }
-
-    if (name == "x264") {
+    else if (name == "x264") {
         auto enc = std::make_unique<X264Encoder>();
         if (enc->initialize(config)) {
             spdlog::info("[EncoderFactory] using x264 CPU encoder");
