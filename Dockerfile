@@ -38,8 +38,10 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     libssl3 libsqlite3-0 ca-certificates openssl curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy binary
+# Copy binary and shared libraries
 COPY --from=builder /src/build/release/bin/hub32api-service /usr/local/bin/hub32api-service
+COPY --from=builder /src/build/release/lib/*.so /usr/local/lib/
+RUN ldconfig
 
 # Copy locales and default config
 COPY --from=builder /src/locales /opt/hub32api/locales
