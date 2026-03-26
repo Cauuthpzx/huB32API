@@ -39,6 +39,12 @@ option(WITH_SANITIZERS    "Enable address/UB sanitizers"        OFF)
 option(HUB32API_SHARED  "Build as shared library (DLL)"       ON)
 option(HUB32_WITH_MEDIASOUP "Build with mediasoup SFU (Linux only)" OFF)
 
+# When building static, define HUB32API_STATIC globally so export.h
+# collapses all __declspec/visibility macros to nothing.
+if(NOT HUB32API_SHARED)
+    add_compile_definitions(HUB32API_STATIC=1)
+endif()
+
 # -----------------------------------------------------------------------
 # Dependencies (FetchContent or Find)
 # -----------------------------------------------------------------------
