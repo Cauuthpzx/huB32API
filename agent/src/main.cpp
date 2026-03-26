@@ -41,6 +41,7 @@
 #include "hub32agent/pipeline/StreamPipeline.hpp"
 #include "hub32agent/webrtc/SignalingClient.hpp"
 #include "hub32agent/webrtc/WebRtcProducer.hpp"
+#include "hub32agent/features/StreamControl.hpp"
 #define HUB32_STREAMING_ENABLED 1
 #endif
 
@@ -132,35 +133,34 @@ int runAgent(const hub32agent::AgentConfig& cfg)
         return 0;
     }
 
-    // --- 2b. Start streaming pipeline (if built with FFmpeg + WebRTC) ---
+    // --- 2b. Initialize streaming pipeline (if built with FFmpeg + WebRTC) ---
 #ifdef HUB32_STREAMING_ENABLED
     hub32agent::webrtc::SignalingClient signaling(cfg.serverUrl, client.authToken());
     hub32agent::webrtc::WebRtcProducer::Config producerCfg;
     producerCfg.locationId = cfg.locationId;
     hub32agent::webrtc::WebRtcProducer producer(signaling, producerCfg);
 
-    std::unique_ptr<hub32agent::pipeline::StreamPipeline> pipeline;
+    auto pipeline = std::make_unique<hub32agent::pipeline::StreamPipeline>(producer);
+
+    // Register stream-control feature handler (server can start/stop streaming)
+    dispatcher.registerHandler(
+        std::make_unique<hub32agent::features::StreamControl>(*pipeline, producer));
+    spdlog::info("[Agent] streaming support enabled (server can send stream-control commands)");
+
+    // Auto-start streaming if locationId is configured
     if (!cfg.locationId.empty()) {
-        pipeline = std::make_unique<hub32agent::pipeline::StreamPipeline>(producer);
-
-        hub32agent::pipeline::PipelineConfig pipeCfg;
-        pipeCfg.width  = cfg.streamWidth  > 0 ? cfg.streamWidth  : 1920;
-        pipeCfg.height = cfg.streamHeight > 0 ? cfg.streamHeight : 1080;
-        pipeCfg.fps    = cfg.streamFps    > 0 ? cfg.streamFps    : 15;
-
         if (producer.connect()) {
+            hub32agent::pipeline::PipelineConfig pipeCfg;
+            pipeCfg.width  = cfg.streamWidth  > 0 ? cfg.streamWidth  : 1920;
+            pipeCfg.height = cfg.streamHeight > 0 ? cfg.streamHeight : 1080;
+            pipeCfg.fps    = cfg.streamFps    > 0 ? cfg.streamFps    : 15;
+
             if (pipeline->start(pipeCfg)) {
-                spdlog::info("[Agent] streaming pipeline started ({}x{} @{} fps, path={})",
+                spdlog::info("[Agent] auto-started streaming ({}x{} @{} fps, path={})",
                              pipeCfg.width, pipeCfg.height, pipeCfg.fps,
                              hub32agent::pipeline::to_string(pipeline->activePath()));
-            } else {
-                spdlog::warn("[Agent] streaming pipeline failed to start — continuing without streaming");
             }
-        } else {
-            spdlog::warn("[Agent] WebRTC connection failed — continuing without streaming");
         }
-    } else {
-        spdlog::info("[Agent] no locationId configured — streaming disabled");
     }
 #endif
 

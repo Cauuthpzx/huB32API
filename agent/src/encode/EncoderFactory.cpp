@@ -19,11 +19,11 @@
 // Encoder implementations — included conditionally
 #ifdef HUB32_WITH_FFMPEG
 #include "NvencEncoder.hpp"
-// #include "QsvEncoder.hpp"
+#include "QsvEncoder.hpp"
 #include "X264Encoder.hpp"
 #endif
 #include "CpuColorConverter.hpp"
-// #include "D3D11ColorConverter.hpp"
+#include "D3D11ColorConverter.hpp"
 
 namespace hub32agent::encode {
 
@@ -72,7 +72,14 @@ std::unique_ptr<H264Encoder> EncoderFactory::createEncoder(
         }
         spdlog::info("[EncoderFactory] NVENC not available (no NVIDIA GPU or driver), trying next");
     }
-    // else if (name == "qsv") { ... }
+    else if (name == "qsv") {
+        auto enc = std::make_unique<QsvEncoder>();
+        if (enc->initialize(config)) {
+            spdlog::info("[EncoderFactory] using Intel QSV hardware encoder");
+            return enc;
+        }
+        spdlog::info("[EncoderFactory] QSV not available (no Intel GPU or driver), trying next");
+    }
     else if (name == "x264") {
         auto enc = std::make_unique<X264Encoder>();
         if (enc->initialize(config)) {
@@ -94,16 +101,17 @@ std::unique_ptr<ColorConverter> EncoderFactory::createBestConverter(int width, i
 {
     spdlog::info("[EncoderFactory] probing color converters ({}x{})", width, height);
 
-    // TODO: 1. Try D3D11 compute shader (zero-copy from DXGI texture)
-    // {
-    //     auto conv = std::make_unique<D3D11ColorConverter>();
-    //     if (conv->initialize(width, height)) {
-    //         spdlog::info("[EncoderFactory] using D3D11 compute shader color converter");
-    //         return conv;
-    //     }
-    // }
+    // 1. Try D3D11 VideoProcessor (GPU-accelerated BGRA→NV12)
+    {
+        auto conv = std::make_unique<D3D11ColorConverter>();
+        if (conv->initialize(width, height)) {
+            spdlog::info("[EncoderFactory] using D3D11 VideoProcessor color converter");
+            return conv;
+        }
+        spdlog::debug("[EncoderFactory] D3D11 color converter not available, trying CPU");
+    }
 
-    // 2. CPU manual conversion (always available, no libyuv dependency)
+    // 2. CPU manual conversion (always available)
     {
         auto conv = std::make_unique<CpuColorConverter>();
         if (conv->initialize(width, height)) {

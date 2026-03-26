@@ -41,7 +41,7 @@ std::vector<uint8_t> WorkerMessageBuilder::closeRouterRequest(
     auto requestOffset = FBS::Request::CreateRequest(
         builder,
         requestId,
-        FBS::Request::Method::ROUTER_CLOSE,
+        FBS::Request::Method::WORKER_CLOSE_ROUTER,
         handlerIdOffset,
         FBS::Request::Body::NONE, 0);
 
@@ -74,6 +74,7 @@ std::vector<uint8_t> WorkerMessageBuilder::createWebRtcTransportRequest(
     auto listenInfo = FBS::Transport::CreateListenInfo(builder,
         FBS::Transport::Protocol::UDP,
         ipOffset, ipOffset,  // ip and announcedAddress
+        false,               // exposeInternalIp
         0,                   // port (0 = auto-assign within range)
         portRange, socketFlags,
         0, 0);               // sendBufferSize=0, recvBufferSize=0 (OS defaults)
@@ -201,7 +202,7 @@ std::vector<uint8_t> WorkerMessageBuilder::closeTransportNotification(
     auto handlerIdOffset = builder.CreateString(transportId);
     auto notifOffset = FBS::Notification::CreateNotification(builder,
         handlerIdOffset,
-        FBS::Notification::Event::TRANSPORT_CLOSE,
+        FBS::Notification::Event::WORKER_CLOSE,
         FBS::Notification::Body::NONE, 0);
 
     auto messageOffset = FBS::Message::CreateMessage(builder,
@@ -213,20 +214,20 @@ std::vector<uint8_t> WorkerMessageBuilder::closeTransportNotification(
     return {buf, buf + builder.GetSize()};
 }
 
-std::vector<uint8_t> WorkerMessageBuilder::closeWorkerRequest(uint32_t requestId)
+std::vector<uint8_t> WorkerMessageBuilder::closeWorkerRequest(uint32_t /*requestId*/)
 {
     flatbuffers::FlatBufferBuilder builder(128);  // 128 bytes initial buffer
 
+    // WORKER_CLOSE is a Notification::Event, not a Request::Method
     auto handlerIdOffset = builder.CreateString("");
-    auto requestOffset = FBS::Request::CreateRequest(builder,
-        requestId,
-        FBS::Request::Method::WORKER_CLOSE,
+    auto notifOffset = FBS::Notification::CreateNotification(builder,
         handlerIdOffset,
-        FBS::Request::Body::NONE, 0);
+        FBS::Notification::Event::WORKER_CLOSE,
+        FBS::Notification::Body::NONE, 0);
 
     auto messageOffset = FBS::Message::CreateMessage(builder,
-        FBS::Message::Body::Request,
-        requestOffset.Union());
+        FBS::Message::Body::Notification,
+        notifOffset.Union());
 
     builder.FinishSizePrefixed(messageOffset);
     auto* buf = builder.GetBufferPointer();
@@ -281,20 +282,20 @@ nlohmann::json WorkerMessageBuilder::parseWebRtcTransportDump(
     }
 
     // Extract ICE parameters
-    if (dump->ice_parameters()) {
+    if (dump->iceParameters()) {
         result["iceParameters"]["usernameFragment"] =
-            dump->ice_parameters()->username_fragment()
-                ? dump->ice_parameters()->username_fragment()->str() : "";
+            dump->iceParameters()->usernameFragment()
+                ? dump->iceParameters()->usernameFragment()->str() : "";
         result["iceParameters"]["password"] =
-            dump->ice_parameters()->password()
-                ? dump->ice_parameters()->password()->str() : "";
-        result["iceParameters"]["iceLite"] = dump->ice_parameters()->ice_lite();
+            dump->iceParameters()->password()
+                ? dump->iceParameters()->password()->str() : "";
+        result["iceParameters"]["iceLite"] = dump->iceParameters()->iceLite();
     }
 
     // Extract ICE candidates
     result["iceCandidates"] = nlohmann::json::array();
-    if (dump->ice_candidates()) {
-        for (const auto* candidate : *dump->ice_candidates()) {
+    if (dump->iceCandidates()) {
+        for (const auto* candidate : *dump->iceCandidates()) {
             nlohmann::json c;
             c["foundation"] = candidate->foundation()
                 ? candidate->foundation()->str() : "";
@@ -310,11 +311,11 @@ nlohmann::json WorkerMessageBuilder::parseWebRtcTransportDump(
     }
 
     // Extract DTLS parameters
-    if (dump->dtls_parameters()) {
+    if (dump->dtlsParameters()) {
         result["dtlsParameters"]["role"] = "auto";
         result["dtlsParameters"]["fingerprints"] = nlohmann::json::array();
-        if (dump->dtls_parameters()->fingerprints()) {
-            for (const auto* fp : *dump->dtls_parameters()->fingerprints()) {
+        if (dump->dtlsParameters()->fingerprints()) {
+            for (const auto* fp : *dump->dtlsParameters()->fingerprints()) {
                 nlohmann::json f;
                 switch (fp->algorithm()) {
                     case FBS::WebRtcTransport::FingerprintAlgorithm::SHA1:
@@ -796,11 +797,12 @@ nlohmann::json WorkerMessageBuilder::parseConsumeResponse(
     if (!consumeResp) return result;
 
     result["paused"] = consumeResp->paused();
-    result["producerPaused"] = consumeResp->producer_paused();
+    result["producerPaused"] = consumeResp->producerPaused();
 
-    if (consumeResp->preferred_layers()) {
-        result["preferredLayers"]["spatialLayer"] = consumeResp->preferred_layers()->spatial_layer();
-        result["preferredLayers"]["temporalLayer"] = consumeResp->preferred_layers()->temporal_layer();
+    if (consumeResp->preferredLayers()) {
+        result["preferredLayers"]["spatialLayer"] = static_cast<int>(consumeResp->preferredLayers()->spatialLayer());
+        auto tl = consumeResp->preferredLayers()->temporalLayer();
+        result["preferredLayers"]["temporalLayer"] = tl.has_value() ? static_cast<int>(tl.value()) : 0;
     }
 
     return result;

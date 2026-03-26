@@ -127,7 +127,8 @@ TEST(EncoderFactoryTest, CreateBestConverter)
 {
     auto conv = EncoderFactory::createBestConverter(640, 360);
     ASSERT_NE(conv, nullptr);
-    EXPECT_EQ(conv->name(), "cpu-manual");
+    // D3D11 VideoProcessor preferred if GPU available, otherwise CPU fallback
+    EXPECT_TRUE(conv->name() == "d3d11-videoproc" || conv->name() == "cpu-manual");
     conv->shutdown();
 }
 

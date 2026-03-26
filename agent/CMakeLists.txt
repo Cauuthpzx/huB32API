@@ -17,6 +17,7 @@ add_executable(hub32agent-service
     src/features/PowerControl.cpp
     src/encode/EncoderFactory.cpp
     src/encode/CpuColorConverter.cpp
+    src/encode/D3D11ColorConverter.cpp
 )
 
 target_include_directories(hub32agent-service
@@ -59,13 +60,8 @@ if(HUB32_WITH_FFMPEG)
     target_sources(hub32agent-service PRIVATE
         src/encode/X264Encoder.cpp
         src/encode/NvencEncoder.cpp
+        src/encode/QsvEncoder.cpp
     )
-
-    # TODO: Add remaining encoder implementation sources when ready:
-    # target_sources(hub32agent-service PRIVATE
-    #     src/encode/QsvEncoder.cpp
-    #     src/encode/D3D11ColorConverter.cpp
-    # )
 endif()
 
 # -----------------------------------------------------------------------
@@ -78,10 +74,11 @@ if(HUB32_WITH_WEBRTC)
     )
     target_compile_definitions(hub32agent-service PRIVATE HUB32_WITH_WEBRTC)
 
-    # StreamPipeline requires both FFmpeg and WebRTC
+    # StreamPipeline + StreamControl require both FFmpeg and WebRTC
     if(HUB32_WITH_FFMPEG)
         target_sources(hub32agent-service PRIVATE
             src/pipeline/StreamPipeline.cpp
+            src/features/StreamControl.cpp
         )
     endif()
 
@@ -125,7 +122,9 @@ if(BUILD_TESTS)
             tests/test_x264_encoder.cpp
             src/encode/X264Encoder.cpp
             src/encode/NvencEncoder.cpp
+            src/encode/QsvEncoder.cpp
             src/encode/CpuColorConverter.cpp
+            src/encode/D3D11ColorConverter.cpp
             src/encode/EncoderFactory.cpp
         )
         target_include_directories(test_x264_encoder PRIVATE
@@ -138,6 +137,7 @@ if(BUILD_TESTS)
             nlohmann_json::nlohmann_json
             spdlog::spdlog
             GTest::gtest_main
+            d3d11 dxgi dxguid ole32
         )
         target_compile_definitions(test_x264_encoder PRIVATE HUB32_WITH_FFMPEG)
 
@@ -156,7 +156,9 @@ if(BUILD_TESTS)
             src/pipeline/StreamPipeline.cpp
             src/encode/X264Encoder.cpp
             src/encode/NvencEncoder.cpp
+            src/encode/QsvEncoder.cpp
             src/encode/CpuColorConverter.cpp
+            src/encode/D3D11ColorConverter.cpp
             src/encode/EncoderFactory.cpp
             src/webrtc/SignalingClient.cpp
             src/webrtc/WebRtcProducer.cpp

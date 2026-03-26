@@ -256,19 +256,22 @@ PipelinePath StreamPipeline::probePipeline(const PipelineConfig& config)
     encConfig.bitrateKbps = config.bitrateKbps;
     encConfig.profile     = "baseline";
 
-    // Try NVENC first
+    // Try NVENC first (with best available color converter: D3D11 or CPU)
     auto nvenc = encode::EncoderFactory::createEncoder("nvenc", encConfig);
     if (nvenc) {
-        // Path A: D3D11 VideoProcessor for zero-copy — not yet implemented
-        // TODO(hub32): implement D3D11ColorConverter for zero-copy GPU path
-
-        // Path B: NVENC + CPU color conversion
-        auto cpuConv = encode::EncoderFactory::createBestConverter(
+        auto conv = encode::EncoderFactory::createBestConverter(
             config.width, config.height);
-        if (cpuConv) {
-            m_converter = std::move(cpuConv);
+        if (conv) {
+            bool gpuConverter = (conv->name().find("d3d11") != std::string::npos);
+            m_converter = std::move(conv);
             m_encoder = std::move(nvenc);
-            spdlog::info("[StreamPipeline] Path B: NVENC + {} color converter",
+
+            if (gpuConverter) {
+                spdlog::info("[StreamPipeline] Path A: NVENC + {} (full GPU)",
+                             m_converter->name());
+                return PipelinePath::kFullGpu;
+            }
+            spdlog::info("[StreamPipeline] Path B: NVENC + {} (mixed GPU/CPU)",
                          m_converter->name());
             return PipelinePath::kMixedGpu;
         }
@@ -277,19 +280,19 @@ PipelinePath StreamPipeline::probePipeline(const PipelineConfig& config)
         nvenc->shutdown();
     }
 
-    // Path C: x264 + CPU color conversion
-    auto x264 = encode::EncoderFactory::createEncoder("x264", encConfig);
-    if (x264) {
-        auto cpuConv = encode::EncoderFactory::createBestConverter(
+    // Path C: x264 (or QSV) + best color converter
+    auto encoder = encode::EncoderFactory::createBestEncoder(encConfig);
+    if (encoder) {
+        auto conv = encode::EncoderFactory::createBestConverter(
             config.width, config.height);
-        if (cpuConv) {
-            m_converter = std::move(cpuConv);
-            m_encoder = std::move(x264);
-            spdlog::info("[StreamPipeline] Path C: x264 + {} color converter",
-                         m_converter->name());
+        if (conv) {
+            m_converter = std::move(conv);
+            m_encoder = std::move(encoder);
+            spdlog::info("[StreamPipeline] Path C: {} + {} color converter",
+                         m_encoder->name(), m_converter->name());
             return PipelinePath::kCpuOnly;
         }
-        x264->shutdown();
+        encoder->shutdown();
     }
 
     return PipelinePath::kNone;
