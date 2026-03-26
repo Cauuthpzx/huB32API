@@ -25,6 +25,7 @@
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #include <openssl/crypto.h>  // for CRYPTO_memcmp
+#include <argon2.h>
 
 namespace hub32api::auth {
 
@@ -110,73 +111,83 @@ bool UserRoleStore::hasUsers() const
 
 Result<std::string> UserRoleStore::hashPassword(const std::string& password)
 {
-    unsigned char salt[kPbkdf2SaltBytes];
-    if (RAND_bytes(salt, kPbkdf2SaltBytes) != 1) {
+    unsigned char salt[kArgon2SaltBytes];
+    if (RAND_bytes(salt, kArgon2SaltBytes) != 1) {
         return Result<std::string>::fail(ApiError{
             ErrorCode::CryptoFailure, "RAND_bytes failed for password salt"
         });
     }
 
-    unsigned char hash[kPbkdf2HashBytes];
-    if (PKCS5_PBKDF2_HMAC(
-            password.c_str(), static_cast<int>(password.size()),
-            salt, kPbkdf2SaltBytes,
-            kPbkdf2Iterations,
-            EVP_sha256(),
-            kPbkdf2HashBytes, hash) != 1) {
+    char encoded[256];
+    int rc = argon2id_hash_encoded(
+        kArgon2TimeCost,
+        kArgon2MemoryCost,
+        kArgon2Parallelism,
+        password.c_str(), password.size(),
+        salt, kArgon2SaltBytes,
+        kArgon2HashBytes,
+        encoded, sizeof(encoded));
+
+    if (rc != ARGON2_OK) {
         return Result<std::string>::fail(ApiError{
-            ErrorCode::CryptoFailure, "PBKDF2_HMAC failed"
+            ErrorCode::CryptoFailure,
+            std::string("argon2id_hash_encoded failed: ") + argon2_error_message(rc)
         });
     }
 
-    return Result<std::string>::ok(
-        "$pbkdf2-sha256$" + std::to_string(kPbkdf2Iterations) + "$" +
-        utils::bytes_to_hex(salt, kPbkdf2SaltBytes) + "$" +
-        utils::bytes_to_hex(hash, kPbkdf2HashBytes));
+    return Result<std::string>::ok(std::string(encoded));
 }
 
 bool UserRoleStore::verifyPassword(const std::string& password, const std::string& storedHash)
 {
-    // Parse: $pbkdf2-sha256$iterations$salt_hex$hash_hex
-    if (storedHash.rfind("$pbkdf2-sha256$", 0) != 0) return false;
-
-    // Split by '$' -- fields: [empty, "pbkdf2-sha256", iterations, salt, hash]
-    std::vector<std::string> parts;
-    std::istringstream ss(storedHash);
-    std::string part;
-    while (std::getline(ss, part, '$')) {
-        parts.push_back(part);
+    // Argon2id format: $argon2id$...
+    if (storedHash.rfind("$argon2id$", 0) == 0) {
+        return argon2id_verify(storedHash.c_str(), password.c_str(), password.size()) == ARGON2_OK;
     }
 
-    if (parts.size() != 5) return false;
-    // parts[0] = "" (before first $)
-    // parts[1] = "pbkdf2-sha256"
-    // parts[2] = iterations
-    // parts[3] = salt_hex
-    // parts[4] = hash_hex
+    // Legacy PBKDF2-SHA256 format: $pbkdf2-sha256$...
+    if (storedHash.rfind("$pbkdf2-sha256$", 0) == 0) {
+        // Split by '$' -- fields: [empty, "pbkdf2-sha256", iterations, salt, hash]
+        std::vector<std::string> parts;
+        std::istringstream ss(storedHash);
+        std::string part;
+        while (std::getline(ss, part, '$')) {
+            parts.push_back(part);
+        }
 
-    int iterations;
-    try { iterations = std::stoi(parts[2]); }
-    catch (...) { return false; }
+        if (parts.size() != 5) return false;
+        // parts[0] = "" (before first $)
+        // parts[1] = "pbkdf2-sha256"
+        // parts[2] = iterations
+        // parts[3] = salt_hex
+        // parts[4] = hash_hex
 
-    auto salt = utils::hex_to_bytes(parts[3]);
-    auto expectedHash = utils::hex_to_bytes(parts[4]);
+        int iterations;
+        try { iterations = std::stoi(parts[2]); }
+        catch (...) { return false; }
 
-    if (salt.empty() || expectedHash.empty()) return false;
+        auto salt = utils::hex_to_bytes(parts[3]);
+        auto expectedHash = utils::hex_to_bytes(parts[4]);
 
-    unsigned char computed[kPbkdf2HashBytes];
-    if (PKCS5_PBKDF2_HMAC(
-            password.c_str(), static_cast<int>(password.size()),
-            salt.data(), static_cast<int>(salt.size()),
-            iterations,
-            EVP_sha256(),
-            kPbkdf2HashBytes, computed) != 1) {
-        return false;
+        if (salt.empty() || expectedHash.empty()) return false;
+
+        unsigned char computed[kPbkdf2HashBytes];
+        if (PKCS5_PBKDF2_HMAC(
+                password.c_str(), static_cast<int>(password.size()),
+                salt.data(), static_cast<int>(salt.size()),
+                iterations,
+                EVP_sha256(),
+                kPbkdf2HashBytes, computed) != 1) {
+            return false;
+        }
+
+        // SECURITY: Constant-time comparison to prevent timing attacks
+        return CRYPTO_memcmp(computed, expectedHash.data(),
+                             std::min<size_t>(kPbkdf2HashBytes, expectedHash.size())) == 0;
     }
 
-    // SECURITY: Constant-time comparison to prevent timing attacks
-    return CRYPTO_memcmp(computed, expectedHash.data(),
-                         std::min<size_t>(kPbkdf2HashBytes, expectedHash.size())) == 0;
+    // Unknown hash format
+    return false;
 }
 
 } // namespace hub32api::auth

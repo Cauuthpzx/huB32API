@@ -4,7 +4,7 @@ project(hub32api
     VERSION 1.0.0
     DESCRIPTION "REST API server for Hub32 educational monitoring system"
     HOMEPAGE_URL "https://github.com/hub32/hub32api"
-    LANGUAGES CXX
+    LANGUAGES CXX C
 )
 
 # -----------------------------------------------------------------------

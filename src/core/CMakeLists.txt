@@ -47,6 +47,7 @@ target_link_libraries(hub32api-core
     PRIVATE
         jwt-cpp::jwt-cpp
         SQLite::SQLite3
+        Argon2::argon2
         ws2_32
         crypt32
         $<IF:$<TARGET_EXISTS:OpenSSL::SSL>,OpenSSL::SSL,ssl>

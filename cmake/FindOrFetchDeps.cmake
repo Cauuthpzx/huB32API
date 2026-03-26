@@ -9,6 +9,7 @@ include(deps/Findspdlog)
 include(deps/FindJwt-cpp)
 include(deps/FindSQLite3)
 include(deps/FindGoogleTest)
+include(deps/FindArgon2)
 
 # Mark all FetchContent dependency include dirs as SYSTEM so that
 # -Werror doesn't fire on third-party code (jwt-cpp, spdlog, etc.)
@@ -37,3 +38,4 @@ mark_as_system(jwt-cpp::jwt-cpp)
 mark_as_system(SQLite::SQLite3)
 mark_as_system(GTest::gtest)
 mark_as_system(GTest::gmock)
+mark_as_system(Argon2::argon2)

@@ -24,7 +24,7 @@ using namespace hub32api::auth;
 // ---------------------------------------------------------------------------
 
 /**
- * @brief Verifies that hashPassword produces a well-formed PBKDF2 hash string
+ * @brief Verifies that hashPassword produces a well-formed Argon2id hash string
  *        and that verifyPassword accepts it.
  */
 TEST(UserRoleStoreTest, HashAndVerifyPassword)
@@ -33,9 +33,9 @@ TEST(UserRoleStoreTest, HashAndVerifyPassword)
     ASSERT_TRUE(hashResult.is_ok()) << "hashPassword must succeed";
     const auto hash = hashResult.take();
 
-    // Must start with the algorithm prefix
-    EXPECT_EQ(hash.rfind("$pbkdf2-sha256$", 0), 0u)
-        << "Hash must start with $pbkdf2-sha256$ prefix";
+    // Must start with the Argon2id algorithm prefix
+    EXPECT_EQ(hash.rfind("$argon2id$", 0), 0u)
+        << "Hash must start with $argon2id$ prefix";
 
     // Must verify correctly
     EXPECT_TRUE(UserRoleStore::verifyPassword("testpassword123", hash))
