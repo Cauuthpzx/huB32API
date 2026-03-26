@@ -1,7 +1,7 @@
 #pragma once
 
 namespace httplib { class Request; class Response; }
-namespace hub32api::core::internal { class PluginRegistry; }
+namespace hub32api::db { class LocationRepository; class ComputerRepository; }
 
 namespace hub32api::api::v2 {
 
@@ -10,13 +10,15 @@ namespace hub32api::api::v2 {
 class LocationController
 {
 public:
-    explicit LocationController(core::internal::PluginRegistry& registry);
+    LocationController(db::LocationRepository& locationRepo,
+                       db::ComputerRepository& computerRepo);
 
     void handleList  (const httplib::Request& req, httplib::Response& res);
     void handleGetOne(const httplib::Request& req, httplib::Response& res);
 
 private:
-    core::internal::PluginRegistry& m_registry;
+    db::LocationRepository&  m_locationRepo;
+    db::ComputerRepository&  m_computerRepo;
 };
 
 } // namespace hub32api::api::v2

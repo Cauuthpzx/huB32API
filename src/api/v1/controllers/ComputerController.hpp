@@ -3,7 +3,7 @@
 #include <memory>
 
 namespace httplib { class Request; class Response; }
-namespace hub32api::core::internal { class PluginRegistry; }
+namespace hub32api::db { class ComputerRepository; }
 
 namespace hub32api::api::v1 {
 
@@ -17,14 +17,14 @@ namespace hub32api::api::v1 {
 class ComputerController
 {
 public:
-    explicit ComputerController(core::internal::PluginRegistry& registry);
+    explicit ComputerController(db::ComputerRepository& repo);
 
     void handleList  (const httplib::Request& req, httplib::Response& res);
     void handleGetOne(const httplib::Request& req, httplib::Response& res);
     void handleInfo  (const httplib::Request& req, httplib::Response& res);
 
 private:
-    core::internal::PluginRegistry& m_registry;
+    db::ComputerRepository& m_repo;
 };
 
 } // namespace hub32api::api::v1

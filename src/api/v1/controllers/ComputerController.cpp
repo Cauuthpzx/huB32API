@@ -2,7 +2,7 @@
 #include "ComputerController.hpp"
 #include "../dto/ComputerDto.hpp"
 #include "../dto/ErrorDto.hpp"
-#include "core/internal/PluginRegistry.hpp"
+#include "db/ComputerRepository.hpp"
 #include "core/internal/I18n.hpp"
 #include "api/common/HttpErrorUtil.hpp"
 #include "utils/string_utils.hpp"
@@ -19,16 +19,28 @@ std::string getLocale(const httplib::Request& req) {
     return i->negotiate(req.get_header_value("Accept-Language"));
 }
 
+/// Convert a ComputerRecord to ComputerDto.
+hub32api::api::v1::dto::ComputerDto toDto(const hub32api::db::ComputerRecord& rec)
+{
+    hub32api::api::v1::dto::ComputerDto d;
+    d.id       = rec.id;
+    d.name     = rec.hostname;       // use hostname as display name
+    d.hostname = rec.hostname;
+    d.location = rec.locationId;
+    d.state    = rec.state;
+    return d;
+}
+
 } // anonymous namespace
 
 namespace hub32api::api::v1 {
 
 /**
  * @brief Constructs the ComputerController.
- * @param registry The plugin registry used to resolve the computer plugin.
+ * @param repo The computer repository for database access.
  */
-ComputerController::ComputerController(core::internal::PluginRegistry& registry)
-    : m_registry(registry)
+ComputerController::ComputerController(db::ComputerRepository& repo)
+    : m_repo(repo)
 {}
 
 /**
@@ -57,18 +69,6 @@ void ComputerController::handleList(const httplib::Request& req, httplib::Respon
     using hub32api::core::internal::tr;
     const auto lang = getLocale(req);
 
-    auto* plugin = m_registry.computerPlugin();
-    if (!plugin) {
-        sendError(res, 503, tr(lang, "error.computer_plugin_unavailable"));
-        return;
-    }
-
-    const auto result = plugin->listComputers();
-    if (result.is_err()) {
-        sendError(res, 503, tr(lang, "error.failed_list_computers"), result.error().message);
-        return;
-    }
-
     // ── Parse query parameters ────────────────────────────────────────────
     const std::string locationFilter = req.get_param_value("location");
     const std::string stateFilter    = req.get_param_value("state");
@@ -80,14 +80,23 @@ void ComputerController::handleList(const httplib::Request& req, httplib::Respon
         limit = std::clamp(limit, 1, kMaxPageSize);
     }
 
-    // ── Filter all matching computers ─────────────────────────────────────
+    // ── Query repository ─────────────────────────────────────────────────
+    auto result = locationFilter.empty()
+        ? m_repo.listAll()
+        : m_repo.listByLocation(locationFilter);
+
+    if (result.is_err()) {
+        sendError(res, 503, tr(lang, "error.failed_list_computers"), result.error().message);
+        return;
+    }
+
+    // ── Filter and convert to DTOs ───────────────────────────────────────
     std::vector<dto::ComputerDto> filtered;
     filtered.reserve(result.value().size());
-    for (const auto& info : result.value()) {
-        const auto d = dto::ComputerDto::from(info);
-        if (!locationFilter.empty() && d.location != locationFilter) continue;
-        if (!stateFilter.empty()    && d.state    != stateFilter)    continue;
-        filtered.push_back(d);
+    for (const auto& rec : result.value()) {
+        auto d = toDto(rec);
+        if (!stateFilter.empty() && d.state != stateFilter) continue;
+        filtered.push_back(std::move(d));
     }
 
     const int total = static_cast<int>(filtered.size());
@@ -135,7 +144,7 @@ void ComputerController::handleList(const httplib::Request& req, httplib::Respon
  *
  * The computer UID is extracted from the first capture group of the route regex
  * (i.e. @c req.matches[1]).  Returns HTTP 200 with a @ref dto::ComputerDto JSON
- * body, HTTP 404 if the computer is not found, or HTTP 503 on plugin error.
+ * body, HTTP 404 if the computer is not found, or HTTP 503 on repository error.
  *
  * @param req  The incoming HTTP request (must have at least one regex match).
  * @param res  The HTTP response to populate.
@@ -151,13 +160,7 @@ void ComputerController::handleGetOne(const httplib::Request& req, httplib::Resp
     }
     const std::string id = req.matches[1].str();
 
-    auto* plugin = m_registry.computerPlugin();
-    if (!plugin) {
-        sendError(res, 503, tr(lang, "error.computer_plugin_unavailable"));
-        return;
-    }
-
-    const auto result = plugin->getComputer(id);
+    const auto result = m_repo.findById(id);
     if (result.is_err()) {
         const auto& err = result.error();
         const bool notFound = (err.code == ErrorCode::ComputerNotFound ||
@@ -171,7 +174,7 @@ void ComputerController::handleGetOne(const httplib::Request& req, httplib::Resp
         return;
     }
 
-    const nlohmann::json j = dto::ComputerDto::from(result.value());
+    const nlohmann::json j = toDto(result.value());
     res.status = 200;
     res.set_content(j.dump(), "application/json");
 }
@@ -185,7 +188,7 @@ void ComputerController::handleGetOne(const httplib::Request& req, httplib::Resp
  * { "computer": { ...ComputerDto... }, "state": "online" }
  * @endcode
  *
- * Returns HTTP 404 if the computer is not found, HTTP 503 on plugin error.
+ * Returns HTTP 404 if the computer is not found, HTTP 503 on repository error.
  *
  * @param req  The incoming HTTP request (must have at least one regex match).
  * @param res  The HTTP response to populate.
@@ -201,14 +204,8 @@ void ComputerController::handleInfo(const httplib::Request& req, httplib::Respon
     }
     const std::string id = req.matches[1].str();
 
-    auto* plugin = m_registry.computerPlugin();
-    if (!plugin) {
-        sendError(res, 503, tr(lang, "error.computer_plugin_unavailable"));
-        return;
-    }
-
-    // Retrieve computer info
-    const auto compResult = plugin->getComputer(id);
+    // Retrieve computer record from repository
+    const auto compResult = m_repo.findById(id);
     if (compResult.is_err()) {
         const auto& err = compResult.error();
         const bool notFound = (err.code == ErrorCode::ComputerNotFound ||
@@ -222,19 +219,12 @@ void ComputerController::handleInfo(const httplib::Request& req, httplib::Respon
         return;
     }
 
-    // Retrieve current state (best-effort; fall back to info.state on error)
-    std::string stateStr;
-    const auto stateResult = plugin->getState(id);
-    if (stateResult.is_ok()) {
-        stateStr = to_string(stateResult.value());
-    } else {
-        // Fall back to the state embedded in ComputerInfo
-        stateStr = dto::ComputerDto::from(compResult.value()).state;
-    }
+    // State is stored directly in the ComputerRecord
+    const auto dto = toDto(compResult.value());
 
     nlohmann::json j;
-    j["computer"] = dto::ComputerDto::from(compResult.value());
-    j["state"]    = stateStr;
+    j["computer"] = dto;
+    j["state"]    = dto.state;
 
     res.status = 200;
     res.set_content(j.dump(), "application/json");

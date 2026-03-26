@@ -732,7 +732,11 @@ void Router::registerV1()
 {
     // ── Controllers ───────────────────────────────────────────────────────
     auto authCtrl     = std::make_shared<api::v1::AuthController>(m_svcs.jwtAuth, m_svcs.keyAuth, m_svcs.roleStore);
-    auto computerCtrl = std::make_shared<api::v1::ComputerController>(m_svcs.registry);
+    if (!m_svcs.computerRepo) {
+        spdlog::warn("[Router] computerRepo not available — computer routes disabled");
+        return;
+    }
+    auto computerCtrl = std::make_shared<api::v1::ComputerController>(*m_svcs.computerRepo);
     auto featureCtrl  = std::make_shared<api::v1::FeatureController>(m_svcs.registry);
     auto fbCtrl       = std::make_shared<api::v1::FramebufferController>(m_svcs.registry);
     auto sessionCtrl  = std::make_shared<api::v1::SessionController>(m_svcs.registry);
@@ -1369,7 +1373,11 @@ void Router::registerStreamRoutes()
 void Router::registerV2()
 {
     auto batchCtrl = std::make_shared<api::v2::BatchController>(m_svcs.registry);
-    auto locCtrl   = std::make_shared<api::v2::LocationController>(m_svcs.registry);
+    if (!m_svcs.locationRepo || !m_svcs.computerRepo) {
+        spdlog::warn("[Router] locationRepo/computerRepo not available — v2 location routes disabled");
+        return;
+    }
+    auto locCtrl   = std::make_shared<api::v2::LocationController>(*m_svcs.locationRepo, *m_svcs.computerRepo);
 
     const api::v1::middleware::CorsConfig corsConfig{};
     auto cors   = std::make_shared<api::v1::middleware::CorsMiddleware>(corsConfig);
