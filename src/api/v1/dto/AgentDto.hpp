@@ -22,24 +22,27 @@ namespace hub32api::api::v1::dto {
  */
 struct AgentRegisterRequest {
     std::string hostname;      ///< Machine hostname
+    std::string macAddress;    ///< MAC address of the primary NIC
     std::string agentKey;      ///< Pre-shared key for agent authentication
     std::string osVersion;     ///< OS version string
     std::string agentVersion;  ///< Agent software version
     std::vector<std::string> capabilities; ///< Supported features
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(AgentRegisterRequest,
-    hostname, agentKey, osVersion, agentVersion, capabilities)
+    hostname, macAddress, agentKey, osVersion, agentVersion, capabilities)
 
 /**
  * @brief Response body for POST /api/v1/agents/register.
  */
 struct AgentRegisterResponse {
     std::string agentId;              ///< Assigned agent ID
+    std::string computerId;           ///< Database computer ID (may differ from agentId)
+    std::string locationId;           ///< Assigned location ID (empty if unassigned)
     std::string authToken;            ///< JWT for subsequent requests
     int commandPollIntervalMs = 5000; ///< Suggested poll interval in ms
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(AgentRegisterResponse,
-    agentId, authToken, commandPollIntervalMs)
+    agentId, computerId, locationId, authToken, commandPollIntervalMs)
 
 /**
  * @brief Agent status DTO for GET responses.

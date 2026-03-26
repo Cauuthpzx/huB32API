@@ -153,14 +153,20 @@ void AgentController::handleRegister(const httplib::Request& req, httplib::Respo
     }
 
     // --- Upsert computer record in database (agent registration → computer sync) ---
-    // macAddress is not included in the registration DTO; pass empty string.
+    std::string computerId;
+    std::string locationId;
     if (m_computerRepo) {
         auto existing = m_computerRepo->findByHostname(reqDto.hostname);
         if (existing.is_ok()) {
+            computerId = existing.value().id;
+            locationId = existing.value().locationId;
             m_computerRepo->updateHeartbeat(existing.value().id, req.remote_addr, reqDto.agentVersion);
             m_computerRepo->updateState(existing.value().id, "online");
         } else {
-            m_computerRepo->createUnassigned(reqDto.hostname, /*macAddress=*/"");
+            auto createResult = m_computerRepo->createUnassigned(reqDto.hostname, reqDto.macAddress);
+            if (createResult.is_ok()) {
+                computerId = createResult.value();
+            }
         }
     }
 
@@ -172,7 +178,12 @@ void AgentController::handleRegister(const httplib::Request& req, httplib::Respo
     }
 
     // --- Build and return response ---
-    const dto::AgentRegisterResponse resp{agentId, tokenResult.value(), 5000};
+    dto::AgentRegisterResponse resp;
+    resp.agentId = agentId;
+    resp.computerId = computerId;
+    resp.locationId = locationId;
+    resp.authToken = tokenResult.value();
+    resp.commandPollIntervalMs = 5000;
     const nlohmann::json j = resp;
     res.status = 201;  // 201 Created — new resource was created
     res.set_content(j.dump(), "application/json");
@@ -429,10 +440,23 @@ void AgentController::handleHeartbeat(const httplib::Request& req, httplib::Resp
         }
     }
 
-    nlohmann::json j;
-    j["ok"] = true;
+    // --- Dequeue any pending commands for this agent ---
+    auto commands = m_registry.dequeuePendingCommands(id);
+
+    nlohmann::json resp;
+    resp["ok"] = true;
+    resp["pendingCommands"] = nlohmann::json::array();
+    for (const auto& cmd : commands) {
+        nlohmann::json c;
+        c["commandId"]  = cmd.commandId;
+        c["featureUid"] = cmd.featureUid;
+        c["operation"]  = cmd.operation;
+        c["arguments"]  = cmd.arguments;
+        resp["pendingCommands"].push_back(std::move(c));
+    }
+
     res.status = 200;
-    res.set_content(j.dump(), "application/json");
+    res.set_content(resp.dump(), "application/json");
 }
 
 } // namespace hub32api::api::v1

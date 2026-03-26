@@ -338,3 +338,66 @@ TEST_F(AgentDbIntegrationTest, ComputerAssignToLocation)
     EXPECT_EQ(list.value()[0].hostname, "PC-Assign-01");
     EXPECT_EQ(list.value()[0].locationId, locationId);
 }
+
+// ---------------------------------------------------------------------------
+// Test 7: FullLifecycle_RegisterHeartbeatOffline
+//
+// Verifies the full agent lifecycle: register → heartbeat → offline → recover.
+// Covers DB creation, location assignment, state transitions, and IP/version
+// updates across multiple heartbeats.
+// ---------------------------------------------------------------------------
+
+TEST_F(AgentDbIntegrationTest, FullLifecycle_RegisterHeartbeatOffline)
+{
+    // 1. Create a school + location for the computer
+    auto schoolId = schoolRepo->create("Test School", "123 Main St");
+    ASSERT_TRUE(schoolId.is_ok());
+    auto locId = locationRepo->create(schoolId.value(), "Lab A", "Building 1", 1, 30, "lab");
+    ASSERT_TRUE(locId.is_ok());
+
+    // 2. Register agent (creates unassigned computer)
+    hub32api::AgentInfo info;
+    info.agentId = "agent-lifecycle-test";
+    info.hostname = "PC-LIFECYCLE-01";
+    info.ipAddress = "192.168.1.50";
+    info.agentVersion = "2.0.0";
+    info.state = hub32api::AgentState::Online;
+    auto regResult = agentRegistry.registerAgent(info);
+    ASSERT_TRUE(regResult.is_ok());
+
+    // Create computer in DB (simulating what AgentController does)
+    auto compId = computerRepo->createUnassigned("PC-LIFECYCLE-01", "AA:BB:CC:DD:EE:FF");
+    ASSERT_TRUE(compId.is_ok());
+
+    // 3. Assign computer to location
+    auto updateResult = computerRepo->update(compId.value(), locId.value(), "PC-LIFECYCLE-01", 0, 0);
+    ASSERT_TRUE(updateResult.is_ok());
+
+    // 4. Heartbeat — should set state to online
+    computerRepo->updateHeartbeat(compId.value(), "192.168.1.50", "2.0.0");
+    auto comp = computerRepo->findById(compId.value());
+    ASSERT_TRUE(comp.is_ok());
+    EXPECT_EQ(comp.value().state, "online");
+    EXPECT_EQ(comp.value().ipLastSeen, "192.168.1.50");
+    EXPECT_EQ(comp.value().agentVersion, "2.0.0");
+
+    // 5. Verify computer is in location
+    auto inLoc = computerRepo->listByLocation(locId.value());
+    ASSERT_TRUE(inLoc.is_ok());
+    EXPECT_EQ(inLoc.value().size(), 1u);
+    EXPECT_EQ(inLoc.value()[0].hostname, "PC-LIFECYCLE-01");
+
+    // 6. Simulate offline — manually set state
+    computerRepo->updateState(compId.value(), "offline");
+    auto offComp = computerRepo->findById(compId.value());
+    ASSERT_TRUE(offComp.is_ok());
+    EXPECT_EQ(offComp.value().state, "offline");
+
+    // 7. Heartbeat again — should come back online
+    computerRepo->updateHeartbeat(compId.value(), "192.168.1.51", "2.0.1");
+    auto backOnline = computerRepo->findById(compId.value());
+    ASSERT_TRUE(backOnline.is_ok());
+    EXPECT_EQ(backOnline.value().state, "online");
+    EXPECT_EQ(backOnline.value().ipLastSeen, "192.168.1.51");
+    EXPECT_EQ(backOnline.value().agentVersion, "2.0.1");
+}
