@@ -128,11 +128,18 @@ DatabaseManager::DatabaseManager(const std::string& dataDir)
         return;
     }
 
-    // Performance and durability settings
-    sqlite3_exec(m_impl->db, "PRAGMA journal_mode=WAL;",      nullptr, nullptr, nullptr);
-    sqlite3_exec(m_impl->db, "PRAGMA synchronous=NORMAL;",    nullptr, nullptr, nullptr);
-    sqlite3_exec(m_impl->db, "PRAGMA foreign_keys=ON;",       nullptr, nullptr, nullptr);
-    sqlite3_exec(m_impl->db, "PRAGMA busy_timeout=5000;",     nullptr, nullptr, nullptr);
+    // Performance and durability settings — check return codes
+    auto execPragma = [&](const char* sql, const char* name) {
+        int prc = sqlite3_exec(m_impl->db, sql, nullptr, nullptr, nullptr);
+        if (prc != SQLITE_OK) {
+            spdlog::warn("[DatabaseManager] {} failed: {} (non-fatal)",
+                         name, sqlite3_errmsg(m_impl->db));
+        }
+    };
+    execPragma("PRAGMA journal_mode=WAL;",   "journal_mode=WAL");
+    execPragma("PRAGMA synchronous=NORMAL;", "synchronous=NORMAL");
+    execPragma("PRAGMA foreign_keys=ON;",    "foreign_keys=ON");
+    execPragma("PRAGMA busy_timeout=5000;",  "busy_timeout=5000");
 
     createSchema();
 
@@ -198,9 +205,11 @@ void DatabaseManager::createSchema()
     char* errMsg = nullptr;
     int rc = sqlite3_exec(m_impl->db, k_schemaSql, nullptr, nullptr, &errMsg);
     if (rc != SQLITE_OK) {
-        spdlog::error("[DatabaseManager] failed to create schema: {}",
+        spdlog::error("[DatabaseManager] failed to create schema: {} — database disabled",
                       errMsg ? errMsg : "unknown error");
         sqlite3_free(errMsg);
+        sqlite3_close(m_impl->db);
+        m_impl->db = nullptr;
     } else {
         spdlog::debug("[DatabaseManager] schema created/verified successfully");
     }
