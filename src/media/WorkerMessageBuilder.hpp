@@ -19,6 +19,8 @@
 #include "FBS/webRtcTransport_generated.h"
 #include "FBS/transport_generated.h"
 #include "FBS/sctpParameters_generated.h"
+#include "FBS/consumer_generated.h"
+#include "FBS/rtpParameters_generated.h"
 #include <flatbuffers/flatbuffers.h>
 
 namespace hub32api::media {
@@ -88,6 +90,51 @@ public:
     /// Extracts: iceParameters, iceCandidates, dtlsParameters, sctpParameters.
     /// @param responseBody Raw response bytes from parseResponse().
     static nlohmann::json parseWebRtcTransportDump(const std::vector<uint8_t>& responseBody);
+
+    /// @brief Build TRANSPORT_PRODUCE request.
+    static std::vector<uint8_t> createProduceRequest(
+        uint32_t requestId,
+        const std::string& transportId,
+        const std::string& producerId,
+        const std::string& kind,
+        const nlohmann::json& rtpParameters);
+
+    /// @brief Build TRANSPORT_CONSUME request.
+    static std::vector<uint8_t> createConsumeRequest(
+        uint32_t requestId,
+        const std::string& transportId,
+        const std::string& consumerId,
+        const std::string& producerId,
+        const nlohmann::json& rtpCapabilities);
+
+    /// @brief Build PRODUCER_PAUSE request.
+    static std::vector<uint8_t> createPauseProducerRequest(
+        uint32_t requestId,
+        const std::string& producerId);
+
+    /// @brief Build PRODUCER_RESUME request.
+    static std::vector<uint8_t> createResumeProducerRequest(
+        uint32_t requestId,
+        const std::string& producerId);
+
+    /// @brief Build CONSUMER_REQUEST_KEY_FRAME request.
+    static std::vector<uint8_t> createRequestKeyFrameRequest(
+        uint32_t requestId,
+        const std::string& consumerId);
+
+    /// @brief Build CONSUMER_SET_PREFERRED_LAYERS request.
+    static std::vector<uint8_t> createSetPreferredLayersRequest(
+        uint32_t requestId,
+        const std::string& consumerId,
+        int spatialLayer, int temporalLayer);
+
+    /// @brief Parse TRANSPORT_PRODUCE response to extract producer type.
+    static bool parseProduceResponse(const std::vector<uint8_t>& data,
+                                      uint32_t expectedId,
+                                      std::string& type);
+
+    /// @brief Parse TRANSPORT_CONSUME response to extract consumer details as JSON.
+    static nlohmann::json parseConsumeResponse(const std::vector<uint8_t>& responseBody);
 };
 
 } // namespace hub32api::media

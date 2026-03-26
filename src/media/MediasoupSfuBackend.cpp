@@ -78,8 +78,10 @@ struct MediasoupSfuBackend::Impl
 
     // Entity tracking
     std::mutex entityMutex;
-    std::unordered_map<std::string, int> routerToWorker;           // routerId -> worker index
-    std::unordered_map<std::string, std::string> transportToRouter; // transportId -> routerId
+    std::unordered_map<std::string, int> routerToWorker;             // routerId -> worker index
+    std::unordered_map<std::string, std::string> transportToRouter;  // transportId -> routerId
+    std::unordered_map<std::string, std::string> producerToTransport; // producerId -> transportId
+    std::unordered_map<std::string, std::string> consumerToTransport; // consumerId -> transportId
     int nextWorkerIdx = 0;
 
     /// @brief Pick the next worker using round-robin scheduling.
@@ -107,6 +109,24 @@ struct MediasoupSfuBackend::Impl
         auto tIt = transportToRouter.find(transportId);
         if (tIt == transportToRouter.end()) return nullptr;
         return channelForRouter(tIt->second);
+    }
+
+    /// @brief Get the WorkerChannel for a given producer (via its transport).
+    /// @return Pointer to the channel, or nullptr if producerId not found.
+    WorkerChannel* channelForProducer(const std::string& producerId)
+    {
+        auto it = producerToTransport.find(producerId);
+        if (it == producerToTransport.end()) return nullptr;
+        return channelForTransport(it->second);
+    }
+
+    /// @brief Get the WorkerChannel for a given consumer (via its transport).
+    /// @return Pointer to the channel, or nullptr if consumerId not found.
+    WorkerChannel* channelForConsumer(const std::string& consumerId)
+    {
+        auto it = consumerToTransport.find(consumerId);
+        if (it == consumerToTransport.end()) return nullptr;
+        return channelForTransport(it->second);
     }
 };
 
@@ -246,13 +266,21 @@ void MediasoupSfuBackend::closeRouter(const std::string& routerId)
     auto reqData = WorkerMessageBuilder::closeRouterRequest(reqId, routerId);
     channel->request(reqId, reqData);
 
-    // Remove all transports belonging to this router
-    for (auto it = m_impl->transportToRouter.begin(); it != m_impl->transportToRouter.end();) {
-        if (it->second == routerId) {
-            it = m_impl->transportToRouter.erase(it);
-        } else {
-            ++it;
+    // Collect transports belonging to this router
+    std::vector<std::string> transportIds;
+    for (const auto& [tid, rid] : m_impl->transportToRouter) {
+        if (rid == routerId) transportIds.push_back(tid);
+    }
+
+    // Remove producers/consumers belonging to those transports
+    for (const auto& tid : transportIds) {
+        for (auto it = m_impl->producerToTransport.begin(); it != m_impl->producerToTransport.end();) {
+            if (it->second == tid) { it = m_impl->producerToTransport.erase(it); } else { ++it; }
         }
+        for (auto it = m_impl->consumerToTransport.begin(); it != m_impl->consumerToTransport.end();) {
+            if (it->second == tid) { it = m_impl->consumerToTransport.erase(it); } else { ++it; }
+        }
+        m_impl->transportToRouter.erase(tid);
     }
     m_impl->routerToWorker.erase(routerId);
     spdlog::info("[MediasoupSfuBackend] closed router {}", routerId);
@@ -354,24 +382,83 @@ Result<ProducerInfo> MediasoupSfuBackend::produce(const std::string& transportId
                                                     const std::string& kind,
                                                     const nlohmann::json& rtpParameters)
 {
-    // TODO: Send TRANSPORT_PRODUCE request with kind + rtpParameters
-    // Parse response for producerId
-    (void)transportId;
-    (void)kind;
-    (void)rtpParameters;
-    return Result<ProducerInfo>::fail(ApiError{ErrorCode::NotImplemented, "mediasoup backend not built"});
+    std::lock_guard lock(m_impl->entityMutex);
+    auto* channel = m_impl->channelForTransport(transportId);
+    if (!channel) {
+        return Result<ProducerInfo>::fail(
+            ApiError{ErrorCode::NotFound, "Transport not found: " + transportId});
+    }
+
+    auto uuidResult = CryptoUtils::generateUuid();
+    if (uuidResult.is_err()) return Result<ProducerInfo>::fail(uuidResult.error());
+    std::string producerId = uuidResult.take();
+
+    auto reqId = channel->genRequestId();
+    auto reqData = WorkerMessageBuilder::createProduceRequest(
+        reqId, transportId, producerId, kind, rtpParameters);
+    auto respData = channel->request(reqId, reqData);
+
+    std::vector<uint8_t> body;
+    std::string errorReason;
+    if (!WorkerMessageBuilder::parseResponse(respData, reqId, body, errorReason)) {
+        return Result<ProducerInfo>::fail(ApiError{ErrorCode::InternalError,
+            "[MediasoupSfuBackend] produce failed: " + errorReason});
+    }
+
+    // Parse producer type from response
+    std::string producerType = "simple";
+    WorkerMessageBuilder::parseProduceResponse(body, reqId, producerType);
+
+    m_impl->producerToTransport[producerId] = transportId;
+
+    ProducerInfo info;
+    info.id = producerId;
+    info.kind = kind;
+    info.type = producerType;
+    spdlog::info("[MediasoupSfuBackend] produced {} ({}) on transport {}", producerId, kind, transportId);
+    return Result<ProducerInfo>::ok(std::move(info));
 }
 
 Result<ConsumerInfo> MediasoupSfuBackend::consume(const std::string& transportId,
                                                     const std::string& producerId,
                                                     const nlohmann::json& rtpCapabilities)
 {
-    // TODO: Send TRANSPORT_CONSUME request with producerId + rtpCapabilities
-    // Parse response for consumerId + rtpParameters
-    (void)transportId;
-    (void)producerId;
-    (void)rtpCapabilities;
-    return Result<ConsumerInfo>::fail(ApiError{ErrorCode::NotImplemented, "mediasoup backend not built"});
+    std::lock_guard lock(m_impl->entityMutex);
+    auto* channel = m_impl->channelForTransport(transportId);
+    if (!channel) {
+        return Result<ConsumerInfo>::fail(
+            ApiError{ErrorCode::NotFound, "Transport not found: " + transportId});
+    }
+
+    auto uuidResult = CryptoUtils::generateUuid();
+    if (uuidResult.is_err()) return Result<ConsumerInfo>::fail(uuidResult.error());
+    std::string consumerId = uuidResult.take();
+
+    auto reqId = channel->genRequestId();
+    auto reqData = WorkerMessageBuilder::createConsumeRequest(
+        reqId, transportId, consumerId, producerId, rtpCapabilities);
+    auto respData = channel->request(reqId, reqData);
+
+    std::vector<uint8_t> body;
+    std::string errorReason;
+    if (!WorkerMessageBuilder::parseResponse(respData, reqId, body, errorReason)) {
+        return Result<ConsumerInfo>::fail(ApiError{ErrorCode::InternalError,
+            "[MediasoupSfuBackend] consume failed: " + errorReason});
+    }
+
+    // Parse consume response for additional details
+    auto consumeDetails = WorkerMessageBuilder::parseConsumeResponse(body);
+
+    m_impl->consumerToTransport[consumerId] = transportId;
+
+    ConsumerInfo info;
+    info.id = consumerId;
+    info.producerId = producerId;
+    info.kind = "video";  // TODO: determine from producer's kind
+    info.rtpParameters = rtpCapabilities;  // TODO: parse actual negotiated params
+    spdlog::info("[MediasoupSfuBackend] consumed {} from producer {} on transport {}",
+                 consumerId, producerId, transportId);
+    return Result<ConsumerInfo>::ok(std::move(info));
 }
 
 void MediasoupSfuBackend::closeTransport(const std::string& transportId)
@@ -387,35 +474,114 @@ void MediasoupSfuBackend::closeTransport(const std::string& transportId)
     auto notifData = WorkerMessageBuilder::closeTransportNotification(transportId);
     channel->notify(notifData);
 
+    // Remove producers/consumers belonging to this transport
+    for (auto it = m_impl->producerToTransport.begin(); it != m_impl->producerToTransport.end();) {
+        if (it->second == transportId) { it = m_impl->producerToTransport.erase(it); } else { ++it; }
+    }
+    for (auto it = m_impl->consumerToTransport.begin(); it != m_impl->consumerToTransport.end();) {
+        if (it->second == transportId) { it = m_impl->consumerToTransport.erase(it); } else { ++it; }
+    }
     m_impl->transportToRouter.erase(transportId);
     spdlog::info("[MediasoupSfuBackend] closed transport {}", transportId);
 }
 
 Result<void> MediasoupSfuBackend::pauseProducer(const std::string& producerId)
 {
-    (void)producerId;
-    return Result<void>::fail(ApiError{ErrorCode::NotImplemented, "mediasoup backend not built"});
+    std::lock_guard lock(m_impl->entityMutex);
+    auto* channel = m_impl->channelForProducer(producerId);
+    if (!channel) {
+        return Result<void>::fail(
+            ApiError{ErrorCode::NotFound, "Producer not found: " + producerId});
+    }
+
+    auto reqId = channel->genRequestId();
+    auto reqData = WorkerMessageBuilder::createPauseProducerRequest(reqId, producerId);
+    auto respData = channel->request(reqId, reqData);
+
+    std::vector<uint8_t> body;
+    std::string errorReason;
+    if (!WorkerMessageBuilder::parseResponse(respData, reqId, body, errorReason)) {
+        return Result<void>::fail(ApiError{ErrorCode::InternalError,
+            "[MediasoupSfuBackend] pauseProducer failed: " + errorReason});
+    }
+
+    spdlog::info("[MediasoupSfuBackend] paused producer {}", producerId);
+    return Result<void>::ok();
 }
 
 Result<void> MediasoupSfuBackend::resumeProducer(const std::string& producerId)
 {
-    (void)producerId;
-    return Result<void>::fail(ApiError{ErrorCode::NotImplemented, "mediasoup backend not built"});
+    std::lock_guard lock(m_impl->entityMutex);
+    auto* channel = m_impl->channelForProducer(producerId);
+    if (!channel) {
+        return Result<void>::fail(
+            ApiError{ErrorCode::NotFound, "Producer not found: " + producerId});
+    }
+
+    auto reqId = channel->genRequestId();
+    auto reqData = WorkerMessageBuilder::createResumeProducerRequest(reqId, producerId);
+    auto respData = channel->request(reqId, reqData);
+
+    std::vector<uint8_t> body;
+    std::string errorReason;
+    if (!WorkerMessageBuilder::parseResponse(respData, reqId, body, errorReason)) {
+        return Result<void>::fail(ApiError{ErrorCode::InternalError,
+            "[MediasoupSfuBackend] resumeProducer failed: " + errorReason});
+    }
+
+    spdlog::info("[MediasoupSfuBackend] resumed producer {}", producerId);
+    return Result<void>::ok();
 }
 
 Result<void> MediasoupSfuBackend::requestKeyFrame(const std::string& consumerId)
 {
-    (void)consumerId;
-    return Result<void>::fail(ApiError{ErrorCode::NotImplemented, "mediasoup backend not built"});
+    std::lock_guard lock(m_impl->entityMutex);
+    auto* channel = m_impl->channelForConsumer(consumerId);
+    if (!channel) {
+        return Result<void>::fail(
+            ApiError{ErrorCode::NotFound, "Consumer not found: " + consumerId});
+    }
+
+    auto reqId = channel->genRequestId();
+    auto reqData = WorkerMessageBuilder::createRequestKeyFrameRequest(reqId, consumerId);
+    auto respData = channel->request(reqId, reqData);
+
+    std::vector<uint8_t> body;
+    std::string errorReason;
+    if (!WorkerMessageBuilder::parseResponse(respData, reqId, body, errorReason)) {
+        return Result<void>::fail(ApiError{ErrorCode::InternalError,
+            "[MediasoupSfuBackend] requestKeyFrame failed: " + errorReason});
+    }
+
+    spdlog::info("[MediasoupSfuBackend] requested key frame for consumer {}", consumerId);
+    return Result<void>::ok();
 }
 
 Result<void> MediasoupSfuBackend::setConsumerPreferredLayers(const std::string& consumerId,
                                                                int spatialLayer, int temporalLayer)
 {
-    (void)consumerId;
-    (void)spatialLayer;
-    (void)temporalLayer;
-    return Result<void>::fail(ApiError{ErrorCode::NotImplemented, "mediasoup backend not built"});
+    std::lock_guard lock(m_impl->entityMutex);
+    auto* channel = m_impl->channelForConsumer(consumerId);
+    if (!channel) {
+        return Result<void>::fail(
+            ApiError{ErrorCode::NotFound, "Consumer not found: " + consumerId});
+    }
+
+    auto reqId = channel->genRequestId();
+    auto reqData = WorkerMessageBuilder::createSetPreferredLayersRequest(
+        reqId, consumerId, spatialLayer, temporalLayer);
+    auto respData = channel->request(reqId, reqData);
+
+    std::vector<uint8_t> body;
+    std::string errorReason;
+    if (!WorkerMessageBuilder::parseResponse(respData, reqId, body, errorReason)) {
+        return Result<void>::fail(ApiError{ErrorCode::InternalError,
+            "[MediasoupSfuBackend] setConsumerPreferredLayers failed: " + errorReason});
+    }
+
+    spdlog::info("[MediasoupSfuBackend] set preferred layers ({},{}) for consumer {}",
+                 spatialLayer, temporalLayer, consumerId);
+    return Result<void>::ok();
 }
 
 } // namespace hub32api::media
