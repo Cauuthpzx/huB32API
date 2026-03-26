@@ -20,6 +20,7 @@
 #include <gtest/gtest.h>
 #include "auth/UserRoleStore.hpp"
 
+using namespace hub32api;
 using namespace hub32api::auth;
 
 // ---------------------------------------------------------------------------
@@ -34,7 +35,9 @@ using namespace hub32api::auth;
  */
 TEST(AgentKeyValidationTest, ConstantTimeVerification)
 {
-    const auto hash = UserRoleStore::hashPassword("my-secret-agent-key");
+    auto hashResult = UserRoleStore::hashPassword("my-secret-agent-key");
+    ASSERT_TRUE(hashResult.is_ok()) << "hashPassword must succeed";
+    const auto hash = hashResult.take();
 
     // Correct key must verify
     EXPECT_TRUE(UserRoleStore::verifyPassword("my-secret-agent-key", hash))
@@ -67,8 +70,12 @@ TEST(AgentKeyValidationTest, EmptyHashRejectsAll)
  */
 TEST(AgentKeyValidationTest, DifferentKeysProduceDifferentHashes)
 {
-    const auto hash1 = UserRoleStore::hashPassword("agent-key-alpha");
-    const auto hash2 = UserRoleStore::hashPassword("agent-key-beta");
+    auto r1 = UserRoleStore::hashPassword("agent-key-alpha");
+    auto r2 = UserRoleStore::hashPassword("agent-key-beta");
+    ASSERT_TRUE(r1.is_ok());
+    ASSERT_TRUE(r2.is_ok());
+    const auto hash1 = r1.take();
+    const auto hash2 = r2.take();
 
     EXPECT_NE(hash1, hash2)
         << "Different keys must produce different hashes";
@@ -85,8 +92,12 @@ TEST(AgentKeyValidationTest, DifferentKeysProduceDifferentHashes)
  */
 TEST(AgentKeyValidationTest, SameKeyDifferentSalts)
 {
-    const auto hash1 = UserRoleStore::hashPassword("same-agent-key");
-    const auto hash2 = UserRoleStore::hashPassword("same-agent-key");
+    auto r1 = UserRoleStore::hashPassword("same-agent-key");
+    auto r2 = UserRoleStore::hashPassword("same-agent-key");
+    ASSERT_TRUE(r1.is_ok());
+    ASSERT_TRUE(r2.is_ok());
+    const auto hash1 = r1.take();
+    const auto hash2 = r2.take();
 
     EXPECT_NE(hash1, hash2)
         << "Same key hashed twice must produce different hashes (random salt)";

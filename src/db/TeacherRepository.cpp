@@ -77,7 +77,12 @@ Result<std::string> TeacherRepository::create(const std::string& username,
     }
     const std::string id = uuidResult.take();
 
-    const std::string passwordHash = UserRoleStore::hashPassword(password);
+    auto hashResult = UserRoleStore::hashPassword(password);
+    if (hashResult.is_err()) {
+        spdlog::error("[TeacherRepository] password hashing failed: {}", hashResult.error().message);
+        return Result<std::string>::fail(hashResult.error());
+    }
+    const std::string passwordHash = hashResult.take();
 
     const int64_t now = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
@@ -400,7 +405,12 @@ Result<void> TeacherRepository::changePassword(const std::string& id,
 {
     std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
 
-    const std::string newHash = UserRoleStore::hashPassword(newPassword);
+    auto hashResult = UserRoleStore::hashPassword(newPassword);
+    if (hashResult.is_err()) {
+        spdlog::error("[TeacherRepository] password hashing failed: {}", hashResult.error().message);
+        return Result<void>::fail(hashResult.error());
+    }
+    const std::string newHash = hashResult.take();
 
     constexpr const char* k_sql =
         "UPDATE teachers SET password_hash = ? WHERE id = ?;";

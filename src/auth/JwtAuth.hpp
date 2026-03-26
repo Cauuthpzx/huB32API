@@ -17,7 +17,9 @@ namespace hub32api::auth {
 class HUB32API_EXPORT JwtAuth
 {
 public:
-    explicit JwtAuth(const ServerConfig& cfg);
+    /// @brief Factory method — returns Result instead of throwing on config errors.
+    static Result<std::unique_ptr<JwtAuth>> create(const ServerConfig& cfg);
+
     ~JwtAuth();
 
     // Issue a new token for a validated user
@@ -33,6 +35,8 @@ public:
 
 private:
     struct Impl;
+    explicit JwtAuth(std::unique_ptr<Impl> impl);
+
     std::unique_ptr<Impl> m_impl;
 };
 

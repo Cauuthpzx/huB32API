@@ -123,7 +123,12 @@ HttpServer::HttpServer(const ServerConfig& cfg)
     m_impl->pool = std::make_unique<core::internal::ConnectionPool>(limits);
 
     // 4. Auth
-    m_impl->jwtAuth = std::make_unique<auth::JwtAuth>(cfg);
+    auto jwtResult = auth::JwtAuth::create(cfg);
+    if (jwtResult.is_err()) {
+        spdlog::critical("[HttpServer] JwtAuth creation failed: {}", jwtResult.error().message);
+        throw std::runtime_error(jwtResult.error().message);
+    }
+    m_impl->jwtAuth = jwtResult.take();
 
     // SECURITY: Load key hashes from files instead of environment variables.
     // This prevents exposure via /proc/self/environ, crash dumps, container

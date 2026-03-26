@@ -29,7 +29,9 @@ using namespace hub32api::auth;
  */
 TEST(UserRoleStoreTest, HashAndVerifyPassword)
 {
-    const auto hash = UserRoleStore::hashPassword("testpassword123");
+    auto hashResult = UserRoleStore::hashPassword("testpassword123");
+    ASSERT_TRUE(hashResult.is_ok()) << "hashPassword must succeed";
+    const auto hash = hashResult.take();
 
     // Must start with the algorithm prefix
     EXPECT_EQ(hash.rfind("$pbkdf2-sha256$", 0), 0u)
@@ -50,8 +52,12 @@ TEST(UserRoleStoreTest, HashAndVerifyPassword)
  */
 TEST(UserRoleStoreTest, HashPasswordProducesDifferentSalts)
 {
-    const auto hash1 = UserRoleStore::hashPassword("samepassword");
-    const auto hash2 = UserRoleStore::hashPassword("samepassword");
+    auto r1 = UserRoleStore::hashPassword("samepassword");
+    auto r2 = UserRoleStore::hashPassword("samepassword");
+    ASSERT_TRUE(r1.is_ok());
+    ASSERT_TRUE(r2.is_ok());
+    const auto hash1 = r1.take();
+    const auto hash2 = r2.take();
 
     EXPECT_NE(hash1, hash2)
         << "Two hashes of the same password must differ (different salts)";
@@ -116,8 +122,12 @@ TEST(UserRoleStoreTest, MissingFileRejectsAllLogins)
 TEST(UserRoleStoreTest, AuthenticateFromFile)
 {
     // Generate a hash for the test password
-    const auto adminHash = UserRoleStore::hashPassword("adminpass");
-    const auto teacherHash = UserRoleStore::hashPassword("teacherpass");
+    auto adminResult = UserRoleStore::hashPassword("adminpass");
+    auto teacherResult = UserRoleStore::hashPassword("teacherpass");
+    ASSERT_TRUE(adminResult.is_ok());
+    ASSERT_TRUE(teacherResult.is_ok());
+    const auto adminHash = adminResult.take();
+    const auto teacherHash = teacherResult.take();
 
     // Write a temporary users.json
     const std::string tmpFile = "test_users_temp.json";

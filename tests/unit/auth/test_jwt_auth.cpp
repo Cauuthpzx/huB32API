@@ -50,7 +50,9 @@ ServerConfig makeTestConfig(int expirySeconds = 3600)
 TEST(JwtAuthTest, IssueTokenReturnsValidTokenString)
 {
     const auto cfg = makeTestConfig();
-    JwtAuth auth(cfg);
+    auto authCreateResult = JwtAuth::create(cfg);
+    ASSERT_TRUE(authCreateResult.is_ok()) << "JwtAuth::create must succeed";
+    auto& auth = *authCreateResult.value();
 
     auto result = auth.issueToken("admin", "admin");
     ASSERT_TRUE(result.is_ok()) << "issueToken should succeed";
@@ -74,7 +76,9 @@ TEST(JwtAuthTest, IssueTokenReturnsValidTokenString)
 TEST(JwtAuthTest, IssueAndAuthenticateRoundtrip)
 {
     const auto cfg = makeTestConfig();
-    JwtAuth auth(cfg);
+    auto authCreateResult = JwtAuth::create(cfg);
+    ASSERT_TRUE(authCreateResult.is_ok()) << "JwtAuth::create must succeed";
+    auto& auth = *authCreateResult.value();
 
     auto issueResult = auth.issueToken("testuser", "teacher");
     ASSERT_TRUE(issueResult.is_ok());
@@ -100,7 +104,9 @@ TEST(JwtAuthTest, IssueAndAuthenticateRoundtrip)
 TEST(JwtAuthTest, RevokeTokenCausesAuthenticateToFail)
 {
     const auto cfg = makeTestConfig();
-    JwtAuth auth(cfg);
+    auto authCreateResult = JwtAuth::create(cfg);
+    ASSERT_TRUE(authCreateResult.is_ok()) << "JwtAuth::create must succeed";
+    auto& auth = *authCreateResult.value();
 
     auto issueResult = auth.issueToken("revokeuser", "admin");
     ASSERT_TRUE(issueResult.is_ok());
@@ -134,7 +140,9 @@ TEST(JwtAuthTest, ExpiredTokenFailsAuthentication)
 {
     // Issue with immediate expiry (0 seconds).
     auto cfg = makeTestConfig(0);
-    JwtAuth auth(cfg);
+    auto authCreateResult = JwtAuth::create(cfg);
+    ASSERT_TRUE(authCreateResult.is_ok()) << "JwtAuth::create must succeed";
+    auto& auth = *authCreateResult.value();
 
     auto issueResult = auth.issueToken("expireduser", "readonly");
     ASSERT_TRUE(issueResult.is_ok());
@@ -166,7 +174,9 @@ TEST(JwtAuthTest, RejectsTokenWithMismatchedAlgorithm)
     // are accepted (algorithm matches).
     ServerConfig cfg = makeTestConfig();
 
-    JwtAuth auth(cfg);
+    auto authCreateResult = JwtAuth::create(cfg);
+    ASSERT_TRUE(authCreateResult.is_ok()) << "JwtAuth::create must succeed";
+    auto& auth = *authCreateResult.value();
     auto tokenResult = auth.issueToken("testuser", "teacher");
     ASSERT_TRUE(tokenResult.is_ok());
 
@@ -180,8 +190,8 @@ TEST(JwtAuthTest, RejectsTokenWithMismatchedAlgorithm)
 // ---------------------------------------------------------------------------
 
 /**
- * @brief Verifies that constructing JwtAuth with HS256 and an empty secret
- *        throws a std::runtime_error, preventing use of a weak/missing key.
+ * @brief Verifies that JwtAuth::create() with HS256 and an empty secret
+ *        returns an error Result, preventing use of a weak/missing key.
  */
 TEST(JwtAuthTest, HS256RequiresNonEmptySecret)
 {
@@ -189,7 +199,10 @@ TEST(JwtAuthTest, HS256RequiresNonEmptySecret)
     cfg.jwtAlgorithm = "HS256";
     cfg.jwtSecret = "";  // empty!
 
-    EXPECT_THROW({ JwtAuth auth(cfg); }, std::runtime_error);
+    auto result = JwtAuth::create(cfg);
+    EXPECT_TRUE(result.is_err())
+        << "HS256 with empty secret must fail";
+    EXPECT_EQ(result.error().code, ErrorCode::InvalidConfig);
 }
 
 // ---------------------------------------------------------------------------
@@ -197,8 +210,8 @@ TEST(JwtAuthTest, HS256RequiresNonEmptySecret)
 // ---------------------------------------------------------------------------
 
 /**
- * @brief Verifies that constructing JwtAuth with RS256 and missing key file
- *        paths throws a std::runtime_error — no silent fallback to HS256.
+ * @brief Verifies that JwtAuth::create() with RS256 and missing key file
+ *        paths returns an error Result — no silent fallback to HS256.
  */
 TEST(JwtAuthTest, RS256RequiresKeyFiles)
 {
@@ -207,5 +220,8 @@ TEST(JwtAuthTest, RS256RequiresKeyFiles)
     cfg.jwtPrivateKeyFile = "";  // missing!
     cfg.jwtPublicKeyFile = "";   // missing!
 
-    EXPECT_THROW({ JwtAuth auth(cfg); }, std::runtime_error);
+    auto result = JwtAuth::create(cfg);
+    EXPECT_TRUE(result.is_err())
+        << "RS256 with missing key files must fail";
+    EXPECT_EQ(result.error().code, ErrorCode::InvalidConfig);
 }

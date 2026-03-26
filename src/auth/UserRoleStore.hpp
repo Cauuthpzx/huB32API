@@ -64,7 +64,7 @@ public:
      * @param password Plaintext password.
      * @return Encoded hash string: $pbkdf2-sha256$iterations$salt_hex$hash_hex
      */
-    static std::string hashPassword(const std::string& password);
+    static Result<std::string> hashPassword(const std::string& password);
 
     /**
      * @brief Verifies a password against a stored hash.

@@ -18,38 +18,15 @@
 
 #include "../core/PrecompiledHeader.hpp"
 #include "UserRoleStore.hpp"
+#include "../utils/string_utils.hpp"
 
 #include <fstream>
 #include <sstream>
-#include <iomanip>
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #include <openssl/crypto.h>  // for CRYPTO_memcmp
 
 namespace hub32api::auth {
-
-namespace {
-    constexpr int PBKDF2_ITERATIONS = 310000;  // OWASP 2024 minimum for PBKDF2-SHA256
-    constexpr int SALT_BYTES = 16;
-    constexpr int HASH_BYTES = 32;
-
-    std::string bytesToHex(const unsigned char* data, int len) {
-        std::ostringstream oss;
-        oss << std::hex << std::setfill('0');
-        for (int i = 0; i < len; ++i)
-            oss << std::setw(2) << static_cast<int>(data[i]);
-        return oss.str();
-    }
-
-    std::vector<unsigned char> hexToBytes(const std::string& hex) {
-        std::vector<unsigned char> bytes;
-        for (size_t i = 0; i + 1 < hex.size(); i += 2) {
-            bytes.push_back(static_cast<unsigned char>(
-                std::stoi(hex.substr(i, 2), nullptr, 16)));
-        }
-        return bytes;
-    }
-} // anonymous namespace
 
 UserRoleStore::UserRoleStore(const std::string& filePath)
     : m_filePath(filePath)
@@ -131,25 +108,31 @@ bool UserRoleStore::hasUsers() const
     return !m_users.empty();
 }
 
-std::string UserRoleStore::hashPassword(const std::string& password)
+Result<std::string> UserRoleStore::hashPassword(const std::string& password)
 {
-    unsigned char salt[SALT_BYTES];
-    if (RAND_bytes(salt, SALT_BYTES) != 1) {
-        throw std::runtime_error("RAND_bytes failed for password salt");
+    unsigned char salt[kPbkdf2SaltBytes];
+    if (RAND_bytes(salt, kPbkdf2SaltBytes) != 1) {
+        return Result<std::string>::fail(ApiError{
+            ErrorCode::CryptoFailure, "RAND_bytes failed for password salt"
+        });
     }
 
-    unsigned char hash[HASH_BYTES];
+    unsigned char hash[kPbkdf2HashBytes];
     if (PKCS5_PBKDF2_HMAC(
             password.c_str(), static_cast<int>(password.size()),
-            salt, SALT_BYTES,
-            PBKDF2_ITERATIONS,
+            salt, kPbkdf2SaltBytes,
+            kPbkdf2Iterations,
             EVP_sha256(),
-            HASH_BYTES, hash) != 1) {
-        throw std::runtime_error("PBKDF2_HMAC failed");
+            kPbkdf2HashBytes, hash) != 1) {
+        return Result<std::string>::fail(ApiError{
+            ErrorCode::CryptoFailure, "PBKDF2_HMAC failed"
+        });
     }
 
-    return "$pbkdf2-sha256$" + std::to_string(PBKDF2_ITERATIONS) + "$" +
-           bytesToHex(salt, SALT_BYTES) + "$" + bytesToHex(hash, HASH_BYTES);
+    return Result<std::string>::ok(
+        "$pbkdf2-sha256$" + std::to_string(kPbkdf2Iterations) + "$" +
+        utils::bytes_to_hex(salt, kPbkdf2SaltBytes) + "$" +
+        utils::bytes_to_hex(hash, kPbkdf2HashBytes));
 }
 
 bool UserRoleStore::verifyPassword(const std::string& password, const std::string& storedHash)
@@ -176,24 +159,24 @@ bool UserRoleStore::verifyPassword(const std::string& password, const std::strin
     try { iterations = std::stoi(parts[2]); }
     catch (...) { return false; }
 
-    auto salt = hexToBytes(parts[3]);
-    auto expectedHash = hexToBytes(parts[4]);
+    auto salt = utils::hex_to_bytes(parts[3]);
+    auto expectedHash = utils::hex_to_bytes(parts[4]);
 
     if (salt.empty() || expectedHash.empty()) return false;
 
-    unsigned char computed[HASH_BYTES];
+    unsigned char computed[kPbkdf2HashBytes];
     if (PKCS5_PBKDF2_HMAC(
             password.c_str(), static_cast<int>(password.size()),
             salt.data(), static_cast<int>(salt.size()),
             iterations,
             EVP_sha256(),
-            HASH_BYTES, computed) != 1) {
+            kPbkdf2HashBytes, computed) != 1) {
         return false;
     }
 
     // SECURITY: Constant-time comparison to prevent timing attacks
     return CRYPTO_memcmp(computed, expectedHash.data(),
-                         std::min<size_t>(HASH_BYTES, expectedHash.size())) == 0;
+                         std::min<size_t>(kPbkdf2HashBytes, expectedHash.size())) == 0;
 }
 
 } // namespace hub32api::auth
