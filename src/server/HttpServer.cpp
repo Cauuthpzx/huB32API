@@ -20,6 +20,9 @@
 #include "../media/SfuBackend.hpp"
 #include "../media/MockSfuBackend.hpp"
 #include "../media/RoomManager.hpp"
+#ifdef HUB32_WITH_MEDIASOUP
+#include "../media/MediasoupSfuBackend.hpp"
+#endif
 #include "../plugins/computer/ComputerPlugin.hpp"
 #include "../plugins/feature/FeaturePlugin.hpp"
 #include "../plugins/session/SessionPlugin.hpp"
@@ -141,7 +144,18 @@ HttpServer::HttpServer(const ServerConfig& cfg)
     m_impl->teacherLocationRepo = std::make_unique<db::TeacherLocationRepository>(*m_impl->dbManager);
 
     // 4.2 SFU backend (MockSfuBackend for dev, real mediasoup for production)
-    m_impl->sfuBackend = std::make_unique<media::MockSfuBackend>();
+#ifdef HUB32_WITH_MEDIASOUP
+    if (cfg.sfuBackend == "mediasoup") {
+        media::MediasoupSfuBackend::Config sfuCfg;
+        sfuCfg.numWorkers = cfg.sfuWorkerCount;
+        sfuCfg.rtcMinPort = cfg.rtcMinPort;
+        sfuCfg.rtcMaxPort = cfg.rtcMaxPort;
+        m_impl->sfuBackend = std::make_unique<media::MediasoupSfuBackend>(sfuCfg);
+    } else
+#endif
+    {
+        m_impl->sfuBackend = std::make_unique<media::MockSfuBackend>();
+    }
     m_impl->roomManager = std::make_unique<media::RoomManager>(*m_impl->sfuBackend);
 
     // 4a. Wire AgentRegistry into plugins for live agent routing

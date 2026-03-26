@@ -40,6 +40,12 @@
     "localesDir": "locales",
     "defaultLocale": "en"
   },
+  "sfu": {
+    "backend": "mock",
+    "workerCount": 0,
+    "rtcMinPort": 40000,
+    "rtcMaxPort": 49999
+  },
   "turn": {
     "secret": "",
     "serverUrl": ""

@@ -37,6 +37,7 @@ option(BUILD_PLUGINS      "Build optional plugin targets"       ON)
 option(WITH_PCH           "Use precompiled headers"             ON)
 option(WITH_SANITIZERS    "Enable address/UB sanitizers"        OFF)
 option(HUB32API_SHARED  "Build as shared library (DLL)"       ON)
+option(HUB32_WITH_MEDIASOUP "Build with mediasoup SFU (Linux only)" OFF)
 
 # -----------------------------------------------------------------------
 # Dependencies (FetchContent or Find)

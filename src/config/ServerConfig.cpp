@@ -265,6 +265,21 @@ ServerConfig ServerConfig::from_file(const std::string& path)
         cfg.defaultLocale  = i18nObj.value("defaultLocale", cfg.defaultLocale);
     }
 
+    // SFU backend
+    cfg.sfuBackend            = j.value("sfuBackend", cfg.sfuBackend);
+    cfg.sfuWorkerCount        = j.value("sfuWorkerCount", cfg.sfuWorkerCount);
+    cfg.rtcMinPort            = j.value("rtcMinPort", cfg.rtcMinPort);
+    cfg.rtcMaxPort            = j.value("rtcMaxPort", cfg.rtcMaxPort);
+
+    // Support nested "sfu" object
+    if (j.contains("sfu") && j["sfu"].is_object()) {
+        const auto& sfuObj = j["sfu"];
+        cfg.sfuBackend     = sfuObj.value("backend", cfg.sfuBackend);
+        cfg.sfuWorkerCount = sfuObj.value("workerCount", cfg.sfuWorkerCount);
+        cfg.rtcMinPort     = sfuObj.value("rtcMinPort", cfg.rtcMinPort);
+        cfg.rtcMaxPort     = sfuObj.value("rtcMaxPort", cfg.rtcMaxPort);
+    }
+
     // TURN / ICE
     cfg.turnSecret            = j.value("turnSecret", cfg.turnSecret);
     cfg.turnServerUrl         = j.value("turnServerUrl", cfg.turnServerUrl);

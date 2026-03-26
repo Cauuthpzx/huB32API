@@ -64,6 +64,12 @@ struct HUB32API_EXPORT ServerConfig
     std::string localesDir;               // path to locale JSON catalogs
     std::string defaultLocale    = "en";  // fallback locale
 
+    // SFU backend selection
+    std::string sfuBackend         = "mock";  // "mock" or "mediasoup"
+    int         sfuWorkerCount     = 0;       // 0 = auto (CPU cores); used by mediasoup backend
+    int         rtcMinPort         = 40000;   // RTC relay port range minimum
+    int         rtcMaxPort         = 49999;   // RTC relay port range maximum
+
     // TURN / ICE
     std::string turnSecret;        // HMAC secret for TURN credential generation (coturn REST API)
     std::string turnServerUrl;     // e.g., "turn.example.com"
