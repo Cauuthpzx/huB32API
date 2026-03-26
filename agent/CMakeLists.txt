@@ -15,6 +15,7 @@ add_executable(hub32agent-service
     src/features/MessageDisplay.cpp
     src/features/PowerControl.cpp
     src/encode/EncoderFactory.cpp
+    src/encode/CpuColorConverter.cpp
 )
 
 target_include_directories(hub32agent-service
@@ -53,12 +54,14 @@ if(HUB32_WITH_FFMPEG)
     endif()
     target_compile_definitions(hub32agent-service PRIVATE HUB32_WITH_FFMPEG)
 
-    # TODO: Add encoder implementation sources when ready:
+    target_sources(hub32agent-service PRIVATE
+        src/encode/X264Encoder.cpp
+    )
+
+    # TODO: Add remaining encoder implementation sources when ready:
     # target_sources(hub32agent-service PRIVATE
     #     src/encode/NvencEncoder.cpp
     #     src/encode/QsvEncoder.cpp
-    #     src/encode/X264Encoder.cpp
-    #     src/encode/CpuColorConverter.cpp
     #     src/encode/D3D11ColorConverter.cpp
     # )
 endif()
@@ -89,4 +92,32 @@ if(BUILD_TESTS)
         GTest::gtest_main
     )
     add_test(NAME test_command_dispatcher COMMAND test_command_dispatcher)
+
+    if(HUB32_WITH_FFMPEG)
+        add_executable(test_x264_encoder
+            tests/test_x264_encoder.cpp
+            src/encode/X264Encoder.cpp
+            src/encode/CpuColorConverter.cpp
+            src/encode/EncoderFactory.cpp
+        )
+        target_include_directories(test_x264_encoder PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/include
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/encode
+            ${CMAKE_SOURCE_DIR}/include
+            ${CMAKE_BINARY_DIR}/include
+        )
+        target_link_libraries(test_x264_encoder PRIVATE
+            nlohmann_json::nlohmann_json
+            spdlog::spdlog
+            GTest::gtest_main
+        )
+        target_compile_definitions(test_x264_encoder PRIVATE HUB32_WITH_FFMPEG)
+
+        # Link FFmpeg
+        if(PkgConfig_FOUND AND FFMPEG_FOUND)
+            target_link_libraries(test_x264_encoder PRIVATE PkgConfig::FFMPEG)
+        endif()
+
+        add_test(NAME test_x264_encoder COMMAND test_x264_encoder)
+    endif()
 endif()

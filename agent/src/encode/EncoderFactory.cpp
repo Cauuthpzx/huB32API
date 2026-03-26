@@ -17,12 +17,12 @@
 #include <spdlog/spdlog.h>
 
 // Encoder implementations — included conditionally
-// #ifdef HUB32_WITH_FFMPEG
+#ifdef HUB32_WITH_FFMPEG
 // #include "NvencEncoder.hpp"
 // #include "QsvEncoder.hpp"
-// #include "X264Encoder.hpp"
-// #endif
-// #include "CpuColorConverter.hpp"
+#include "X264Encoder.hpp"
+#endif
+#include "CpuColorConverter.hpp"
 // #include "D3D11ColorConverter.hpp"
 
 namespace hub32agent::encode {
@@ -74,9 +74,15 @@ std::unique_ptr<H264Encoder> EncoderFactory::createEncoder(
     //     spdlog::info("[EncoderFactory] NVENC not available, trying next");
     // }
     // else if (name == "qsv") { ... }
-    // else if (name == "x264") { ... }
-    (void)name;
-    (void)config;
+
+    if (name == "x264") {
+        auto enc = std::make_unique<X264Encoder>();
+        if (enc->initialize(config)) {
+            spdlog::info("[EncoderFactory] using x264 CPU encoder");
+            return enc;
+        }
+        spdlog::warn("[EncoderFactory] x264 encoder initialization failed");
+    }
 #else
     (void)name;
     (void)config;
@@ -99,17 +105,15 @@ std::unique_ptr<ColorConverter> EncoderFactory::createBestConverter(int width, i
     //     }
     // }
 
-    // TODO: 2. Try CPU libyuv (always available)
-    // {
-    //     auto conv = std::make_unique<CpuColorConverter>();
-    //     if (conv->initialize(width, height)) {
-    //         spdlog::info("[EncoderFactory] using CPU (libyuv) color converter");
-    //         return conv;
-    //     }
-    // }
+    // 2. CPU manual conversion (always available, no libyuv dependency)
+    {
+        auto conv = std::make_unique<CpuColorConverter>();
+        if (conv->initialize(width, height)) {
+            spdlog::info("[EncoderFactory] using CPU manual color converter");
+            return conv;
+        }
+    }
 
-    (void)width;
-    (void)height;
     spdlog::error("[EncoderFactory] no color converter available");
     return nullptr;
 }
