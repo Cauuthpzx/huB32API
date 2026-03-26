@@ -45,3 +45,9 @@ target_link_libraries(test_teacher_location_repository PRIVATE SQLite::SQLite3)
 
 add_unit_test(test_mock_sfu_backend  media/test_mock_sfu_backend.cpp)
 add_unit_test(test_room_manager      media/test_room_manager.cpp)
+
+# Utils tests — functions are DLL-exported from hub32api-core
+add_unit_test(test_string_utils      utils/test_string_utils.cpp)
+add_unit_test(test_time_utils        utils/test_time_utils.cpp)
+add_unit_test(test_json_utils        utils/test_json_utils.cpp)
+add_unit_test(test_validation_utils  utils/test_validation_utils.cpp)
