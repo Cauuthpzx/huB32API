@@ -315,7 +315,10 @@ void StreamController::handleGetIceServers(
             auto [username, credential] = generateTurnCredentials(m_turnSecret);
 
             dto::IceServer turn;
-            turn.urls       = {"turn:" + m_turnServerUrl + ":443?transport=tcp"};
+            turn.urls       = {
+                "turn:" + m_turnServerUrl + ":443?transport=tcp",
+                "turn:" + m_turnServerUrl + ":3478?transport=udp"
+            };
             turn.username   = username;
             turn.credential = credential;
             iceServers.push_back(nlohmann::json(turn));
