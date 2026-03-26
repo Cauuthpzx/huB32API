@@ -27,6 +27,14 @@ if(HUB32_WITH_MEDIASOUP)
         )
     endif()
 
-    # TODO: Link libmediasoup-worker and libuv when building on Linux
-    # target_link_libraries(hub32api-core PRIVATE mediasoup::worker uv)
+    # Link mediasoup worker library (Linux only)
+    if(NOT WIN32)
+        find_package(MediasoupWorker QUIET)
+        if(MediasoupWorker_FOUND)
+            target_link_libraries(hub32api-core PRIVATE mediasoup::worker)
+        else()
+            message(WARNING "mediasoup-worker not found. "
+                    "Build: cd third_party/mediasoup/worker && meson setup build && ninja -C build")
+        endif()
+    endif()
 endif()
