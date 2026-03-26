@@ -266,19 +266,19 @@ void WebRtcProducer::sendH264(const uint8_t* data, size_t size,
 
     const uint32_t rtp_ts = static_cast<uint32_t>(timestampUs * 90 / 1000);
 
-    // ---- MUST FIX #3: RTP pacing — inter-packet gap in µs ----
-    const int gap_us = [this]() -> int {
+    // RTP pacing helper — recalculates per-packet to track bitrate changes
+    auto calc_gap_us = [this]() -> int {
         int bps = m_bitrateKbps.load() * 1000;
         if (bps <= 0) return 0;
         int g = static_cast<int>((static_cast<int64_t>(kRtpMtu) * 8 * 1'000'000) / bps);
         return std::min(g, 5000);  // cap at 5ms to avoid over-sleeping
-    }();
+    };
 
     // Split H.264 bitstream into NAL units
     auto all_nals = find_nal_units(data, size);
 
-    // ---- MUST FIX #1: SPS/PPS injection on keyframes ----
     // Extract and store SPS/PPS from keyframe NALs for late-joining clients
+    // (updated on every keyframe, including after resolution/bitrate changes)
     if (isKeyFrame) {
         for (const auto& nal : all_nals) {
             if (nal.size == 0) continue;
@@ -352,7 +352,7 @@ void WebRtcProducer::sendH264(const uint8_t* data, size_t size,
             ++ni;
 
         } else {
-            // ---- MUST FIX #2: STAP-A aggregation for small NALs ----
+            // STAP-A aggregation for small NALs
             // Group consecutive small NALs into a single STAP-A packet
             size_t stap_end    = ni;
             size_t stap_bytes  = 1; // STAP-A type byte
@@ -396,10 +396,10 @@ void WebRtcProducer::sendH264(const uint8_t* data, size_t size,
         }
     }
 
-    // ---- Send all packets with pacing ----
+    // ---- Send all packets with per-packet pacing ----
     for (const auto& pkt : packets) {
         try {
-            send_one_rtp(m_impl->videoTrack.get(), pkt, gap_us);
+            send_one_rtp(m_impl->videoTrack.get(), pkt, calc_gap_us());
         } catch (const std::exception& ex) {
             spdlog::warn("[WebRtcProducer] RTP send error: {}", ex.what());
             return;

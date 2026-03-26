@@ -2,7 +2,7 @@
  * @file StreamPipeline.cpp
  * @brief GPU-first streaming pipeline with 3-thread design.
  *
- * 3-thread architecture (MUST FIX #4):
+ * 3-thread architecture:
  *   Thread 1 (capture): DXGI/GDI → BGRA → FrameQueue.push()
  *   Thread 2 (encode):  FrameQueue.pop() → NV12 → H.264 → sendH264()
  *   Thread 3 (quality): Monitors CPU/RTT/loss, adjusts quality
@@ -171,7 +171,7 @@ bool StreamPipeline::start(const PipelineConfig& config)
     // Reset frame queue for reuse
     m_frameQueue->reset();
 
-    // Launch 3 threads (MUST FIX #4)
+    // Launch 3 threads
     m_running.store(true, std::memory_order_release);
     m_captureThread = std::thread(&StreamPipeline::captureLoop, this);
     m_encodeThread  = std::thread(&StreamPipeline::encodeLoop,  this);
@@ -296,7 +296,7 @@ PipelinePath StreamPipeline::probePipeline(const PipelineConfig& config)
 }
 
 // -----------------------------------------------------------------------
-// captureLoop() — Thread 1: capture → push to FrameQueue (MUST FIX #4)
+// captureLoop() — Thread 1: capture → push to FrameQueue
 // -----------------------------------------------------------------------
 
 void StreamPipeline::captureLoop()
@@ -670,11 +670,9 @@ void StreamPipeline::checkAdaptiveQuality()
 
             if (adjusted) {
                 m_qualityState.cpuHighSinceMs = 0;
-                // MUST FIX #5: keyframe + bitrate update on quality change
                 if (m_encoder) {
                     int newBitrate = m_config.bitrateSteps[m_qualityState.currentBitrateIdx];
-                    m_encoder->setBitrate(newBitrate);
-                    m_encoder->requestKeyFrame();
+                    m_encoder->setBitrateAndKeyFrame(newBitrate);
                     m_producer.setPacingBitrate(newBitrate);
                 }
             }
@@ -708,11 +706,9 @@ void StreamPipeline::checkAdaptiveQuality()
 
             if (restored) {
                 m_qualityState.cpuLowSinceMs = 0;
-                // MUST FIX #5: keyframe + bitrate update on quality restore
                 if (m_encoder) {
                     int newBitrate = m_config.bitrateSteps[m_qualityState.currentBitrateIdx];
-                    m_encoder->setBitrate(newBitrate);
-                    m_encoder->requestKeyFrame();
+                    m_encoder->setBitrateAndKeyFrame(newBitrate);
                     m_producer.setPacingBitrate(newBitrate);
                 }
             }
@@ -738,8 +734,7 @@ void StreamPipeline::checkAdaptiveQuality()
             ++m_qualityState.currentBitrateIdx;
             int newBitrate = m_config.bitrateSteps[m_qualityState.currentBitrateIdx];
             if (m_encoder) {
-                m_encoder->setBitrate(newBitrate);
-                m_encoder->requestKeyFrame();  // MUST FIX #5
+                m_encoder->setBitrateAndKeyFrame(newBitrate);
                 m_producer.setPacingBitrate(newBitrate);
             }
             spdlog::info("[StreamPipeline] packet loss {:.1f}% > {:.1f}% — reducing bitrate to {} kbps",
@@ -751,8 +746,7 @@ void StreamPipeline::checkAdaptiveQuality()
             --m_qualityState.currentBitrateIdx;
             int newBitrate = m_config.bitrateSteps[m_qualityState.currentBitrateIdx];
             if (m_encoder) {
-                m_encoder->setBitrate(newBitrate);
-                m_encoder->requestKeyFrame();  // MUST FIX #5
+                m_encoder->setBitrateAndKeyFrame(newBitrate);
                 m_producer.setPacingBitrate(newBitrate);
             }
             spdlog::info("[StreamPipeline] packet loss {:.1f}% recovered — restoring bitrate to {} kbps",

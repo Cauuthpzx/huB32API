@@ -13,7 +13,7 @@
  *   Path C — CPU fallback (always works):
  *     DXGI/GDI → BGRA CPU → CpuColorConverter NV12 → x264 → WebRTC RTP
  *
- * 3-thread design (MUST FIX #4):
+ * 3-thread design:
  *   Thread 1 (capture): DXGI/GDI → BGRA → FrameQueue.push()
  *   Thread 2 (encode):  FrameQueue.pop() → NV12 → H.264 → sendH264()
  *   Thread 3 (quality): Monitors CPU/RTT/packet loss, adjusts quality
@@ -152,7 +152,7 @@ public:
     void updateTransportStats(int rttMs, double packetLoss);
 
 private:
-    // ---- 3-thread pipeline (MUST FIX #4) ----
+    // ---- 3-thread pipeline ----
     void captureLoop();    ///< Thread 1: DXGI/GDI capture → pushes RawFrame to queue
     void encodeLoop();     ///< Thread 2: pops RawFrame → NV12 → H.264 → sendH264
     void qualityLoop();    ///< Thread 3: monitors CPU/RTT/loss, adjusts quality
@@ -190,7 +190,7 @@ private:
     std::thread m_encodeThread;
     std::thread m_qualityThread;
 
-    // Frame queue between capture and encode threads (MUST FIX #4)
+    // Frame queue between capture and encode threads
     std::unique_ptr<RawFrameQueue> m_frameQueue;
 
     // Encoder + color converter (owned by pipeline)

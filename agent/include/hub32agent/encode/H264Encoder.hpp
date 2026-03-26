@@ -67,6 +67,14 @@ public:
     /// @param kbps New target bitrate in kilobits per second.
     virtual void setBitrate(int kbps) = 0;
 
+    /// @brief Atomically sets bitrate and requests a keyframe.
+    /// Ensures the keyframe is encoded at the new bitrate, not the old one.
+    virtual void setBitrateAndKeyFrame(int kbps)
+    {
+        setBitrate(kbps);
+        requestKeyFrame();
+    }
+
     /// @brief Releases encoder resources.
     virtual void shutdown() = 0;
 };

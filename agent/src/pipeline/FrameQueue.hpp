@@ -2,7 +2,7 @@
  * @file FrameQueue.hpp
  * @brief Bounded blocking queue for the 3-thread capture/encode/send pipeline.
  *
- * Decouples capture from encoding (MUST FIX #4): prevents DXGI
+ * Decouples capture from encoding: prevents DXGI
  * AcquireNextFrame timeouts caused by slow encoding.
  *
  * Thread safety: push() and pop() are fully thread-safe.
