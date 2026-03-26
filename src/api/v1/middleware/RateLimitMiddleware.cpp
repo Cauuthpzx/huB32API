@@ -62,8 +62,7 @@ bool RateLimitMiddleware::process(const httplib::Request& req, httplib::Response
     // Every 1000 requests, remove buckets that have not been accessed
     // in the last 10 minutes.
     // -----------------------------------------------------------------
-    static int callCount = 0;
-    if (++callCount % 1000 == 0) {
+    if (++m_callCount % 1000 == 0) {
         const auto cutoff = Clock::now() - std::chrono::minutes(10);
         for (auto bit = m_buckets.begin(); bit != m_buckets.end(); ) {
             if (bit->second.lastRefill < cutoff) bit = m_buckets.erase(bit);

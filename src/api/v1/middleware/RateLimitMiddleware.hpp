@@ -26,6 +26,7 @@ public:
 private:
     RateLimitConfig m_cfg;
     mutable std::mutex m_mutex;
+    int m_callCount = 0;
 
     struct Bucket { int tokens = 0; std::chrono::steady_clock::time_point lastRefill; };
     std::unordered_map<std::string, Bucket> m_buckets;
