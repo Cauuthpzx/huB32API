@@ -11,6 +11,7 @@ add_library(hub32api-core SHARED
     CryptoUtils.cpp
     Constants.cpp
     ../utils/string_utils.cpp
+    ../utils/time_utils.cpp
     ../auth/JwtAuth.cpp
     ../auth/internal/JwtValidator.cpp
     ../auth/internal/TokenStore.cpp
