@@ -204,7 +204,7 @@ HttpServer::HttpServer(const ServerConfig& cfg)
 
     // 5. HTTP/HTTPS server + router
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
-    if (cfg.tlsEnabled && !cfg.tlsCertFile.empty() && !cfg.tlsKeyFile.empty()) {
+    if (cfg.tlsEnabled) {
         m_impl->httpServer = std::make_unique<httplib::SSLServer>(
             cfg.tlsCertFile.c_str(), cfg.tlsKeyFile.c_str());
         spdlog::info("[HttpServer] TLS enabled with cert={}", cfg.tlsCertFile);
@@ -212,10 +212,12 @@ HttpServer::HttpServer(const ServerConfig& cfg)
         m_impl->httpServer = std::make_unique<httplib::Server>();
     }
 #else
-    m_impl->httpServer = std::make_unique<httplib::Server>();
     if (cfg.tlsEnabled) {
-        spdlog::warn("[HttpServer] TLS requested but OpenSSL support not compiled in");
+        throw std::runtime_error(
+            "[HttpServer] TLS is enabled but OpenSSL support not compiled in. "
+            "Rebuild with CPPHTTPLIB_OPENSSL_SUPPORT or disable TLS.");
     }
+    m_impl->httpServer = std::make_unique<httplib::Server>();
 #endif
     m_impl->httpServer->new_task_queue = [&cfg] {
         return new httplib::ThreadPool(cfg.workerThreads);

@@ -1,10 +1,12 @@
 #pragma once
 
 #include <chrono>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <unordered_set>
 
+#include "hub32api/core/Result.hpp"
 #include "hub32api/export.h"
 
 struct sqlite3;
@@ -25,13 +27,10 @@ namespace hub32api::auth::internal {
 class HUB32API_EXPORT TokenStore
 {
 public:
-    /**
-     * @brief Constructs the token store.
-     *
-     * @param dbPath  Path to the SQLite database file.
-     *                If empty, the store is in-memory only (no persistence).
-     */
-    explicit TokenStore(const std::string& dbPath = {});
+    /// @brief Creates a TokenStore. Fails if dbPath is non-empty but DB cannot be opened.
+    /// Empty dbPath = in-memory mode (test/dev only).
+    static Result<std::unique_ptr<TokenStore>> create(const std::string& dbPath = {});
+
     ~TokenStore();
 
     TokenStore(const TokenStore&) = delete;
@@ -56,6 +55,8 @@ public:
     void purgeExpired();
 
 private:
+    TokenStore() = default;
+
     mutable std::mutex m_mutex;
     mutable sqlite3*   m_db       = nullptr;
     bool               m_useSqlite = false;

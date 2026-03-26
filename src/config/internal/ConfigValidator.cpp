@@ -28,7 +28,7 @@ namespace hub32api::config::internal {
  *  - workerThreads is at least 1.
  *  - connectionLimitPerHost is at least 1.
  *  - globalConnectionLimit is at least connectionLimitPerHost.
- *  - When TLS is enabled, tlsCertFile and tlsKeyFile are not empty.
+ *  - When TLS is enabled, tlsCertFile and tlsKeyFile must not be empty (CRITICAL).
  *
  * @param cfg  The ServerConfig to validate.
  * @return Result with vector of warning strings on success, or ApiError on critical failure.
@@ -84,13 +84,19 @@ Result<std::vector<std::string>> ConfigValidator::validate(const ServerConfig& c
         errors.emplace_back("globalConnectionLimit must be >= connectionLimitPerHost");
     }
 
-    // --- NON-CRITICAL: TLS ---
+    // --- CRITICAL: TLS cert/key required when TLS is enabled ---
     if (cfg.tlsEnabled) {
         if (cfg.tlsCertFile.empty()) {
-            errors.emplace_back("tlsCertFile must not be empty when TLS is enabled");
+            return Result<std::vector<std::string>>::fail(ApiError{
+                ErrorCode::InvalidConfig,
+                "tlsCertFile must not be empty when TLS is enabled"
+            });
         }
         if (cfg.tlsKeyFile.empty()) {
-            errors.emplace_back("tlsKeyFile must not be empty when TLS is enabled");
+            return Result<std::vector<std::string>>::fail(ApiError{
+                ErrorCode::InvalidConfig,
+                "tlsKeyFile must not be empty when TLS is enabled"
+            });
         }
     }
 

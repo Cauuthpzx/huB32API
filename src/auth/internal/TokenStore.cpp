@@ -43,28 +43,31 @@ inline int64_t toEpochSeconds(std::chrono::system_clock::time_point tp)
 // Construction / destruction
 // ---------------------------------------------------------------------------
 
-/**
- * @brief Constructs the TokenStore, optionally opening an SQLite database.
- *
- * If @p dbPath is non-empty, initDb() is called to open (or create) the
- * database and create the revoked_tokens table. On any SQLite failure the
- * store falls back to in-memory mode so the server can still run.
- *
- * @param dbPath  Path to the SQLite file, or empty for in-memory only.
- */
-TokenStore::TokenStore(const std::string& dbPath)
-{
-    if (!dbPath.empty()) {
-        initDb(dbPath);
-    }
-}
-
 TokenStore::~TokenStore()
 {
     if (m_db) {
         sqlite3_close(m_db);
         m_db = nullptr;
     }
+}
+
+Result<std::unique_ptr<TokenStore>> TokenStore::create(const std::string& dbPath)
+{
+    auto store = std::unique_ptr<TokenStore>(new TokenStore());
+
+    if (!dbPath.empty()) {
+        store->initDb(dbPath);
+        if (!store->m_useSqlite) {
+            return Result<std::unique_ptr<TokenStore>>::fail(ApiError{
+                ErrorCode::InternalError,
+                "[TokenStore] Failed to open revocation database: " + dbPath
+            });
+        }
+    } else {
+        spdlog::info("[TokenStore] in-memory mode (no dbPath configured)");
+    }
+
+    return Result<std::unique_ptr<TokenStore>>::ok(std::move(store));
 }
 
 // ---------------------------------------------------------------------------
