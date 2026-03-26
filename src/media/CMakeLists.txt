@@ -7,8 +7,9 @@ if(HUB32_WITH_MEDIASOUP)
     target_sources(hub32api-core PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/MediasoupSfuBackend.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/WorkerChannel.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/WorkerMessageBuilder.cpp
     )
     target_compile_definitions(hub32api-core PRIVATE HUB32_WITH_MEDIASOUP)
-    # TODO: Find and link libmediasoup-worker, libuv when building on Linux
-    # target_link_libraries(hub32api-core PRIVATE mediasoup::worker uv)
+    # TODO: Find and link libmediasoup-worker, libuv, flatbuffers when building on Linux
+    # target_link_libraries(hub32api-core PRIVATE mediasoup::worker uv flatbuffers)
 endif()

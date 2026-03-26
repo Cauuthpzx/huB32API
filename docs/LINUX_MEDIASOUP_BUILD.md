@@ -14,6 +14,20 @@ meson setup builddir --default-library=static
 ninja -C builddir
 ```
 
+## Generate FlatBuffers headers
+
+```bash
+# Install flatc (Ubuntu 22.04+)
+sudo apt install flatbuffers-compiler
+
+# Generate C++ headers from mediasoup FBS schemas
+cd third_party/mediasoup-server-ref/worker/fbs
+flatc --cpp *.fbs --gen-all
+# This creates FBS/ directory with *_generated.h files required by
+# WorkerMessageBuilder.hpp (message, request, response, notification,
+# worker, router, webRtcTransport, transport, sctpParameters).
+```
+
 ## Configure hub32api with mediasoup
 
 ```bash
