@@ -13,6 +13,7 @@ add_library(hub32api-core SHARED
     ../utils/string_utils.cpp
     ../utils/time_utils.cpp
     ../utils/json_utils.cpp
+    ../utils/validation_utils.cpp
     ../auth/JwtAuth.cpp
     ../auth/internal/JwtValidator.cpp
     ../auth/internal/TokenStore.cpp
