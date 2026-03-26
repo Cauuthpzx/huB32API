@@ -882,7 +882,7 @@ void Router::registerV1()
             if (!auth->process(req, res, ctx)) { logger->logResponse(req, res); return; }
 
             // Role-based location access check (admin bypasses)
-            if (ctx.auth.token && ctx.auth.token->role != "admin") {
+            if (ctx.auth.token && user_role_from_string(ctx.auth.token->role) != UserRole::Admin) {
                 if (m_svcs.computerRepo && m_svcs.teacherLocationRepo && m_svcs.teacherRepo) {
                     const std::string computerId = req.matches.size() > 1
                         ? req.matches[1].str() : "";
@@ -1509,13 +1509,13 @@ void Router::registerSse()
     m_server.Get("/api/v1/events", [this](const httplib::Request& req, httplib::Response& res) {
         // --- Validate JWT before allowing SSE subscription ---
         const std::string authHeader = req.get_header_value("Authorization");
-        if (authHeader.empty() || authHeader.substr(0, 7) != "Bearer ") {
+        if (authHeader.empty() || authHeader.substr(0, kBearerPrefixLen) != kBearerPrefix) {
             res.status = 401;
             res.set_content(R"({"status":401,"title":"Unauthorized","detail":"SSE requires Bearer token"})",
                             "application/json");
             return;
         }
-        auto authResult = m_svcs.jwtAuth.authenticate(authHeader.substr(7));
+        auto authResult = m_svcs.jwtAuth.authenticate(authHeader.substr(kBearerPrefixLen));
         if (authResult.is_err()) {
             res.status = 401;
             res.set_content(R"({"status":401,"title":"Unauthorized","detail":"Invalid token"})",
@@ -1569,13 +1569,13 @@ void Router::registerSse()
         [this](const httplib::Request& req, httplib::Response& res) {
             // --- Validate JWT ---
             const std::string authHeader = req.get_header_value("Authorization");
-            if (authHeader.empty() || authHeader.substr(0, 7) != "Bearer ") {
+            if (authHeader.empty() || authHeader.substr(0, kBearerPrefixLen) != kBearerPrefix) {
                 res.status = 401;
                 res.set_content(R"({"status":401,"title":"Unauthorized","detail":"SSE requires Bearer token"})",
                                 "application/json");
                 return;
             }
-            auto authResult = m_svcs.jwtAuth.authenticate(authHeader.substr(7));
+            auto authResult = m_svcs.jwtAuth.authenticate(authHeader.substr(kBearerPrefixLen));
             if (authResult.is_err()) {
                 res.status = 401;
                 res.set_content(R"({"status":401,"title":"Unauthorized","detail":"Invalid token"})",
