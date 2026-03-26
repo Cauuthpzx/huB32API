@@ -17,6 +17,7 @@ add_library(hub32api-core SHARED
     ../config/ServerConfig.cpp
     ../config/internal/ConfigValidator.cpp
     ../agent/AgentRegistry.cpp
+    ../agent/HeartbeatMonitor.cpp
 )
 
 generate_export_header(hub32api-core
