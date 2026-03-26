@@ -1,6 +1,8 @@
 # hub32agent -- lightweight agent binary
 # Connects to hub32api server, executes commands on student PCs.
 
+option(HUB32_WITH_FFMPEG "Build agent with FFmpeg H.264 encoding (NVENC/QSV/x264)" OFF)
+
 add_executable(hub32agent-service
     src/main.cpp
     src/AgentConfig.cpp
@@ -12,6 +14,7 @@ add_executable(hub32agent-service
     src/features/InputLock.cpp
     src/features/MessageDisplay.cpp
     src/features/PowerControl.cpp
+    src/encode/EncoderFactory.cpp
 )
 
 target_include_directories(hub32agent-service
@@ -35,6 +38,30 @@ target_link_libraries(hub32agent-service
 )
 
 set_project_warnings(hub32agent-service)
+
+# -----------------------------------------------------------------------
+# FFmpeg encoding support (optional — for H.264 streaming)
+# -----------------------------------------------------------------------
+if(HUB32_WITH_FFMPEG)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(FFMPEG IMPORTED_TARGET
+            libavcodec libavutil libswscale)
+        if(FFMPEG_FOUND)
+            target_link_libraries(hub32agent-service PRIVATE PkgConfig::FFMPEG)
+        endif()
+    endif()
+    target_compile_definitions(hub32agent-service PRIVATE HUB32_WITH_FFMPEG)
+
+    # TODO: Add encoder implementation sources when ready:
+    # target_sources(hub32agent-service PRIVATE
+    #     src/encode/NvencEncoder.cpp
+    #     src/encode/QsvEncoder.cpp
+    #     src/encode/X264Encoder.cpp
+    #     src/encode/CpuColorConverter.cpp
+    #     src/encode/D3D11ColorConverter.cpp
+    # )
+endif()
 
 # Windows resources (optional version info)
 if(WIN32)
