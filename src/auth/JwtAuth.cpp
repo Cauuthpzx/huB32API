@@ -34,9 +34,6 @@ namespace hub32api::auth {
 // Constants
 // ---------------------------------------------------------------------------
 namespace {
-    constexpr const char* k_issuer   = "hub32api";
-    constexpr const char* k_audience = "hub32api-clients";
-
     /**
      * @brief Reads the entire content of a file into a string.
      *
@@ -123,7 +120,7 @@ Result<std::unique_ptr<JwtAuth>> JwtAuth::create(const ServerConfig& cfg)
     // accepted system-wide. An attacker who can reconstruct the secret
     // (via mt19937_64 seed prediction or HS256 brute-force) gains
     // the ability to forge tokens for any user including admin.
-    if (cfg.jwtAlgorithm == "RS256") {
+    if (cfg.jwtAlgorithm == to_string(JwtAlgorithm::RS256)) {
         if (cfg.jwtPrivateKeyFile.empty() || cfg.jwtPublicKeyFile.empty()) {
             return Result<std::unique_ptr<JwtAuth>>::fail(ApiError{
                 ErrorCode::InvalidConfig,
@@ -149,7 +146,7 @@ Result<std::unique_ptr<JwtAuth>> JwtAuth::create(const ServerConfig& cfg)
     }
 
     // For HS256: verify secret is non-empty
-    if (cfg.jwtAlgorithm == "HS256" && cfg.jwtSecret.empty()) {
+    if (cfg.jwtAlgorithm == to_string(JwtAlgorithm::HS256) && cfg.jwtSecret.empty()) {
         return Result<std::unique_ptr<JwtAuth>>::fail(ApiError{
             ErrorCode::InvalidConfig,
             "[JwtAuth] HS256 algorithm requires a non-empty jwtSecret"
@@ -213,8 +210,8 @@ Result<std::string> JwtAuth::issueToken(
 
         auto builder = jwt::create()
             .set_type("JWT")
-            .set_issuer(k_issuer)
-            .set_audience(k_audience)
+            .set_issuer(std::string(kJwtIssuer))
+            .set_audience(std::string(kJwtAudience))
             .set_subject(subject)
             .set_issued_at(now)
             .set_expires_at(expiry)
@@ -222,7 +219,7 @@ Result<std::string> JwtAuth::issueToken(
             .set_payload_claim("role", jwt::claim(role));
 
         std::string token;
-        if (m_impl->algorithm == "RS256") {
+        if (m_impl->algorithm == to_string(JwtAlgorithm::RS256)) {
             token = builder.sign(jwt::algorithm::rs256{m_impl->publicKey, m_impl->privateKey, "", ""});
         } else {
             token = builder.sign(jwt::algorithm::hs256{m_impl->secret});
@@ -262,7 +259,7 @@ Result<AuthContext> JwtAuth::authenticate(const std::string& bearerToken) const
     // unbounded memory growth.  Every 100 authenticate() calls the store is
     // swept for entries whose expiry time has passed.
     static std::atomic<int> authCount{0};
-    if (++authCount % 100 == 0) {
+    if (++authCount % kTokenPurgeIntervalCalls == 0) {
         m_impl->store->purgeExpired();
     }
 
