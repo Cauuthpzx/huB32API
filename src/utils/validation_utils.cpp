@@ -1,4 +1,5 @@
 #include "validation_utils.hpp"
+#include "string_utils.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -38,16 +39,12 @@ std::string sanitize_input(std::string_view input)
         if (c == '>') { inTag = false; continue; }
         if (!inTag) result.push_back(c);
     }
-    size_t start = 0;
-    while (start < result.size() && std::isspace(static_cast<unsigned char>(result[start]))) ++start;
-    size_t end = result.size();
-    while (end > start && std::isspace(static_cast<unsigned char>(result[end - 1]))) --end;
-    return result.substr(start, end - start);
+    return trim(result);
 }
 
-bool check_length(std::string_view s, size_t minLen, size_t maxLen)
+bool check_length(std::string_view s, size_t min_len, size_t max_len)
 {
-    return s.size() >= minLen && s.size() <= maxLen;
+    return s.size() >= min_len && s.size() <= max_len;
 }
 
 } // namespace hub32api::utils

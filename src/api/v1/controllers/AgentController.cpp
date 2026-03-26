@@ -15,12 +15,10 @@
 #include "core/internal/CryptoUtils.hpp"
 #include "db/ComputerRepository.hpp"
 #include "api/common/HttpErrorUtil.hpp"
+#include "utils/time_utils.hpp"
 
 // cpp-httplib
 #include <httplib.h>
-
-#include <cstdio>
-#include <ctime>
 
 using hub32api::api::common::sendError;
 
@@ -30,25 +28,6 @@ std::string getLocale(const httplib::Request& req) {
     auto* i = hub32api::core::internal::I18n::instance();
     if (!i) return "en";
     return i->negotiate(req.get_header_value("Accept-Language"));
-}
-
-/**
- * @brief Converts a system_clock time_point to an ISO 8601 UTC string.
- * @param ts The timestamp to convert.
- * @return ISO 8601 formatted string (e.g., "2026-03-26T12:34:56Z").
- */
-std::string timestampToIso(hub32api::Timestamp ts)
-{
-    auto t = std::chrono::system_clock::to_time_t(ts);
-    char buf[32];
-    struct tm tmBuf{};
-#ifdef _WIN32
-    gmtime_s(&tmBuf, &t);
-#else
-    gmtime_r(&t, &tmBuf);
-#endif
-    std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tmBuf);
-    return buf;
 }
 
 /**
@@ -64,7 +43,7 @@ hub32api::api::v1::dto::AgentStatusDto toStatusDto(const hub32api::AgentInfo& in
     dto.ipAddress     = info.ipAddress;
     dto.state         = hub32api::to_string(info.state);
     dto.agentVersion  = info.agentVersion;
-    dto.lastHeartbeat = timestampToIso(info.lastHeartbeat);
+    dto.lastHeartbeat = hub32api::utils::format_iso8601(info.lastHeartbeat);
     dto.capabilities  = info.capabilities;
     return dto;
 }

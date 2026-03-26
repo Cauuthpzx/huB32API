@@ -81,8 +81,8 @@ constexpr size_t kSecretKeyBytes     = 32;   // bytes — JWT secret key length 
 constexpr size_t kUuidBytes          = 16;   // bytes — UUID v4 raw bytes
 constexpr size_t kTimestampBufSize   = 32;   // bytes — ISO 8601 timestamp buffer
 constexpr int    kPbkdf2Iterations   = 310000;  // rounds — OWASP 2024 minimum for PBKDF2-SHA256
-constexpr int    kPbkdf2SaltBytes    = 16;   // bytes — PBKDF2 salt length
-constexpr int    kPbkdf2HashBytes    = 32;   // bytes — PBKDF2 derived key length
+constexpr size_t kPbkdf2SaltBytes   = 16;    // bytes — PBKDF2 salt length
+constexpr size_t kPbkdf2HashBytes   = 32;    // bytes — PBKDF2 derived key length
 
 // -----------------------------------------------------------------------
 // ICMP

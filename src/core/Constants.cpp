@@ -116,6 +116,10 @@ std::string to_string(ErrorCode code)
         case ErrorCode::CryptoFailure:           return "CryptoFailure";
         case ErrorCode::InvalidConfig:           return "InvalidConfig";
         case ErrorCode::FileReadError:           return "FileReadError";
+        case ErrorCode::PayloadTooLarge:         return "PayloadTooLarge";
+        case ErrorCode::UnsupportedMediaType:    return "UnsupportedMediaType";
+        case ErrorCode::UnprocessableEntity:     return "UnprocessableEntity";
+        case ErrorCode::ValidationFailed:        return "ValidationFailed";
         case ErrorCode::NotImplemented:          return "NotImplemented";
         case ErrorCode::ProtocolMismatch:        return "ProtocolMismatch";
         case ErrorCode::ServiceUnavailable:      return "ServiceUnavailable";

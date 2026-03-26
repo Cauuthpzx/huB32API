@@ -38,6 +38,13 @@ enum class ErrorCode
     // 501
     NotImplemented                = 501,
     ProtocolMismatch              = 5011,
+    // 413
+    PayloadTooLarge               = 413,
+    // 415
+    UnsupportedMediaType          = 415,
+    // 422
+    UnprocessableEntity           = 422,
+    ValidationFailed              = 4221,
     // 503
     ServiceUnavailable            = 503,
     FramebufferNotAvailable       = 5031,

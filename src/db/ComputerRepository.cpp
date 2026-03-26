@@ -10,9 +10,9 @@
 #include "../core/PrecompiledHeader.hpp"
 #include "ComputerRepository.hpp"
 #include "DatabaseManager.hpp"
+#include "core/internal/CryptoUtils.hpp"
 
 #include <sqlite3.h>
-#include "core/internal/CryptoUtils.hpp"
 
 namespace hub32api::db {
 
