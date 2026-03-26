@@ -20,6 +20,7 @@ namespace hub32api {
 
 namespace {
 
+#ifdef _WIN32
 /**
  * @brief Helper to read a REG_DWORD value from an open registry key.
  *
@@ -105,6 +106,8 @@ bool readRegistryString(HKEY hKey, const char* valueName, std::string& out)
     }
     return false;
 }
+
+#endif // _WIN32
 
 } // anonymous namespace
 
@@ -276,6 +279,7 @@ Result<ServerConfig> ServerConfig::from_file(const std::string& path)
  *
  * @return A populated ServerConfig from registry values, or defaults() on failure.
  */
+#ifdef _WIN32
 Result<ServerConfig> ServerConfig::from_registry()
 {
     spdlog::info("[ServerConfig] loading from Windows Registry");
@@ -356,5 +360,17 @@ Result<ServerConfig> ServerConfig::from_registry()
                  cfg.httpPort, cfg.bindAddress);
     return Result<ServerConfig>::ok(std::move(cfg));
 }
+
+#else // !_WIN32
+
+Result<ServerConfig> ServerConfig::from_registry()
+{
+    spdlog::error("[ServerConfig] from_registry() is not supported on this platform");
+    return Result<ServerConfig>::fail(
+        ApiError{ErrorCode::InvalidConfig, "registry not supported on this platform"});
+}
+
+#endif // _WIN32
+
 
 } // namespace hub32api
