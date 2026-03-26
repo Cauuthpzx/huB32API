@@ -91,4 +91,37 @@ MediaKind media_kind_from_string(const std::string& s)
     return MediaKind::Video;
 }
 
+// -- ErrorCode --------------------------------------------------------------
+std::string to_string(ErrorCode code)
+{
+    switch (code) {
+        case ErrorCode::None:                    return "None";
+        case ErrorCode::InvalidRequest:          return "InvalidRequest";
+        case ErrorCode::InvalidCredentials:      return "InvalidCredentials";
+        case ErrorCode::InvalidFeature:          return "InvalidFeature";
+        case ErrorCode::InvalidConnection:       return "InvalidConnection";
+        case ErrorCode::AuthMethodNotAvailable:  return "AuthMethodNotAvailable";
+        case ErrorCode::Unauthorized:            return "Unauthorized";
+        case ErrorCode::AuthenticationFailed:    return "AuthenticationFailed";
+        case ErrorCode::TokenExpired:            return "TokenExpired";
+        case ErrorCode::NotFound:                return "NotFound";
+        case ErrorCode::ComputerNotFound:        return "ComputerNotFound";
+        case ErrorCode::RequestTimeout:          return "RequestTimeout";
+        case ErrorCode::ConnectionTimeout:       return "ConnectionTimeout";
+        case ErrorCode::TooManyRequests:         return "TooManyRequests";
+        case ErrorCode::ConnectionLimitReached:  return "ConnectionLimitReached";
+        case ErrorCode::InternalError:           return "InternalError";
+        case ErrorCode::FramebufferEncodingError: return "FramebufferEncodingError";
+        case ErrorCode::PluginError:             return "PluginError";
+        case ErrorCode::CryptoFailure:           return "CryptoFailure";
+        case ErrorCode::InvalidConfig:           return "InvalidConfig";
+        case ErrorCode::FileReadError:           return "FileReadError";
+        case ErrorCode::NotImplemented:          return "NotImplemented";
+        case ErrorCode::ProtocolMismatch:        return "ProtocolMismatch";
+        case ErrorCode::ServiceUnavailable:      return "ServiceUnavailable";
+        case ErrorCode::FramebufferNotAvailable: return "FramebufferNotAvailable";
+    }
+    return "Unknown(" + std::to_string(static_cast<int>(code)) + ")";
+}
+
 } // namespace hub32api
