@@ -27,6 +27,10 @@ struct AgentConfig
     std::string logLevel = "info";                      ///< Log level (trace/debug/info/warn/error)
     std::string logFile;                                ///< Log file path (empty = stdout)
     std::string caCertPath;                             ///< CA certificate path for TLS verification
+    std::string locationId;                             ///< Location ID for streaming (empty = no stream)
+    int streamWidth  = 1920;                            ///< Stream capture width
+    int streamHeight = 1080;                            ///< Stream capture height
+    int streamFps    = 15;                              ///< Stream target FPS
 
     /**
      * @brief Loads configuration from a JSON file.

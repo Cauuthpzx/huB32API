@@ -36,6 +36,14 @@
 #include "hub32agent/features/MessageDisplay.hpp"
 #include "hub32agent/features/PowerControl.hpp"
 
+// Streaming pipeline (optional — requires FFmpeg + WebRTC at build time)
+#if defined(HUB32_WITH_FFMPEG) && defined(HUB32_WITH_WEBRTC)
+#include "hub32agent/pipeline/StreamPipeline.hpp"
+#include "hub32agent/webrtc/SignalingClient.hpp"
+#include "hub32agent/webrtc/WebRtcProducer.hpp"
+#define HUB32_STREAMING_ENABLED 1
+#endif
+
 namespace {
 
 /// @brief Async-signal-safe stop flag set by the signal handler.
@@ -124,6 +132,38 @@ int runAgent(const hub32agent::AgentConfig& cfg)
         return 0;
     }
 
+    // --- 2b. Start streaming pipeline (if built with FFmpeg + WebRTC) ---
+#ifdef HUB32_STREAMING_ENABLED
+    hub32agent::webrtc::SignalingClient signaling(cfg.serverUrl, client.authToken());
+    hub32agent::webrtc::WebRtcProducer::Config producerCfg;
+    producerCfg.locationId = cfg.locationId;
+    hub32agent::webrtc::WebRtcProducer producer(signaling, producerCfg);
+
+    std::unique_ptr<hub32agent::pipeline::StreamPipeline> pipeline;
+    if (!cfg.locationId.empty()) {
+        pipeline = std::make_unique<hub32agent::pipeline::StreamPipeline>(producer);
+
+        hub32agent::pipeline::PipelineConfig pipeCfg;
+        pipeCfg.width  = cfg.streamWidth  > 0 ? cfg.streamWidth  : 1920;
+        pipeCfg.height = cfg.streamHeight > 0 ? cfg.streamHeight : 1080;
+        pipeCfg.fps    = cfg.streamFps    > 0 ? cfg.streamFps    : 15;
+
+        if (producer.connect()) {
+            if (pipeline->start(pipeCfg)) {
+                spdlog::info("[Agent] streaming pipeline started ({}x{} @{} fps, path={})",
+                             pipeCfg.width, pipeCfg.height, pipeCfg.fps,
+                             hub32agent::pipeline::to_string(pipeline->activePath()));
+            } else {
+                spdlog::warn("[Agent] streaming pipeline failed to start — continuing without streaming");
+            }
+        } else {
+            spdlog::warn("[Agent] WebRTC connection failed — continuing without streaming");
+        }
+    } else {
+        spdlog::info("[Agent] no locationId configured — streaming disabled");
+    }
+#endif
+
     // --- 3. Main loop: poll → dispatch → report → heartbeat ---
     auto lastHeartbeat = std::chrono::steady_clock::now();
     const auto pollInterval = std::chrono::milliseconds(cfg.pollIntervalMs);
@@ -169,6 +209,14 @@ int runAgent(const hub32agent::AgentConfig& cfg)
     }
 
     // --- 4. Graceful shutdown ---
+#ifdef HUB32_STREAMING_ENABLED
+    if (pipeline && pipeline->isRunning()) {
+        spdlog::info("[Agent] stopping streaming pipeline");
+        pipeline->stop();
+    }
+    producer.disconnect();
+#endif
+
     spdlog::info("[Agent] shutting down, unregistering from server");
     client.unregister();
     spdlog::info("[Agent] shutdown complete");

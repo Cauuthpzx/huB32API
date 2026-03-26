@@ -129,6 +129,10 @@ AgentConfig AgentConfig::from_file(const std::string& path)
     cfg.logLevel          = j.value("logLevel",          cfg.logLevel);
     cfg.logFile           = j.value("logFile",           cfg.logFile);
     cfg.caCertPath        = j.value("caCertPath",        cfg.caCertPath);
+    cfg.locationId        = j.value("locationId",        cfg.locationId);
+    cfg.streamWidth       = j.value("streamWidth",       cfg.streamWidth);
+    cfg.streamHeight      = j.value("streamHeight",      cfg.streamHeight);
+    cfg.streamFps         = j.value("streamFps",         cfg.streamFps);
 
     spdlog::info("[AgentConfig] loaded config from file: {} (serverUrl={}, poll={}ms)",
                  path, cfg.serverUrl, cfg.pollIntervalMs);
@@ -171,11 +175,15 @@ AgentConfig AgentConfig::from_registry()
     readRegistryString(hKey, "agentKey",  cfg.agentKey);
     readRegistryString(hKey, "logLevel",  cfg.logLevel);
     readRegistryString(hKey, "logFile",   cfg.logFile);
-    readRegistryString(hKey, "caCertPath", cfg.caCertPath);
+    readRegistryString(hKey, "caCertPath",  cfg.caCertPath);
+    readRegistryString(hKey, "locationId", cfg.locationId);
 
     // Integer fields (REG_DWORD)
     readRegistryDword(hKey, "pollIntervalMs",      cfg.pollIntervalMs);
     readRegistryDword(hKey, "heartbeatIntervalMs", cfg.heartbeatIntervalMs);
+    readRegistryDword(hKey, "streamWidth",         cfg.streamWidth);
+    readRegistryDword(hKey, "streamHeight",        cfg.streamHeight);
+    readRegistryDword(hKey, "streamFps",           cfg.streamFps);
 
     RegCloseKey(hKey);
 

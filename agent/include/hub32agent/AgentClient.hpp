@@ -161,6 +161,9 @@ public:
      */
     const std::string& agentId() const;
 
+    /// @brief Returns the JWT auth token obtained during registration.
+    const std::string& authToken() const { return m_authToken; }
+
 private:
     AgentConfig m_cfg;                          ///< Agent configuration
     std::string m_agentId;                      ///< Assigned agent ID from server
