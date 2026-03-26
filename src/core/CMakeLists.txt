@@ -9,6 +9,7 @@ add_library(hub32api-core SHARED
     AuditLog.cpp
     I18n.cpp
     CryptoUtils.cpp
+    Constants.cpp
     ../auth/JwtAuth.cpp
     ../auth/internal/JwtValidator.cpp
     ../auth/internal/TokenStore.cpp
@@ -49,10 +50,11 @@ target_link_libraries(hub32api-core
 )
 
 target_include_directories(hub32api-core
-    PRIVATE
+    SYSTEM PRIVATE
         ${CMAKE_BINARY_DIR}/_deps/jwt-cpp-src/include
 )
 
+set_project_warnings(hub32api-core)
 add_pch(hub32api-core "${CMAKE_CURRENT_SOURCE_DIR}/PrecompiledHeader.hpp")
 
 install(TARGETS hub32api-core

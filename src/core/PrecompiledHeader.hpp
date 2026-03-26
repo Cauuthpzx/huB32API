@@ -44,3 +44,4 @@
 #include "hub32api/core/Types.hpp"
 #include "hub32api/core/Error.hpp"
 #include "hub32api/core/Result.hpp"
+#include "hub32api/core/Constants.hpp"
