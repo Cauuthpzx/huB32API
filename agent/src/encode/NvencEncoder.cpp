@@ -206,6 +206,14 @@ void NvencEncoder::setBitrate(int kbps)
 
 void NvencEncoder::shutdown()
 {
+    // Flush buffered frames before releasing resources
+    if (ctx_ && pkt_) {
+        avcodec_send_frame(ctx_, nullptr);  // signal EOF to flush
+        while (avcodec_receive_packet(ctx_, pkt_) == 0) {
+            av_packet_unref(pkt_);
+        }
+    }
+
     if (pkt_) {
         av_packet_free(&pkt_);
         pkt_ = nullptr;

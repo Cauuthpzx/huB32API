@@ -22,6 +22,7 @@ add_executable(hub32agent-service
 target_include_directories(hub32agent-service
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/pipeline
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_BINARY_DIR}/include
@@ -76,6 +77,13 @@ if(HUB32_WITH_WEBRTC)
         src/webrtc/WebRtcProducer.cpp
     )
     target_compile_definitions(hub32agent-service PRIVATE HUB32_WITH_WEBRTC)
+
+    # StreamPipeline requires both FFmpeg and WebRTC
+    if(HUB32_WITH_FFMPEG)
+        target_sources(hub32agent-service PRIVATE
+            src/pipeline/StreamPipeline.cpp
+        )
+    endif()
 
     # libdatachannel — try static first, then shared
     if(TARGET datachannel-static)
@@ -139,5 +147,50 @@ if(BUILD_TESTS)
         endif()
 
         add_test(NAME test_x264_encoder COMMAND test_x264_encoder)
+    endif()
+
+    # StreamPipeline tests (require both FFmpeg and WebRTC)
+    if(HUB32_WITH_FFMPEG AND HUB32_WITH_WEBRTC)
+        add_executable(test_stream_pipeline
+            tests/test_stream_pipeline.cpp
+            src/pipeline/StreamPipeline.cpp
+            src/encode/X264Encoder.cpp
+            src/encode/NvencEncoder.cpp
+            src/encode/CpuColorConverter.cpp
+            src/encode/EncoderFactory.cpp
+            src/webrtc/SignalingClient.cpp
+            src/webrtc/WebRtcProducer.cpp
+        )
+        target_include_directories(test_stream_pipeline PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/include
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/encode
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/pipeline
+            ${CMAKE_SOURCE_DIR}/include
+            ${CMAKE_BINARY_DIR}/include
+        )
+        target_link_libraries(test_stream_pipeline PRIVATE
+            nlohmann_json::nlohmann_json
+            spdlog::spdlog
+            httplib::httplib
+            GTest::gtest_main
+            ws2_32 d3d11 dxgi dxguid ole32
+        )
+        target_compile_definitions(test_stream_pipeline PRIVATE
+            HUB32_WITH_FFMPEG HUB32_WITH_WEBRTC
+        )
+
+        # Link FFmpeg
+        if(PkgConfig_FOUND AND FFMPEG_FOUND)
+            target_link_libraries(test_stream_pipeline PRIVATE PkgConfig::FFMPEG)
+        endif()
+
+        # Link libdatachannel
+        if(TARGET datachannel-static)
+            target_link_libraries(test_stream_pipeline PRIVATE datachannel-static)
+        elseif(TARGET datachannel)
+            target_link_libraries(test_stream_pipeline PRIVATE datachannel)
+        endif()
+
+        add_test(NAME test_stream_pipeline COMMAND test_stream_pipeline)
     endif()
 endif()

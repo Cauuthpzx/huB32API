@@ -5,7 +5,9 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <vector>
 #include <atomic>
 
 namespace hub32agent::webrtc {
@@ -52,7 +54,24 @@ public:
     /// @brief Sets a callback for connection state changes.
     void setStateCallback(StateCallback cb) { m_stateCb = std::move(cb); }
 
+    /// @brief Updates the target bitrate used for RTP pacing.
+    void setPacingBitrate(int kbps) { m_bitrateKbps.store(kbps); }
+
+    /// @brief Transport statistics snapshot.
+    struct TransportStats {
+        float packetLossFraction = 0.f;  ///< [0.0, 1.0]
+        int   rttMs              = 0;    ///< round-trip time in milliseconds
+    };
+
+    /// @brief Returns the last known transport stats. Thread-safe.
+    TransportStats getStats() const;
+
+    /// @brief Updates transport stats from external source. Thread-safe.
+    void reportStats(float packetLoss, int rttMs);
+
 private:
+    /// @brief Schedules a reconnect with exponential backoff.
+    /// Re-creates transport+producer on reconnect. Does NOT re-probe encoders.
     void attemptReconnect();
 
     SignalingClient& m_signaling;
@@ -62,6 +81,17 @@ private:
     int              m_reconnectAttempts = 0;
     std::string      m_transportId;
     std::string      m_producerId;
+
+    // RTP pacing bitrate (updated by StreamPipeline on quality change)
+    std::atomic<int> m_bitrateKbps{2000};
+
+    // SPS/PPS NAL storage for keyframe injection (send thread only — no lock needed)
+    std::vector<uint8_t> m_spsNal;
+    std::vector<uint8_t> m_ppsNal;
+
+    // Transport stats (written from external thread, read from quality loop)
+    mutable std::mutex m_statsMtx;
+    TransportStats     m_stats;
 
     struct Impl;
     std::unique_ptr<Impl> m_impl;
