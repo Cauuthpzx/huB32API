@@ -75,7 +75,9 @@ endif()
 # Main targets
 # -----------------------------------------------------------------------
 add_subdirectory(src)
-add_subdirectory(agent)
+if(WIN32)
+    add_subdirectory(agent)
+endif()
 
 # -----------------------------------------------------------------------
 # Optional components
