@@ -38,3 +38,6 @@ target_link_libraries(test_computer_repository PRIVATE SQLite::SQLite3)
 
 add_unit_test(test_teacher_repository db/test_teacher_repository.cpp)
 target_link_libraries(test_teacher_repository PRIVATE SQLite::SQLite3)
+
+add_unit_test(test_teacher_location_repository db/test_teacher_location_repository.cpp)
+target_link_libraries(test_teacher_location_repository PRIVATE SQLite::SQLite3)
