@@ -2,6 +2,7 @@
 # Connects to hub32api server, executes commands on student PCs.
 
 option(HUB32_WITH_FFMPEG "Build agent with FFmpeg H.264 encoding (NVENC/QSV/x264)" OFF)
+option(HUB32_WITH_WEBRTC "Build agent with WebRTC streaming (libdatachannel)" OFF)
 
 add_executable(hub32agent-service
     src/main.cpp
@@ -64,6 +65,24 @@ if(HUB32_WITH_FFMPEG)
     #     src/encode/QsvEncoder.cpp
     #     src/encode/D3D11ColorConverter.cpp
     # )
+endif()
+
+# -----------------------------------------------------------------------
+# WebRTC support (optional — for screen streaming)
+# -----------------------------------------------------------------------
+if(HUB32_WITH_WEBRTC)
+    target_sources(hub32agent-service PRIVATE
+        src/webrtc/SignalingClient.cpp
+        src/webrtc/WebRtcProducer.cpp
+    )
+    target_compile_definitions(hub32agent-service PRIVATE HUB32_WITH_WEBRTC)
+
+    # libdatachannel — try static first, then shared
+    if(TARGET datachannel-static)
+        target_link_libraries(hub32agent-service PRIVATE datachannel-static)
+    elseif(TARGET datachannel)
+        target_link_libraries(hub32agent-service PRIVATE datachannel)
+    endif()
 endif()
 
 # Windows resources (optional version info)

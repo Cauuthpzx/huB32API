@@ -39,3 +39,8 @@ mark_as_system(SQLite::SQLite3)
 mark_as_system(GTest::gtest)
 mark_as_system(GTest::gmock)
 mark_as_system(Argon2::argon2)
+
+if(HUB32_WITH_WEBRTC)
+    include(deps/FindLibDataChannel)
+    mark_as_system(datachannel-static)
+endif()
