@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -31,5 +32,13 @@ HUB32API_EXPORT std::string bytes_to_hex(const unsigned char* data, size_t len);
 
 /// @brief Converts hex string to raw bytes. Returns empty on invalid input.
 HUB32API_EXPORT std::vector<unsigned char> hex_to_bytes(std::string_view hex);
+
+/// @brief Safe integer parse. Returns nullopt for empty, too-long (> 20 chars),
+/// or non-parseable input. No exceptions thrown.
+HUB32API_EXPORT std::optional<int> safe_stoi(std::string_view s);
+
+/// @brief Safe double parse. Returns nullopt for empty, too-long (> 40 chars),
+/// NaN, Inf, or non-parseable input. No exceptions thrown.
+HUB32API_EXPORT std::optional<double> safe_stod(std::string_view s);
 
 } // namespace hub32api::utils

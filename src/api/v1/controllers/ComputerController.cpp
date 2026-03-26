@@ -5,6 +5,7 @@
 #include "core/internal/PluginRegistry.hpp"
 #include "core/internal/I18n.hpp"
 #include "api/common/HttpErrorUtil.hpp"
+#include "utils/string_utils.hpp"
 
 #include <httplib.h>
 
@@ -75,10 +76,8 @@ void ComputerController::handleList(const httplib::Request& req, httplib::Respon
 
     int limit = kDefaultPageSize;
     if (req.has_param("limit")) {
-        try {
-            limit = std::stoi(req.get_param_value("limit"));
-            limit = std::clamp(limit, 1, kMaxPageSize);
-        } catch (...) { /* use default */ }
+        limit = hub32api::utils::safe_stoi(req.get_param_value("limit")).value_or(kDefaultPageSize);
+        limit = std::clamp(limit, 1, kMaxPageSize);
     }
 
     // ── Filter all matching computers ─────────────────────────────────────

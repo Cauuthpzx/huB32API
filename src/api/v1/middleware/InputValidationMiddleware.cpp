@@ -124,7 +124,7 @@ bool InputValidationMiddleware::validateJsonValue(const nlohmann::json& j,
                                                   int depth,
                                                   std::string& violation) const
 {
-    if (depth > m_cfg.maxPathDepth) {
+    if (depth >= m_cfg.maxPathDepth) {
         violation = "JSON nesting depth exceeds maximum of "
                     + std::to_string(m_cfg.maxPathDepth);
         return false;

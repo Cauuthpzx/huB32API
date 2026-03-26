@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <stdexcept>
 
 namespace hub32api::utils {
 
@@ -86,6 +87,36 @@ std::vector<unsigned char> hex_to_bytes(std::string_view hex)
         bytes.push_back(static_cast<unsigned char>((hi << 4) | lo));
     }
     return bytes;
+}
+
+std::optional<int> safe_stoi(std::string_view s)
+{
+    if (s.empty() || s.size() > 20) return std::nullopt;
+    try {
+        size_t pos = 0;
+        int val = std::stoi(std::string(s), &pos);
+        if (pos != s.size()) return std::nullopt;
+        return val;
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
+std::optional<double> safe_stod(std::string_view s)
+{
+    if (s.empty() || s.size() > 40) return std::nullopt;
+    std::string str(s);
+    auto lower = to_lower(str);
+    if (lower.find("nan") != std::string::npos ||
+        lower.find("inf") != std::string::npos) return std::nullopt;
+    try {
+        size_t pos = 0;
+        double val = std::stod(str, &pos);
+        if (pos != str.size()) return std::nullopt;
+        return val;
+    } catch (...) {
+        return std::nullopt;
+    }
 }
 
 } // namespace hub32api::utils

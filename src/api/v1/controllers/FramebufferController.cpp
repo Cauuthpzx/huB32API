@@ -3,6 +3,7 @@
 #include "core/internal/PluginRegistry.hpp"
 #include "core/internal/I18n.hpp"
 #include "api/common/HttpErrorUtil.hpp"
+#include "utils/string_utils.hpp"
 
 #include <httplib.h>
 #include <algorithm>
@@ -78,10 +79,10 @@ void FramebufferController::handleGetFramebuffer(
     const std::string formatParam = req.get_param_value("format");
 
     if (!widthParam.empty()) {
-        try { width = std::stoi(widthParam); } catch (...) { width = 0; }
+        width = hub32api::utils::safe_stoi(widthParam).value_or(0);
     }
     if (!heightParam.empty()) {
-        try { height = std::stoi(heightParam); } catch (...) { height = 0; }
+        height = hub32api::utils::safe_stoi(heightParam).value_or(0);
     }
     if (!formatParam.empty()) {
         if (formatParam == "jpeg" || formatParam == "jpg") {
@@ -95,10 +96,12 @@ void FramebufferController::handleGetFramebuffer(
     const std::string compParam = req.get_param_value("compression");
     const std::string qualParam = req.get_param_value("quality");
     if (!compParam.empty()) {
-        try { compression = std::clamp(std::stoi(compParam), 0, 9); } catch (...) {}
+        compression = std::clamp(
+            hub32api::utils::safe_stoi(compParam).value_or(-1), 0, 9);
     }
     if (!qualParam.empty()) {
-        try { quality = std::clamp(std::stoi(qualParam), 0, 100); } catch (...) {}
+        quality = std::clamp(
+            hub32api::utils::safe_stoi(qualParam).value_or(-1), 0, 100);
     }
 
     // --- Capture framebuffer ---

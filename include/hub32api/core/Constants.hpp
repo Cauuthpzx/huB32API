@@ -73,6 +73,7 @@ constexpr size_t kDefaultMaxBodySize     = 1 * 1024 * 1024;  // bytes — 1 MB
 constexpr size_t kDefaultMaxFieldLength  = 1000;              // characters
 constexpr size_t kDefaultMaxArraySize    = 500;               // elements
 constexpr int    kDefaultMaxPathDepth    = 10;                // levels
+constexpr size_t kMaxQueryParamLength    = 200;               // characters — max query parameter length
 
 // -----------------------------------------------------------------------
 // Crypto / buffer sizes
