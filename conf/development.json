@@ -1,12 +1,52 @@
 {
-  "http": { "port": 11081, "bindAddress": "0.0.0.0" },
+  "environment": "development",
+
+  "http": {
+    "port": 11081,
+    "bindAddress": "0.0.0.0"
+  },
+
   "databaseDir": "data",
-  "logging": { "level": "debug" },
-  "connections": { "lifetimeSec": 30, "idleTimeoutSec": 15 },
+
+  "logging": {
+    "level": "debug"
+  },
+
+  "connections": {
+    "lifetimeSec": 30,
+    "idleTimeoutSec": 15
+  },
+
+  "jwt": {
+    "algorithm": "RS256",
+    "privateKeyFile": "conf/private.pem",
+    "publicKeyFile": "conf/public.pem",
+    "expirySeconds": 3600
+  },
+
+  "auth": {
+    "usersFile": "conf/users.json",
+    "agentKeyFile": "conf/agent-key"
+  },
+
   "sfu": {
     "backend": "mock",
     "workerCount": 2,
     "rtcMinPort": 40000,
     "rtcMaxPort": 49999
-  }
+  },
+
+  "smtp": {
+    "host": "smtp.hostinger.com",
+    "port": 587,
+    "useTls": true,
+    "username": "admin@max-hub.online",
+    "passwordFile": "conf/smtp-password",
+    "fromAddress": "admin@max-hub.online",
+    "fromName": "Hub32",
+    "timeoutSec": 10,
+    "verifySsl": true
+  },
+
+  "appBaseUrl": "http://103.91.170.82:11081"
 }

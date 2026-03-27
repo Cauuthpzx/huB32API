@@ -68,7 +68,7 @@ TEST_F(DatabaseManagerTest, OpensAndCreatesSchema)
     EXPECT_TRUE(std::filesystem::exists(dir + "/school.db"));
 }
 
-TEST_F(DatabaseManagerTest, AllSixTablesExist)
+TEST_F(DatabaseManagerTest, AllTablesExist)
 {
     DatabaseManager dm(dir);
     auto* db = dm.schoolDb();
@@ -81,6 +81,11 @@ TEST_F(DatabaseManagerTest, AllSixTablesExist)
     EXPECT_NE(std::find(tables.begin(), tables.end(), "teachers"), tables.end());
     EXPECT_NE(std::find(tables.begin(), tables.end(), "teacher_locations"), tables.end());
     EXPECT_NE(std::find(tables.begin(), tables.end(), "active_sessions"), tables.end());
+    EXPECT_NE(std::find(tables.begin(), tables.end(), "tenants"), tables.end());
+    EXPECT_NE(std::find(tables.begin(), tables.end(), "classes"), tables.end());
+    EXPECT_NE(std::find(tables.begin(), tables.end(), "students"), tables.end());
+    EXPECT_NE(std::find(tables.begin(), tables.end(), "registration_tokens"), tables.end());
+    EXPECT_NE(std::find(tables.begin(), tables.end(), "pending_requests"), tables.end());
 }
 
 TEST_F(DatabaseManagerTest, IndexesExist)
@@ -126,5 +131,5 @@ TEST_F(DatabaseManagerTest, IdempotentOnSecondOpen)
     DatabaseManager dm2(dir);
     EXPECT_TRUE(dm2.isOpen());
     auto tables = getTableNames(dm2.schoolDb());
-    EXPECT_EQ(tables.size(), 6u);
+    EXPECT_EQ(tables.size(), 11u);
 }

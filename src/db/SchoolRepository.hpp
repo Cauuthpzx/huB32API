@@ -26,6 +26,8 @@ public:
     Result<std::string> create(const std::string& name, const std::string& address);
     Result<SchoolRecord> findById(const std::string& id);
     Result<std::vector<SchoolRecord>> listAll();
+    /// Returns schools scoped to a specific tenant (WHERE tenant_id = tenantId).
+    Result<std::vector<SchoolRecord>> listByTenant(const std::string& tenantId);
     Result<void> update(const std::string& id, const std::string& name, const std::string& address);
     Result<void> remove(const std::string& id);
 

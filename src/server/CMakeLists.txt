@@ -17,9 +17,13 @@ add_library(hub32api-server SHARED
     ../api/v1/controllers/FeatureController.cpp
     ../api/v1/controllers/FramebufferController.cpp
     ../api/v1/controllers/SessionController.cpp
+    ../api/v1/controllers/RegisterController.cpp
     ../api/v1/controllers/SchoolController.cpp
     ../api/v1/controllers/StreamController.cpp
+    ../api/v1/controllers/StudentController.cpp
     ../api/v1/controllers/TeacherController.cpp
+    ../api/v1/controllers/ClassController.cpp
+    ../api/v1/controllers/RequestController.cpp
 
     # v1 middleware
     ../api/v1/middleware/AuthMiddleware.cpp
@@ -57,6 +61,7 @@ target_link_libraries(hub32api-server
         hub32api-core
     PRIVATE
         httplib::httplib
+        SQLite::SQLite3
         $<$<PLATFORM_ID:Windows>:ws2_32>
         $<$<PLATFORM_ID:Windows>:iphlpapi>
 )

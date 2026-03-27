@@ -5,6 +5,8 @@
 #include "auth/JwtAuth.hpp"
 #include "auth/Hub32KeyAuth.hpp"
 #include "auth/UserRoleStore.hpp"
+#include "db/TeacherRepository.hpp"
+#include "db/StudentRepository.hpp"
 #include "core/internal/I18n.hpp"
 #include "api/common/HttpErrorUtil.hpp"
 
@@ -32,16 +34,24 @@ namespace hub32api::api::v1 {
 
 /**
  * @brief Constructs the AuthController with the required auth services.
- * @param jwtAuth  Service used to issue and revoke JWT tokens.
- * @param keyAuth  Service used for Hub32 public-key authentication.
+ *
+ * @param jwtAuth      Service used to issue and revoke JWT tokens.
+ * @param keyAuth      Service used for Hub32 public-key authentication.
+ * @param roleStore    UserRoleStore for superadmin/admin credential verification.
+ * @param teacherRepo  TeacherRepository for DB-backed teacher authentication.
+ * @param studentRepo  StudentRepository for DB-backed student authentication.
  */
 AuthController::AuthController(
-    auth::JwtAuth&       jwtAuth,
-    auth::Hub32KeyAuth&  keyAuth,
-    auth::UserRoleStore& roleStore)
+    auth::JwtAuth&         jwtAuth,
+    auth::Hub32KeyAuth&    keyAuth,
+    auth::UserRoleStore&   roleStore,
+    db::TeacherRepository& teacherRepo,
+    db::StudentRepository& studentRepo)
     : m_jwtAuth(jwtAuth)
     , m_keyAuth(keyAuth)
     , m_roleStore(roleStore)
+    , m_teacherRepo(teacherRepo)
+    , m_studentRepo(studentRepo)
 {}
 
 /**
@@ -73,25 +83,55 @@ void AuthController::handleLogin(const httplib::Request& req, httplib::Response&
 
     const auto authMethod = normalizeAuthMethod(req_dto.method);
 
+    // --- Read optional tenant header ---
+    const std::string tenantId = req.get_header_value("X-Tenant-ID");
+
     // --- Authenticate and determine role ---
     // SECURITY: Role is determined by authenticated lookup in persistent store.
     // No code path exists where role is derived from username string comparison.
     //
-    // ATTACK PREVENTED: Previously, sending username="admin" with method="logon"
-    // granted admin role with zero credential verification. Now the password
-    // must match the PBKDF2-SHA256 hash stored in users.json, and role comes
-    // from the store entry, not from the username string.
+    // Multi-tenant login order (Logon method):
+    //   1. If X-Tenant-ID header present → try TeacherRepository (DB)
+    //   2. If teacher not found           → try StudentRepository (DB)
+    //   3. Fallback (no tenant or not found in DB) → UserRoleStore (superadmin/admin)
     std::string role;
+    std::string subject;
+    std::string tid;
 
     if (authMethod == AuthMethod::Logon) {
-        // Authenticate against UserRoleStore (password verification + role lookup)
-        auto authResult = m_roleStore.authenticate(req_dto.username, req_dto.password);
-        if (authResult.is_err()) {
-            sendError(res, 401, tr(lang, "error.auth_failed"),
-                      authResult.error().message);
-            return;
+        if (!tenantId.empty()) {
+            // --- Try teacher first (DB lookup, scoped to tenant) ---
+            auto teacherResult = m_teacherRepo.authenticate(
+                req_dto.username, req_dto.password, tenantId);
+            if (teacherResult.is_ok()) {
+                const auto& rec = teacherResult.value();
+                subject = rec.id;
+                role    = rec.role;   // "teacher" or "admin" (tenant admin role)
+                tid     = tenantId;
+            } else {
+                // --- Try student (DB lookup, scoped to tenant) ---
+                auto studentResult = m_studentRepo.authenticate(
+                    req_dto.username, req_dto.password, tenantId);
+                if (studentResult.is_ok()) {
+                    subject = studentResult.value().username;
+                    role    = to_string(UserRole::Student);
+                    tid     = tenantId;
+                }
+            }
         }
-        role = authResult.value();
+
+        // --- Fallback: UserRoleStore (superadmin / admin — no tenant) ---
+        if (subject.empty()) {
+            auto authResult = m_roleStore.authenticate(req_dto.username, req_dto.password);
+            if (authResult.is_err()) {
+                sendError(res, 401, tr(lang, "error.auth_failed"),
+                          authResult.error().message);
+                return;
+            }
+            role    = authResult.value();
+            subject = req_dto.username;
+            // tid stays empty — no tenant for superadmin/admin
+        }
     }
     else if (authMethod == AuthMethod::Hub32Key) {
         // Hub32 key auth -- delegates to Hub32KeyAuth
@@ -103,7 +143,9 @@ void AuthController::handleLogin(const httplib::Request& req, httplib::Response&
         }
         // Hub32 key users get "teacher" role by default
         // PHASE-3 TODO: allow key-to-role mapping in the store
-        role = to_string(UserRole::Teacher);
+        role    = to_string(UserRole::Teacher);
+        subject = req_dto.username;
+        // tid stays empty — hub32-key auth is not tenant-scoped
     }
     else {
         sendError(res, 400, tr(lang, "error.unsupported_auth_method"),
@@ -111,8 +153,10 @@ void AuthController::handleLogin(const httplib::Request& req, httplib::Response&
         return;
     }
 
-    // --- Issue JWT ---
-    const auto tokenResult = m_jwtAuth.issueToken(req_dto.username, role);
+    // --- Issue JWT (3-arg form: subject, role, tenant_id) ---
+    // subject: teacher UUID or student username or admin username
+    // tid:     tenant_id embedded as "tid" claim; empty for superadmin/admin
+    const auto tokenResult = m_jwtAuth.issueToken(subject, role, tid);
     if (tokenResult.is_err()) {
         sendError(res, 401, tr(lang, "error.auth_failed"),
                   tokenResult.error().message);

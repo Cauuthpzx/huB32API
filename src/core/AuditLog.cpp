@@ -177,7 +177,6 @@ void AuditLog::writerLoop()
             continue;
         }
 
-        bool batchFailed = false;
         while (!batch.empty()) {
             const auto& e = batch.front();
             sqlite3_bind_text(stmt, 1, e.level.c_str(), -1, SQLITE_TRANSIENT);
@@ -189,26 +188,18 @@ void AuditLog::writerLoop()
             sqlite3_bind_int(stmt,  7, e.success ? 1 : 0);
             rc = sqlite3_step(stmt);
             if (rc != SQLITE_DONE) {
-                spdlog::error("[AuditLog] failed to insert row: {}",
+                // Skip bad row, log and continue — audit log is best-effort.
+                // Do not ROLLBACK the whole batch for a single failing row.
+                spdlog::error("[AuditLog] failed to insert row (skipping): {}",
                               sqlite3_errmsg(m_impl->db));
-                batchFailed = true;
-                sqlite3_reset(stmt);
-                break;
             }
             sqlite3_reset(stmt);
             batch.pop();
         }
 
-        if (batchFailed) {
-            rc = sqlite3_exec(m_impl->db, "ROLLBACK", nullptr, nullptr, nullptr);
-            if (rc != SQLITE_OK) {
-                spdlog::error("[AuditLog] ROLLBACK failed: {}", sqlite3_errmsg(m_impl->db));
-            }
-        } else {
-            rc = sqlite3_exec(m_impl->db, "COMMIT", nullptr, nullptr, nullptr);
-            if (rc != SQLITE_OK) {
-                spdlog::error("[AuditLog] COMMIT failed: {}", sqlite3_errmsg(m_impl->db));
-            }
+        rc = sqlite3_exec(m_impl->db, "COMMIT", nullptr, nullptr, nullptr);
+        if (rc != SQLITE_OK) {
+            spdlog::error("[AuditLog] COMMIT failed: {}", sqlite3_errmsg(m_impl->db));
         }
     }
 

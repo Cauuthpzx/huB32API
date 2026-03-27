@@ -16,6 +16,10 @@
 #include "../db/ComputerRepository.hpp"
 #include "../db/TeacherRepository.hpp"
 #include "../db/TeacherLocationRepository.hpp"
+#include "../db/TenantRepository.hpp"
+#include "../db/StudentRepository.hpp"
+#include "../db/ClassRepository.hpp"
+#include "../db/PendingRequestRepository.hpp"
 #include "../core/internal/I18n.hpp"
 #include "../media/SfuBackend.hpp"
 #include "../media/MockSfuBackend.hpp"
@@ -27,6 +31,7 @@
 #include "../plugins/feature/FeaturePlugin.hpp"
 #include "../plugins/session/SessionPlugin.hpp"
 #include "../plugins/metrics/MetricsPlugin.hpp"
+#include "hub32api/service/EmailService.hpp"
 
 #include <httplib.h>
 #include <fstream>
@@ -90,11 +95,16 @@ struct HttpServer::Impl
     std::unique_ptr<db::ComputerRepository>           computerRepo;
     std::unique_ptr<db::TeacherRepository>            teacherRepo;
     std::unique_ptr<db::TeacherLocationRepository>    teacherLocationRepo;
+    std::unique_ptr<db::TenantRepository>             tenantRepo;
+    std::unique_ptr<db::StudentRepository>            studentRepo;
+    std::unique_ptr<db::ClassRepository>              classRepo;
+    std::unique_ptr<db::PendingRequestRepository>     requestRepo;
     std::unique_ptr<media::SfuBackend>                sfuBackend;
     std::unique_ptr<media::RoomManager>               roomManager;
     std::unique_ptr<server::internal::ThreadPool>     threadPool;
     std::unique_ptr<httplib::Server>                  httpServer;
     std::unique_ptr<server::internal::Router>         router;
+    std::unique_ptr<service::EmailService>            emailService;
     std::atomic<bool> running{false};
 };
 
@@ -155,6 +165,10 @@ HttpServer::HttpServer(const ServerConfig& cfg)
     m_impl->computerRepo = std::make_unique<db::ComputerRepository>(*m_impl->dbManager);
     m_impl->teacherRepo = std::make_unique<db::TeacherRepository>(*m_impl->dbManager);
     m_impl->teacherLocationRepo = std::make_unique<db::TeacherLocationRepository>(*m_impl->dbManager);
+    m_impl->tenantRepo = std::make_unique<db::TenantRepository>(*m_impl->dbManager);
+    m_impl->studentRepo  = std::make_unique<db::StudentRepository>(*m_impl->dbManager);
+    m_impl->classRepo    = std::make_unique<db::ClassRepository>(*m_impl->dbManager);
+    m_impl->requestRepo  = std::make_unique<db::PendingRequestRepository>(*m_impl->dbManager);
 
     // 4.2 SFU backend (MockSfuBackend for dev, real mediasoup for production)
 #ifdef HUB32_WITH_MEDIASOUP
@@ -202,6 +216,43 @@ HttpServer::HttpServer(const ServerConfig& cfg)
     // 4b. Initialize i18n
     core::internal::I18n::init(cfg.localesDir, cfg.defaultLocale);
 
+    // 4c. SMTP email service (optional — dev mode works without it)
+    {
+        service::EmailService::Config smtpCfg;
+        smtpCfg.host        = cfg.smtpHost;
+        smtpCfg.port        = cfg.smtpPort;
+        smtpCfg.useTls      = cfg.smtpUseTls;
+        smtpCfg.username    = cfg.smtpUsername;
+        smtpCfg.fromAddress = cfg.smtpFromAddress;
+        smtpCfg.fromName    = cfg.smtpFromName;
+        smtpCfg.timeoutSec  = cfg.smtpTimeoutSec;
+        smtpCfg.verifySsl   = cfg.smtpVerifySsl;
+
+        if (!cfg.smtpPasswordFile.empty()) {
+            std::ifstream pwf(cfg.smtpPasswordFile);
+            if (pwf.is_open()) {
+                std::getline(pwf, smtpCfg.password);
+                // Trim trailing whitespace / newline
+                while (!smtpCfg.password.empty() &&
+                       (smtpCfg.password.back() == '\n' ||
+                        smtpCfg.password.back() == '\r' ||
+                        smtpCfg.password.back() == ' ')) {
+                    smtpCfg.password.pop_back();
+                }
+            } else {
+                spdlog::warn("[HttpServer] smtpPasswordFile not found: {} — SMTP disabled",
+                             cfg.smtpPasswordFile);
+            }
+        }
+
+        m_impl->emailService = std::make_unique<service::EmailService>(std::move(smtpCfg));
+        if (m_impl->emailService->isConfigured()) {
+            spdlog::info("[HttpServer] SMTP configured: {}:{}", cfg.smtpHost, cfg.smtpPort);
+        } else {
+            spdlog::warn("[HttpServer] SMTP not configured — email disabled, debug_token mode active");
+        }
+    }
+
     // 5. HTTP/HTTPS server + router
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
     if (cfg.tlsEnabled) {
@@ -223,14 +274,25 @@ HttpServer::HttpServer(const ServerConfig& cfg)
         return new httplib::ThreadPool(cfg.workerThreads);
     };
 
+    // Derive appBaseUrl: use explicit config value; fall back to bindAddress + port.
+    const std::string appBaseUrl = cfg.appBaseUrl.empty()
+        ? "http://" + cfg.bindAddress + ":" + std::to_string(cfg.httpPort)
+        : cfg.appBaseUrl;
+
     server::internal::Router::Services svcs{
         *m_impl->registry, *m_impl->pool, *m_impl->jwtAuth, *m_impl->keyAuth,
         *m_impl->roleStore, *m_impl->agentRegistry, agentKeyHash,
         m_impl->schoolRepo.get(), m_impl->locationRepo.get(),
         m_impl->computerRepo.get(), m_impl->teacherRepo.get(),
         m_impl->teacherLocationRepo.get(),
+        m_impl->studentRepo.get(),
+        m_impl->classRepo.get(),
         m_impl->roomManager.get(), m_impl->sfuBackend.get(),
-        cfg.turnSecret, cfg.turnServerUrl
+        cfg.turnSecret, cfg.turnServerUrl,
+        m_impl->tenantRepo.get(), m_impl->dbManager.get(),
+        m_impl->requestRepo.get(),
+        m_impl->emailService.get(),
+        appBaseUrl
     };
     m_impl->router = std::make_unique<server::internal::Router>(*m_impl->httpServer, svcs);
     m_impl->router->registerAll();

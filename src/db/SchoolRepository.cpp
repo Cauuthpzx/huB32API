@@ -195,6 +195,61 @@ Result<std::vector<SchoolRecord>> SchoolRepository::listAll()
 }
 
 // ---------------------------------------------------------------------------
+// listByTenant
+// ---------------------------------------------------------------------------
+
+/**
+ * @brief Returns school records belonging to the given tenant, ordered by created_at.
+ *
+ * @param tenantId  UUID of the tenant to filter by.
+ * @return Result containing a (possibly empty) vector of SchoolRecord.
+ */
+Result<std::vector<SchoolRecord>> SchoolRepository::listByTenant(const std::string& tenantId)
+{
+    std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
+
+    constexpr const char* k_sql =
+        "SELECT id, name, address, created_at FROM schools WHERE tenant_id = ? ORDER BY created_at ASC;";
+
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(m_db, k_sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        spdlog::error("[SchoolRepository] listByTenant prepare failed: {}", sqlite3_errmsg(m_db));
+        return Result<std::vector<SchoolRecord>>::fail(ApiError{
+            ErrorCode::InternalError,
+            sqlite3_errmsg(m_db)
+        });
+    }
+
+    sqlite3_bind_text(stmt, 1, tenantId.c_str(), static_cast<int>(tenantId.size()), SQLITE_STATIC);
+
+    std::vector<SchoolRecord> records;
+    int rc;
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+        SchoolRecord rec;
+        auto col_text = [&](int col) -> std::string {
+            const char* txt = reinterpret_cast<const char*>(sqlite3_column_text(stmt, col));
+            return txt ? std::string(txt) : std::string{};
+        };
+        rec.id        = col_text(0);
+        rec.name      = col_text(1);
+        rec.address   = col_text(2);
+        rec.createdAt = sqlite3_column_int64(stmt, 3);
+        records.push_back(std::move(rec));
+    }
+    sqlite3_finalize(stmt);
+
+    if (rc != SQLITE_DONE) {
+        spdlog::error("[SchoolRepository] listByTenant step failed: {}", sqlite3_errmsg(m_db));
+        return Result<std::vector<SchoolRecord>>::fail(ApiError{
+            ErrorCode::InternalError,
+            sqlite3_errmsg(m_db)
+        });
+    }
+
+    return Result<std::vector<SchoolRecord>>::ok(std::move(records));
+}
+
+// ---------------------------------------------------------------------------
 // update
 // ---------------------------------------------------------------------------
 
@@ -289,6 +344,12 @@ Result<void> SchoolRepository::remove(const std::string& id)
         return Result<void>::fail(ApiError{
             ErrorCode::InternalError,
             sqlite3_errmsg(m_db)
+        });
+    }
+
+    if (sqlite3_changes(m_db) == 0) {
+        return Result<void>::fail(ApiError{
+            ErrorCode::NotFound, "School not found: " + id
         });
     }
 

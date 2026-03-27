@@ -9,8 +9,11 @@ namespace hub32api::core::internal { class PluginRegistry; class ConnectionPool;
 namespace hub32api::auth { class JwtAuth; class Hub32KeyAuth; class UserRoleStore; }
 namespace hub32api::agent { class AgentRegistry; }
 namespace hub32api::db { class SchoolRepository; class LocationRepository; class ComputerRepository;
-                         class TeacherRepository; class TeacherLocationRepository; }
+                         class TeacherRepository; class TeacherLocationRepository;
+                         class TenantRepository; class DatabaseManager; class StudentRepository;
+                         class ClassRepository; class PendingRequestRepository; }
 namespace hub32api::media { class SfuBackend; class RoomManager; }
+namespace hub32api::service { class EmailService; }
 namespace hub32api::api::v1::middleware { class RateLimitMiddleware; }
 namespace hub32api::server { class SseManager; }
 
@@ -37,10 +40,17 @@ public:
         db::ComputerRepository*         computerRepo = nullptr;
         db::TeacherRepository*          teacherRepo = nullptr;
         db::TeacherLocationRepository*  teacherLocationRepo = nullptr;
+        db::StudentRepository*          studentRepo = nullptr;
+        db::ClassRepository*            classRepo   = nullptr;
         media::RoomManager*             roomManager = nullptr;
         media::SfuBackend*              sfuBackend = nullptr;
         std::string                     turnSecret;
         std::string                     turnServerUrl;
+        db::TenantRepository*           tenantRepo    = nullptr;
+        db::DatabaseManager*            dbManager     = nullptr;
+        db::PendingRequestRepository*   requestRepo   = nullptr;
+        service::EmailService*          emailService  = nullptr;  // optional; nullptr = dev mode
+        std::string                     appBaseUrl;               // base URL for verification links in emails
     };
 
     explicit Router(httplib::Server& server, Services svcs);
@@ -55,7 +65,11 @@ private:
     void registerAgentRoutes();
     void registerSchoolRoutes();
     void registerTeacherRoutes();
+    void registerStudentRoutes();
+    void registerClassRoutes();
     void registerStreamRoutes();
+    void registerRegisterRoutes();
+    void registerRequestRoutes();
     void registerSse();
     void registerDebug();
 

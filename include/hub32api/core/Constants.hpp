@@ -126,6 +126,9 @@ enum class UserRole
     Teacher,
     Readonly,
     Agent,       // agent registration token role
+    Superadmin,  // developer backdoor (hardcoded, not in DB)
+    Owner,       // multi-tenant owner (full access)
+    Student,     // minimal access, created by teacher
 };
 
 HUB32API_EXPORT std::string to_string(UserRole role);

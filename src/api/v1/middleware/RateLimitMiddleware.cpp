@@ -1,6 +1,7 @@
 #include "core/PrecompiledHeader.hpp"
 #include "RateLimitMiddleware.hpp"
 #include "core/internal/I18n.hpp"
+#include "utils/string_utils.hpp"
 #include <httplib.h>
 #include <cmath>
 #include <ctime>
@@ -54,7 +55,19 @@ bool RateLimitMiddleware::process(const httplib::Request& req, httplib::Response
     using SysClock  = std::chrono::system_clock;
     using Seconds   = std::chrono::duration<double>;
 
-    const std::string key = req.remote_addr + ":" + req.path;
+    // TODO(deploy): When behind a reverse proxy (nginx/caddy), req.remote_addr is the
+    // proxy's IP. Use X-Forwarded-For or X-Real-IP to get the real client IP.
+    // Only enable this after verifying the proxy is trusted (to prevent IP spoofing).
+    std::string client_ip = req.remote_addr;
+    if (auto it = req.headers.find("X-Real-IP"); it != req.headers.end() && !it->second.empty()) {
+        client_ip = it->second;
+    } else if (auto it2 = req.headers.find("X-Forwarded-For"); it2 != req.headers.end() && !it2->second.empty()) {
+        // X-Forwarded-For may be a comma-separated list; first entry is the real client
+        const auto& xff = it2->second;
+        const auto comma = xff.find(',');
+        client_ip = (comma != std::string::npos) ? hub32api::utils::trim(xff.substr(0, comma)) : hub32api::utils::trim(xff);
+    }
+    const std::string key = client_ip + ":" + req.path;
 
     // Resolve per-endpoint rate limit
     int effectiveRpm = m_cfg.requestsPerMinute;

@@ -21,8 +21,11 @@ struct HUB32API_EXPORT JwtToken
     /** @brief Issuer claim ("iss") — expected to equal "hub32api". */
     std::string issuer;
 
-    /** @brief Custom role claim — one of "admin", "teacher", "readonly". */
+    /** @brief Custom role claim — one of "admin", "teacher", "readonly", "owner", "student", "superadmin". */
     std::string role;
+
+    /** @brief Tenant ID claim ("tid") — identifies the tenant for multi-tenant deployments. Empty for superadmin. */
+    std::string tenant_id;
 
     /** @brief JWT ID claim ("jti") — unique token identifier used for revocation. */
     std::string jti;

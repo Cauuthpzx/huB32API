@@ -7,7 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     build-essential cmake ninja-build pkg-config git \
-    libssl-dev libsqlite3-dev \
+    libssl-dev libsqlite3-dev libcurl4-openssl-dev \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
@@ -35,7 +35,7 @@ FROM ubuntu:22.04 AS runtime
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
-    libssl3 libsqlite3-0 ca-certificates openssl curl \
+    libssl3 libsqlite3-0 libcurl4 ca-certificates openssl curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy binary and shared libraries

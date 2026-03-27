@@ -22,10 +22,12 @@ public:
 
     ~JwtAuth();
 
-    // Issue a new token for a validated user
-    Result<std::string> issueToken(
+    // Issue a new token for a validated user.
+    // tenant_id is embedded as the "tid" claim when non-empty; empty for superadmin.
+    [[nodiscard]] Result<std::string> issueToken(
         const std::string& subject,
-        const std::string& role) const;
+        const std::string& role,
+        const std::string& tenant_id = "") const;
 
     // Validate an incoming Bearer token → AuthContext
     Result<AuthContext> authenticate(const std::string& bearerToken) const;

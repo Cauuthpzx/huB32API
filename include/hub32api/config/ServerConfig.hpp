@@ -79,6 +79,25 @@ struct HUB32API_EXPORT ServerConfig
     bool metricsEnabled            = false;
     uint16_t metricsPort           = 9091;
 
+    // SMTP — gửi email xác thực đăng ký (Phase 8)
+    std::string smtpHost;                          // địa chỉ SMTP server (vd: smtp.gmail.com)
+    uint16_t    smtpPort           = 587;          // cổng SMTP: 587 (STARTTLS) hoặc 465 (SSL)
+    bool        smtpUseTls         = true;         // true = STARTTLS/SSL, false = plain text
+    std::string smtpUsername;                      // tài khoản đăng nhập SMTP
+    std::string smtpPasswordFile;                  // đường dẫn file chứa mật khẩu SMTP (1 dòng, không hardcode)
+    std::string smtpFromAddress;                   // địa chỉ email người gửi (vd: noreply@truong.edu.vn)
+    std::string smtpFromName       = "Hub32";      // tên hiển thị người gửi
+    int         smtpTimeoutSec     = 10;           // timeout kết nối tới SMTP server (giây)
+    bool        smtpVerifySsl      = true;         // xác thực certificate SMTP (luôn true trong production)
+
+    // URL gốc ứng dụng — dùng tạo link xác thực trong email
+    std::string appBaseUrl;       // vd: "https://app.truong.edu.vn" hoặc "http://localhost:11081"
+                                  // Rỗng = tự suy từ bindAddress + port
+
+    // Môi trường — kiểm soát hành vi debug
+    std::string environment        = "development"; // "development" | "production"
+                                                    // production: ẩn debug_token trong response đăng ký
+
     // Load from JSON file or Windows Registry; returns error on invalid config
     HUB32API_EXPORT static Result<ServerConfig> from_file(const std::string& path);
     HUB32API_EXPORT static Result<ServerConfig> from_registry();  // Windows Registry

@@ -1,14 +1,20 @@
 {
+  "appBaseUrl": "",
+
+  "environment": "development",
+
   "http": {
     "enabled": true,
     "port": 11081,
     "bindAddress": "127.0.0.1"
   },
+
   "tls": {
     "enabled": false,
     "certFile": "",
     "keyFile": ""
   },
+
   "connections": {
     "limitPerHost": 4,
     "globalLimit": 64,
@@ -16,40 +22,62 @@
     "idleTimeoutSec": 60,
     "authTimeoutSec": 15
   },
+
   "threads": {
     "workerCount": 8
   },
+
   "jwt": {
     "algorithm": "RS256",
-    "secret": "CHANGE_ME_IN_PRODUCTION",
     "privateKeyFile": "",
     "publicKeyFile": "",
     "expirySeconds": 3600,
     "tokenRevocationFile": ""
   },
-  "databaseDir": "data",
-  "hub32": {
-    "pluginDir": ""
+
+  "auth": {
+    "usersFile": "conf/users.json",
+    "agentKeyFile": "",
+    "authKeyFile": ""
   },
+
+  "databaseDir": "data",
+
   "logging": {
     "level": "info",
     "file": "",
     "auditLogFile": ""
   },
+
   "i18n": {
     "localesDir": "locales",
     "defaultLocale": "en"
   },
+
   "sfu": {
     "backend": "mock",
     "workerCount": 0,
     "rtcMinPort": 40000,
     "rtcMaxPort": 49999
   },
+
   "turn": {
     "secret": "",
     "serverUrl": ""
   },
+
+  "smtp": {
+    "host": "",
+    "port": 587,
+    "useTls": true,
+    "username": "",
+    "passwordFile": "",
+    "fromAddress": "",
+    "fromName": "Hub32",
+    "timeoutSec": 10,
+    "verifySsl": true
+  },
+
   "metrics": {
     "enabled": false,
     "port": 9091

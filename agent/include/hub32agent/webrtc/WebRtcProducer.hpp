@@ -85,6 +85,10 @@ private:
     // RTP pacing bitrate (updated by StreamPipeline on quality change)
     std::atomic<int> m_bitrateKbps{2000};
 
+    // Reconnect guard — prevents multiple concurrent reconnect threads and
+    // allows cancellation when disconnect() is called during a pending reconnect.
+    std::atomic<bool> m_reconnecting{false};
+
     // SPS/PPS NAL storage for keyframe injection (send thread only — no lock needed)
     std::vector<uint8_t> m_spsNal;
     std::vector<uint8_t> m_ppsNal;

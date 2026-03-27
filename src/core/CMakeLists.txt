@@ -1,6 +1,8 @@
 include(PchHelpers)
 include(GenerateExportHeader)
 
+find_package(CURL REQUIRED)
+
 add_library(hub32api-core SHARED
     Hub32CoreWrapper.cpp
     PluginRegistry.cpp
@@ -23,6 +25,8 @@ add_library(hub32api-core SHARED
     ../config/internal/ConfigValidator.cpp
     ../agent/AgentRegistry.cpp
     ../agent/HeartbeatMonitor.cpp
+    ../service_email/EmailService.cpp
+    ../service_email/EmailTemplates.cpp
 )
 
 generate_export_header(hub32api-core
@@ -52,6 +56,7 @@ target_link_libraries(hub32api-core
         $<$<PLATFORM_ID:Windows>:crypt32>
         $<IF:$<TARGET_EXISTS:OpenSSL::SSL>,OpenSSL::SSL,ssl>
         $<IF:$<TARGET_EXISTS:OpenSSL::Crypto>,OpenSSL::Crypto,crypto>
+        CURL::libcurl
 )
 
 target_include_directories(hub32api-core

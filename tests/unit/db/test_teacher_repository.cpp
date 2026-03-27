@@ -91,7 +91,7 @@ TEST_F(TeacherRepositoryTest, Authenticate)
 
     auto authResult = repo->authenticate("tuser", "test123");
     ASSERT_TRUE(authResult.is_ok()) << "authenticate() must succeed with correct password";
-    EXPECT_EQ(authResult.value(), "teacher") << "authenticate() must return the role";
+    EXPECT_EQ(authResult.value().role, "teacher") << "authenticate() must return TeacherRecord with correct role";
 }
 
 // ---------------------------------------------------------------------------
@@ -158,5 +158,5 @@ TEST_F(TeacherRepositoryTest, ChangePassword)
     // New password must work
     auto authNew = repo->authenticate("changepw", "new_password");
     ASSERT_TRUE(authNew.is_ok()) << "new password must work after change";
-    EXPECT_EQ(authNew.value(), "teacher");
+    EXPECT_EQ(authNew.value().role, "teacher");
 }

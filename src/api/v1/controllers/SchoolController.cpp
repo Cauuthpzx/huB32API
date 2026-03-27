@@ -23,8 +23,8 @@ std::string getLocale(const httplib::Request& req) {
 
 /**
  * @brief Extracts the Bearer token from the Authorization header and checks
- *        that the caller holds the "admin" role.
- * @return true if the caller is admin; false if 403 has been sent.
+ *        that the caller holds the "admin", "superadmin", or "owner" role.
+ * @return true if authorized; false if 403 has been sent.
  */
 bool requireAdmin(const httplib::Request& req, httplib::Response& res,
                   hub32api::auth::JwtAuth& jwtAuth, const std::string& lang)
@@ -37,12 +37,31 @@ bool requireAdmin(const httplib::Request& req, httplib::Response& res,
     }
     const std::string token = authHeader.substr(hub32api::kBearerPrefixLen);
     auto result = jwtAuth.authenticate(token);
-    if (result.is_err() || !result.value().token ||
-        hub32api::user_role_from_string(result.value().token->role) != hub32api::UserRole::Admin) {
+    if (result.is_err() || !result.value().token) {
+        sendError(res, 403, tr(lang, "error.forbidden"));
+        return false;
+    }
+    const auto& role = result.value().token->role;
+    if (role != "admin" && role != "superadmin" && role != "owner") {
         sendError(res, 403, tr(lang, "error.forbidden"));
         return false;
     }
     return true;
+}
+
+/**
+ * @brief Extracts the tenant_id claim from the Bearer token in the Authorization header.
+ *
+ * @return The tenant_id string, or an empty string if the token is absent/invalid.
+ */
+std::string getTenantId(const httplib::Request& req, hub32api::auth::JwtAuth& jwtAuth)
+{
+    const std::string authHeader = req.get_header_value("Authorization");
+    if (authHeader.size() <= hub32api::kBearerPrefixLen) return {};
+    const std::string token = authHeader.substr(hub32api::kBearerPrefixLen);
+    auto result = jwtAuth.authenticate(token);
+    if (result.is_err() || !result.value().token) return {};
+    return result.value().token->tenant_id;
 }
 
 } // anonymous namespace
@@ -115,7 +134,12 @@ void SchoolController::handleListSchools(const httplib::Request& req, httplib::R
 
     if (!requireAdmin(req, res, m_jwtAuth, lang)) return;
 
-    auto result = m_schoolRepo.listAll();
+    const std::string tenantId = getTenantId(req, m_jwtAuth);
+
+    // superadmin (no tenantId) sees all schools; owner sees only their own tenant's schools.
+    auto result = tenantId.empty()
+        ? m_schoolRepo.listAll()
+        : m_schoolRepo.listByTenant(tenantId);
     if (result.is_err()) {
         sendError(res, 500, result.error().message);
         return;

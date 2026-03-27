@@ -169,21 +169,25 @@ JwtAuth::~JwtAuth() = default;
  *  - iss  "hub32api"
  *  - aud  "hub32api-clients"
  *  - sub  @p subject
- *  - role @p role  (custom claim)
+ *  - role @p role      (custom claim)
+ *  - tid  @p tenant_id (custom claim, omitted when empty — superadmin tokens)
  *  - jti  UUID v4 (for revocation)
  *  - iat  current time
  *  - exp  current time + jwtExpirySeconds
  *
  * The token is signed with the RSA private key using RS256.
  *
- * @param subject  The authenticated username to embed as the "sub" claim.
- * @param role     The role string to embed as the "role" claim.
+ * @param subject    The authenticated username to embed as the "sub" claim.
+ * @param role       The role string to embed as the "role" claim.
+ * @param tenant_id  Tenant identifier to embed as the "tid" claim.
+ *                   Pass an empty string (default) to omit the claim (superadmin).
  * @return @c Result<std::string> containing the signed token on success,
  *         or an @c ApiError on signing failure.
  */
 Result<std::string> JwtAuth::issueToken(
     const std::string& subject,
-    const std::string& role) const
+    const std::string& role,
+    const std::string& tenant_id) const
 {
     try {
         const auto now    = std::chrono::system_clock::now();
@@ -207,11 +211,16 @@ Result<std::string> JwtAuth::issueToken(
             .set_id(jti)
             .set_payload_claim("role", jwt::claim(role));
 
+        // Embed tenant_id as "tid" claim when non-empty (superadmin tokens omit it)
+        if (!tenant_id.empty()) {
+            builder.set_payload_claim("tid", jwt::claim(std::string{tenant_id}));
+        }
+
         std::string token = builder.sign(
             jwt::algorithm::rs256{m_impl->publicKey, m_impl->privateKey, "", ""});
 
-        spdlog::debug("[JwtAuth] issued token: sub={} role={} jti={} alg={}",
-                      subject, role, jti, m_impl->algorithm);
+        spdlog::debug("[JwtAuth] issued token: sub={} role={} jti={} tid={} alg={}",
+                      subject, role, jti, tenant_id, m_impl->algorithm);
         return Result<std::string>::ok(std::move(token));
     }
     catch (const std::exception& ex) {
@@ -270,6 +279,7 @@ Result<AuthContext> JwtAuth::authenticate(const std::string& bearerToken) const
     AuthContext ctx;
     ctx.authenticated = true;
     ctx.token         = std::move(token);
+    ctx.tenant_id     = ctx.token ? ctx.token->tenant_id : "";
 
     spdlog::debug("[JwtAuth] authenticate: success sub={}", ctx.subject());
     return Result<AuthContext>::ok(std::move(ctx));

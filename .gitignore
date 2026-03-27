@@ -4,5 +4,20 @@ build/
 *.suo
 .vs/
 CMakeUserPresets.json
+
+# Config files chứa secret — KHÔNG commit
 conf/production.json
+conf/private.pem
+conf/public.pem
+conf/users.json
+conf/agent-key
+conf/auth-key
+conf/smtp-password
+conf/*.pem
+conf/*-key
+conf/*-password
+
 docs/doxygen/
+
+# Runtime data — KHÔNG commit database files
+data/

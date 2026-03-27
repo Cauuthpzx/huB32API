@@ -7,19 +7,25 @@ namespace hub32api {
 std::string to_string(UserRole role)
 {
     switch (role) {
-        case UserRole::Admin:    return "admin";
-        case UserRole::Teacher:  return "teacher";
-        case UserRole::Readonly: return "readonly";
-        case UserRole::Agent:    return "agent";
+        case UserRole::Admin:       return "admin";
+        case UserRole::Teacher:     return "teacher";
+        case UserRole::Readonly:    return "readonly";
+        case UserRole::Agent:       return "agent";
+        case UserRole::Superadmin:  return "superadmin";
+        case UserRole::Owner:       return "owner";
+        case UserRole::Student:     return "student";
     }
     return "readonly";
 }
 
 UserRole user_role_from_string(const std::string& s)
 {
-    if (s == "admin")    return UserRole::Admin;
-    if (s == "teacher")  return UserRole::Teacher;
-    if (s == "agent")    return UserRole::Agent;
+    if (s == "admin")       return UserRole::Admin;
+    if (s == "teacher")     return UserRole::Teacher;
+    if (s == "agent")       return UserRole::Agent;
+    if (s == "superadmin")  return UserRole::Superadmin;
+    if (s == "owner")       return UserRole::Owner;
+    if (s == "student")     return UserRole::Student;
     return UserRole::Readonly;
 }
 
@@ -101,6 +107,8 @@ std::string to_string(ErrorCode code)
         case ErrorCode::ComputerNotFound:        return "ComputerNotFound";
         case ErrorCode::RequestTimeout:          return "RequestTimeout";
         case ErrorCode::ConnectionTimeout:       return "ConnectionTimeout";
+        case ErrorCode::Conflict:                return "Conflict";
+        case ErrorCode::DuplicateResource:       return "DuplicateResource";
         case ErrorCode::TooManyRequests:         return "TooManyRequests";
         case ErrorCode::ConnectionLimitReached:  return "ConnectionLimitReached";
         case ErrorCode::InternalError:           return "InternalError";

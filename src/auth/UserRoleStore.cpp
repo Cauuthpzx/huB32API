@@ -118,7 +118,11 @@ Result<std::string> UserRoleStore::hashPassword(const std::string& password)
         });
     }
 
-    char encoded[256];
+    const size_t encoded_len = argon2_encodedlen(
+        kArgon2TimeCost, kArgon2MemoryCost, kArgon2Parallelism,
+        kArgon2SaltBytes, kArgon2HashBytes, Argon2_id);
+    std::vector<char> encoded(encoded_len + 1);
+
     int rc = argon2id_hash_encoded(
         kArgon2TimeCost,
         kArgon2MemoryCost,
@@ -126,7 +130,7 @@ Result<std::string> UserRoleStore::hashPassword(const std::string& password)
         password.c_str(), password.size(),
         salt, kArgon2SaltBytes,
         kArgon2HashBytes,
-        encoded, sizeof(encoded));
+        encoded.data(), encoded.size());
 
     if (rc != ARGON2_OK) {
         return Result<std::string>::fail(ApiError{
@@ -135,7 +139,7 @@ Result<std::string> UserRoleStore::hashPassword(const std::string& password)
         });
     }
 
-    return Result<std::string>::ok(std::string(encoded));
+    return Result<std::string>::ok(std::string(encoded.data()));
 }
 
 bool UserRoleStore::verifyPassword(const std::string& password, const std::string& storedHash)

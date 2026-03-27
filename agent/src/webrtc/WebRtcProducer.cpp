@@ -429,6 +429,9 @@ void WebRtcProducer::disconnect()
 
     m_producerId.clear();
     m_connected = false;
+    // Cancel any pending reconnect thread — the thread checks m_reconnecting
+    // after its sleep and will bail out without calling connect() again.
+    m_reconnecting = false;
     spdlog::info("[WebRtcProducer] disconnected");
 }
 
@@ -473,11 +476,31 @@ void WebRtcProducer::attemptReconnect()
     spdlog::info("[WebRtcProducer] reconnecting (attempt {}/{}) in {}ms (exponential backoff)",
                  m_reconnectAttempts, m_config.maxReconnectAttempts, delayMs);
 
-    // Schedule reconnect on a separate thread to avoid blocking the callback
+    // Guard against multiple concurrent reconnect threads.
+    // exchange(true) returns previous value — if already true, another thread
+    // is already handling reconnect; bail out.
+    if (m_reconnecting.exchange(true)) {
+        spdlog::debug("[WebRtcProducer] reconnect already in progress, skipping");
+        return;
+    }
+
+    // Schedule reconnect on a separate thread to avoid blocking the callback.
+    // SAFETY: capture `this` is safe because:
+    //   1. m_reconnecting is checked after sleep — if disconnect() was called
+    //      during the delay it resets m_reconnecting to false, causing the
+    //      thread to abort before calling disconnect()/connect().
+    //   2. StreamPipeline destructor calls disconnect() then joins all threads,
+    //      ensuring WebRtcProducer outlives any detached reconnect thread.
     std::thread([this, delayMs]() {
         std::this_thread::sleep_for(std::chrono::milliseconds(delayMs));
+        if (!m_reconnecting.load()) {
+            // disconnect() was called while we slept — abort reconnect
+            spdlog::info("[WebRtcProducer] reconnect cancelled (disconnect called)");
+            return;
+        }
         disconnect();
         connect();
+        m_reconnecting = false;
     }).detach();
 }
 

@@ -28,6 +28,9 @@ enum class ErrorCode
     // 408
     RequestTimeout                = 408,
     ConnectionTimeout             = 4081,
+    // 409
+    Conflict                      = 409,
+    DuplicateResource             = 4091,
     // 429
     TooManyRequests               = 429,
     ConnectionLimitReached        = 4291,

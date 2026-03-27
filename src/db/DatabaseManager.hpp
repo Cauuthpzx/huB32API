@@ -28,6 +28,7 @@ private:
     struct Impl;
     std::unique_ptr<Impl> m_impl;
     void createSchema();
+    void runMigrations();
 };
 
 } // namespace hub32api::db

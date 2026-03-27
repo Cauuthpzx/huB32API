@@ -1,0 +1,137 @@
+{
+  "_ghi_chu_chung": [
+    "Đây là file tài liệu cấu hình đầy đủ có ghi chú.",
+    "KHÔNG dùng file này trực tiếp — copy sang development.json hoặc docker.json.",
+    "Mọi key đều có giá trị mặc định hợp lệ — chỉ cần override những gì khác.",
+    "Xem thêm: docs/specs/architecture.md"
+  ],
+
+  "appBaseUrl": "",
+  "_note_appBaseUrl": "URL gốc của ứng dụng, dùng tạo link xác thực trong email. vd: 'https://app.truong.edu.vn'. Để trống = tự suy từ bindAddress + port (chỉ phù hợp dev local).",
+
+  "environment": "development",
+  "_note_environment": "Chế độ vận hành. 'development' = trả debug_token trong response đăng ký. 'production' = ẩn debug_token, yêu cầu SMTP thật hoạt động.",
+
+  "http": {
+    "enabled": true,
+    "_note_enabled": "Bật/tắt HTTP server. Thường để true; tắt nếu chỉ dùng socket nội bộ.",
+    "port": 11081,
+    "_note_port": "Cổng lắng nghe HTTP. Mặc định 11081 (phân biệt với Hub32 desktop WebAPI cổng 11080). Cần mở firewall nếu bindAddress là 0.0.0.0.",
+    "bindAddress": "127.0.0.1",
+    "_note_bindAddress": "'127.0.0.1' = chỉ nhận kết nối từ máy cục bộ (an toàn hơn). '0.0.0.0' = nhận từ mọi interface mạng (cần thiết khi có reverse proxy hoặc Docker)."
+  },
+
+  "tls": {
+    "enabled": false,
+    "_note_tls_enabled": "Bật HTTPS. Nên để false khi đứng sau nginx/Caddy reverse proxy (proxy xử lý TLS). Chỉ bật trực tiếp nếu không có reverse proxy.",
+    "certFile": "conf/cert.pem",
+    "_note_certFile": "Đường dẫn certificate TLS (PEM). Tạo Let's Encrypt: certbot certonly --standalone -d domain.com",
+    "keyFile": "conf/key.pem",
+    "_note_keyFile": "Đường dẫn private key TLS (PEM). Cần bảo vệ file này: chmod 600 conf/key.pem"
+  },
+
+  "connections": {
+    "limitPerHost": 4,
+    "_note_limitPerHost": "Số kết nối đồng thời tối đa từ 1 địa chỉ IP. Ngăn 1 client chiếm hết tài nguyên. Tăng lên 10-20 nếu dùng phía sau load balancer (các request cùng IP thật).",
+    "globalLimit": 64,
+    "_note_globalLimit": "Tổng số kết nối đồng thời toàn server. Tăng theo số lượng client đồng thời dự kiến.",
+    "lifetimeSec": 180,
+    "_note_lifetimeSec": "Thời gian sống tối đa 1 kết nối HTTP (giây). Sau thời gian này server buộc đóng dù client vẫn giữ. Ngăn kết nối zombie.",
+    "idleTimeoutSec": 60,
+    "_note_idleTimeoutSec": "Thời gian không hoạt động tối đa (giây). Kết nối không gửi request trong thời gian này sẽ bị đóng.",
+    "authTimeoutSec": 15,
+    "_note_authTimeoutSec": "Timeout cho bước xác thực đầu tiên của kết nối mới (giây). Kết nối không xác thực trong thời gian này bị từ chối."
+  },
+
+  "threads": {
+    "workerCount": 8,
+    "_note_workerCount": "Số luồng xử lý song song. Khuyến nghị: bằng số logical CPU cores. Đặt 0 để tự detect (chưa implement)."
+  },
+
+  "jwt": {
+    "algorithm": "RS256",
+    "_note_algorithm": "Thuật toán ký JWT. CHỈ dùng RS256. HS256 đã bị xóa vì không an toàn khi secret bị lộ.",
+    "privateKeyFile": "conf/private.pem",
+    "_note_privateKeyFile": "File RSA private key (PEM). Dùng để KÝ token. TUYỆT ĐỐI không commit file này lên git. Tạo: openssl genrsa -out conf/private.pem 2048",
+    "publicKeyFile": "conf/public.pem",
+    "_note_publicKeyFile": "File RSA public key (PEM). Dùng để XÁC THỰC token. Có thể public. Tạo: openssl rsa -in conf/private.pem -pubout -out conf/public.pem",
+    "expirySeconds": 3600,
+    "_note_expirySeconds": "Thời gian hết hạn JWT (giây). 3600 = 1 giờ. Client phải login lại sau thời gian này. Tăng lên 86400 (1 ngày) nếu muốn giảm tần suất login.",
+    "tokenRevocationFile": "data/revoked-tokens.db",
+    "_note_tokenRevocationFile": "File SQLite lưu danh sách JWT đã bị thu hồi (logout sớm). Để trống = chỉ lưu trong memory, mất khi restart server."
+  },
+
+  "auth": {
+    "usersFile": "conf/users.json",
+    "_note_usersFile": "File JSON chứa tài khoản SUPERADMIN (developer backdoor). KHÔNG dùng cho teacher/student thông thường — họ xác thực qua database. Copy từ conf/users.example.json. Để trống = không có superadmin local.",
+    "agentKeyFile": "conf/agent-key",
+    "_note_agentKeyFile": "File chứa HASH của agent registration key (1 dòng). Agent máy học sinh gửi key này khi tự đăng ký. Tạo hash: hub32api-service --hash-password <key>. Để trống = tắt agent registration.",
+    "authKeyFile": "conf/auth-key",
+    "_note_authKeyFile": "File chứa HASH của Hub32 desktop auth key (1 dòng). Hub32 desktop app dùng key này thay JWT để giao tiếp API. Để trống = tắt Hub32-key auth."
+  },
+
+  "databaseDir": "data",
+  "_note_databaseDir": "Thư mục chứa tất cả file SQLite. Tự tạo khi server khởi động. Trong Docker nên mount volume vào đây để dữ liệu không mất khi restart container. Chứa: school.db (dữ liệu chính), audit.db (log), revoked-tokens.db.",
+
+  "logging": {
+    "level": "info",
+    "_note_level": "Mức độ log: 'trace' (rất chi tiết) > 'debug' > 'info' > 'warn' > 'error' (ít nhất). Development dùng 'debug'. Production dùng 'warn' để giảm disk I/O.",
+    "file": "logs/hub32api.log",
+    "_note_file": "File lưu log. Để trống = ghi ra stdout (tốt cho Docker + systemd journald). Nếu set file, thư mục phải tồn tại.",
+    "auditLogFile": "data/audit.db",
+    "_note_auditLogFile": "File SQLite lưu audit trail: ai đăng nhập, ai tạo/xóa dữ liệu, từ IP nào, lúc mấy giờ. Quan trọng cho compliance. Để trống = tắt audit log."
+  },
+
+  "i18n": {
+    "localesDir": "locales",
+    "_note_localesDir": "Thư mục chứa file JSON ngôn ngữ: en.json, vi.json, zh_CN.json. Dùng khi server trả lỗi theo ngôn ngữ client.",
+    "defaultLocale": "en",
+    "_note_defaultLocale": "Ngôn ngữ fallback khi client không gửi Accept-Language header. Các locale hiện có: 'en', 'vi', 'zh_CN'."
+  },
+
+  "sfu": {
+    "backend": "mock",
+    "_note_backend": "'mock' = giả lập, không có video/audio thật (dùng khi develop). 'mediasoup' = SFU thật cho production (cần Node.js mediasoup worker).",
+    "workerCount": 2,
+    "_note_workerCount": "Số mediasoup worker process. Chỉ có hiệu lực khi backend='mediasoup'. Khuyến nghị: bằng số CPU cores.",
+    "rtcMinPort": 40000,
+    "_note_rtcMinPort": "Cổng UDP thấp nhất cho RTC media. Cần MỞ FIREWALL toàn bộ dải port này (UDP inbound + outbound).",
+    "rtcMaxPort": 49999,
+    "_note_rtcMaxPort": "Cổng UDP cao nhất cho RTC media. Dải mặc định: 40000-49999 (10000 cổng). Giảm dải nếu firewall giới hạn."
+  },
+
+  "turn": {
+    "secret": "",
+    "_note_secret": "HMAC secret dùng tạo TURN credentials động (coturn REST API). Phải khớp với turn_rest_api_key trong coturn config. Để trống = không dùng TURN (WebRTC sẽ không hoạt động qua NAT/firewall chặt).",
+    "serverUrl": "",
+    "_note_serverUrl": "Địa chỉ TURN server. vd: 'turn.truong.edu.vn' hoặc IP public '103.91.170.82'. Server này relay media khi peer-to-peer không kết nối được."
+  },
+
+  "smtp": {
+    "host": "smtp.gmail.com",
+    "_note_host": "Địa chỉ SMTP server để gửi email xác thực đăng ký. Ví dụ: 'smtp.gmail.com' (Gmail), 'smtp.mailgun.org' (Mailgun), 'smtp.sendgrid.net' (SendGrid), hoặc SMTP nội bộ của trường. Để trống = tắt gửi email (dùng debug_token).",
+    "port": 587,
+    "_note_port": "Cổng SMTP: 587 = STARTTLS (khuyến nghị, hỗ trợ bởi mọi provider). 465 = SSL/TLS ngầm. 25 = plain text không mã hoá (KHÔNG dùng).",
+    "useTls": true,
+    "_note_useTls": "true = bắt buộc mã hoá TLS (STARTTLS hoặc SSL). LUÔN để true trừ khi SMTP server là nội bộ trong cùng mạng LAN có firewall bảo vệ.",
+    "username": "noreply@truong.edu.vn",
+    "_note_username": "Tên đăng nhập SMTP. Thường là địa chỉ email. Với SendGrid dùng 'apikey'. Với AWS SES dùng SMTP username từ IAM credential.",
+    "passwordFile": "conf/smtp-password",
+    "_note_passwordFile": "File chứa MẬT KHẨU SMTP hoặc API key (1 dòng, không có ký tự thừa). TUYỆT ĐỐI không viết mật khẩu trực tiếp vào JSON. Thêm file này vào .gitignore. Gmail: dùng App Password (không phải mật khẩu chính).",
+    "fromAddress": "noreply@truong.edu.vn",
+    "_note_fromAddress": "Địa chỉ email hiển thị là người gửi. Phải là email được phép gửi từ SMTP server đó (nếu không sẽ bị từ chối hoặc vào spam).",
+    "fromName": "Hệ thống Hub32",
+    "_note_fromName": "Tên hiển thị trong ứng dụng email của người nhận. vd: 'Hệ thống Hub32', 'Trường THPT Nguyễn Du'.",
+    "timeoutSec": 10,
+    "_note_timeoutSec": "Timeout kết nối tới SMTP server (giây). Nếu SMTP server chậm hoặc không phản hồi trong thời gian này, đăng ký sẽ trả lỗi. Tăng lên 30 nếu SMTP server ở xa hoặc mạng không ổn định.",
+    "verifySsl": true,
+    "_note_verifySsl": "true = xác thực certificate của SMTP server (bắt buộc production, ngăn MITM). false = bỏ qua certificate (chỉ dùng test với SMTP server nội bộ không có cert hợp lệ)."
+  },
+
+  "metrics": {
+    "enabled": false,
+    "_note_enabled": "Bật endpoint Prometheus metrics. Truy cập tại http://host:metricsPort/metrics. Dùng với Grafana để giám sát server.",
+    "port": 9091,
+    "_note_port": "Cổng expose Prometheus metrics (tách riêng khỏi API port để dễ giới hạn firewall)."
+  }
+}

@@ -29,6 +29,17 @@ add_unit_test(test_agent_registry     agent/test_agent_registry.cpp)
 add_unit_test(test_agent_key_validation auth/test_agent_key_validation.cpp)
 add_unit_test(test_heartbeat_monitor  agent/test_heartbeat_monitor.cpp)
 add_unit_test(test_token_store_sqlite auth/test_token_store_sqlite.cpp)
+
+add_unit_test(test_register_flow      auth/test_register_flow.cpp
+    ${CMAKE_SOURCE_DIR}/src/api/v1/controllers/RegisterController.cpp
+    ${CMAKE_SOURCE_DIR}/src/api/common/HttpErrorUtil.cpp
+)
+target_link_libraries(test_register_flow PRIVATE
+    SQLite::SQLite3
+    httplib::httplib
+    $<IF:$<TARGET_EXISTS:OpenSSL::SSL>,OpenSSL::SSL,ssl>
+    $<IF:$<TARGET_EXISTS:OpenSSL::Crypto>,OpenSSL::Crypto,crypto>
+)
 add_unit_test(test_database_manager  db/test_database_manager.cpp)
 target_link_libraries(test_database_manager PRIVATE SQLite::SQLite3)
 
@@ -46,6 +57,15 @@ target_link_libraries(test_teacher_repository PRIVATE SQLite::SQLite3)
 
 add_unit_test(test_teacher_location_repository db/test_teacher_location_repository.cpp)
 target_link_libraries(test_teacher_location_repository PRIVATE SQLite::SQLite3)
+
+add_unit_test(test_tenant_repository db/test_tenant_repository.cpp)
+target_link_libraries(test_tenant_repository PRIVATE SQLite::SQLite3)
+
+add_unit_test(test_class_repository db/test_class_repository.cpp)
+target_link_libraries(test_class_repository PRIVATE SQLite::SQLite3)
+
+add_unit_test(test_student_repository db/test_student_repository.cpp)
+target_link_libraries(test_student_repository PRIVATE SQLite::SQLite3)
 
 add_unit_test(test_mock_sfu_backend  media/test_mock_sfu_backend.cpp)
 add_unit_test(test_room_manager      media/test_room_manager.cpp)

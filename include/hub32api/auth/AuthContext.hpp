@@ -21,11 +21,32 @@ struct HUB32API_EXPORT AuthContext
     /** @brief The validated token, or std::nullopt for anonymous requests. */
     std::optional<JwtToken> token;
 
+    /** @brief Tenant ID for multi-tenant deployments. Empty string for unauthenticated or superadmin. */
+    std::string tenant_id;
+
     /**
      * @brief Returns true if the authenticated user holds the "admin" role.
      * @return @c true when @c token is present and @c token->role == "admin".
      */
     bool is_admin() const noexcept { return token && token->has_role("admin"); }
+
+    /**
+     * @brief Returns true if the authenticated user holds the "superadmin" role.
+     * @return @c true when @c token is present and @c token->role == "superadmin".
+     */
+    bool is_superadmin() const noexcept { return token && token->has_role("superadmin"); }
+
+    /**
+     * @brief Returns true if the authenticated user holds the "owner" role.
+     * @return @c true when @c token is present and @c token->role == "owner".
+     */
+    bool is_owner() const noexcept { return token && token->has_role("owner"); }
+
+    /**
+     * @brief Returns true if the authenticated user holds the "student" role.
+     * @return @c true when @c token is present and @c token->role == "student".
+     */
+    bool is_student() const noexcept { return token && token->has_role("student"); }
 
     /**
      * @brief Returns true if the authenticated user holds the "teacher" role.

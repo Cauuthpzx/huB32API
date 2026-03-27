@@ -224,6 +224,14 @@ Result<JwtToken> JwtValidator::validate(const std::string& rawToken) const
         });
     }
 
+    // Optional: tenant_id (tid) — multi-tenant identifier. Empty for superadmin.
+    try {
+        token.tenant_id = decoded->get_payload_claim("tid").as_string();
+    }
+    catch (const std::exception&) {
+        // tid absent or unparseable — leave empty
+    }
+
     // Optional: issued-at (iat)
     if (decoded->has_issued_at()) {
         token.issuedAt = decoded->get_issued_at();
@@ -234,8 +242,8 @@ Result<JwtToken> JwtValidator::validate(const std::string& rawToken) const
         token.expiresAt = decoded->get_expires_at();
     }
 
-    spdlog::debug("[JwtValidator] token valid: sub={} role={} jti={}",
-                  token.subject, token.role, token.jti);
+    spdlog::debug("[JwtValidator] token valid: sub={} role={} jti={} tid={}",
+                  token.subject, token.role, token.jti, token.tenant_id);
 
     return Result<JwtToken>::ok(std::move(token));
 }

@@ -48,6 +48,29 @@
  *   GET    /health
  *   GET    /api/v2/metrics
  *
+ *  v1 — Students (teacher/owner protected, except activate)
+ *   POST   /api/v1/students                          (teacher/owner)
+ *   GET    /api/v1/students           ?classId=xxx   (teacher/owner)
+ *   POST   /api/v1/students/activate                 (student JWT — no teacher role)
+ *   GET    /api/v1/students/:id                      (teacher/owner)
+ *   PUT    /api/v1/students/:id                      (teacher/owner)
+ *   DELETE /api/v1/students/:id                      (teacher/owner)
+ *   POST   /api/v1/students/:id/reset-machine        (teacher/owner)
+ *
+ *  v1 — Classes (owner/teacher protected)
+ *   POST   /api/v1/classes                          (owner only)
+ *   GET    /api/v1/classes                          (owner: all in tenant; teacher: own classes)
+ *   GET    /api/v1/classes/:id                      (owner/teacher)
+ *   PUT    /api/v1/classes/:id                      (owner only)
+ *   DELETE /api/v1/classes/:id                      (owner only)
+ *
+ *  v1 — Requests/Inbox (ticket system for password-change approval)
+ *   POST   /api/v1/requests/change-password         (student or teacher)
+ *   GET    /api/v1/requests/inbox                   (teacher or owner)
+ *   GET    /api/v1/requests/outbox                  (student or teacher)
+ *   POST   /api/v1/requests/:id/accept              (teacher or owner)
+ *   POST   /api/v1/requests/:id/reject              (teacher or owner)
+ *
  *  OpenAPI (public)
  *   GET    /openapi.json
  */
@@ -62,9 +85,12 @@
 #include "../api/v1/controllers/FeatureController.hpp"
 #include "../api/v1/controllers/FramebufferController.hpp"
 #include "../api/v1/controllers/SessionController.hpp"
+#include "../api/v1/controllers/RegisterController.hpp"
 #include "../api/v1/controllers/SchoolController.hpp"
 #include "../api/v1/controllers/StreamController.hpp"
 #include "../api/v1/controllers/TeacherController.hpp"
+#include "../api/v1/controllers/StudentController.hpp"
+#include "../api/v1/controllers/ClassController.hpp"
 
 // Controllers — v2
 #include "../api/v2/controllers/BatchController.hpp"
@@ -101,6 +127,11 @@
 #include "../db/ComputerRepository.hpp"
 #include "../db/TeacherRepository.hpp"
 #include "../db/TeacherLocationRepository.hpp"
+#include "../db/TenantRepository.hpp"
+#include "../db/DatabaseManager.hpp"
+#include "../db/StudentRepository.hpp"
+#include "../db/PendingRequestRepository.hpp"
+#include "../api/v1/controllers/RequestController.hpp"
 
 // SSE
 #include "SseManager.hpp"
@@ -700,7 +731,11 @@ void Router::registerAll()
     registerAgentRoutes();
     registerSchoolRoutes();
     registerTeacherRoutes();
+    registerStudentRoutes();
+    registerClassRoutes();
+    registerRequestRoutes();
     registerStreamRoutes();
+    registerRegisterRoutes();
     registerV2();
     registerHealthAndMetrics();
     registerOpenApi();
@@ -731,7 +766,13 @@ void Router::registerAll()
 void Router::registerV1()
 {
     // ── Controllers ───────────────────────────────────────────────────────
-    auto authCtrl     = std::make_shared<api::v1::AuthController>(m_svcs.jwtAuth, m_svcs.keyAuth, m_svcs.roleStore);
+    if (!m_svcs.teacherRepo || !m_svcs.studentRepo) {
+        spdlog::critical("[Router] teacherRepo or studentRepo not available — cannot start auth routes");
+        return;
+    }
+    auto authCtrl     = std::make_shared<api::v1::AuthController>(
+        m_svcs.jwtAuth, m_svcs.keyAuth, m_svcs.roleStore,
+        *m_svcs.teacherRepo, *m_svcs.studentRepo);
     if (!m_svcs.computerRepo) {
         spdlog::warn("[Router] computerRepo not available — computer routes disabled");
         return;
@@ -742,10 +783,11 @@ void Router::registerV1()
     auto sessionCtrl  = std::make_shared<api::v1::SessionController>(m_svcs.registry);
 
     // ── Middleware ────────────────────────────────────────────────────────
+    // X-Tenant-ID is required for multi-tenant login (POST /api/v1/auth with method=logon)
     const api::v1::middleware::CorsConfig corsConfig{
         {"*"},
         {"GET","POST","PUT","DELETE","OPTIONS"},
-        {"Authorization","Content-Type","X-Request-ID","Accept"},
+        {"Authorization","Content-Type","X-Request-ID","Accept","X-Tenant-ID"},
         false,
         3600
     };
@@ -1298,6 +1340,129 @@ void Router::registerTeacherRoutes()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Student routes
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * @brief Registers all /api/v1/students routes.
+ *
+ * Route registration order is critical:
+ *   1. POST /api/v1/students/activate  — must be registered before /:id patterns
+ *      so that "activate" is not captured as an :id path segment.
+ *   2. POST /api/v1/students/:id/reset-machine — before bare /:id
+ *   3. Bare /:id routes (GET, PUT, DELETE)
+ *
+ * The activate endpoint accepts a student Bearer token (role="student"), not
+ * teacher/owner. All other endpoints require teacher or owner role.
+ */
+void Router::registerStudentRoutes()
+{
+    if (!m_svcs.studentRepo) {
+        spdlog::warn("[Router] studentRepo not available — skipping student routes");
+        return;
+    }
+
+    auto studentCtrl = std::make_shared<api::v1::StudentController>(
+        *m_svcs.studentRepo, m_svcs.jwtAuth);
+
+    // ── Middleware ────────────────────────────────────────────────────────
+    const api::v1::middleware::CorsConfig corsConfig{
+        {"*"},
+        {"GET","POST","PUT","DELETE","OPTIONS"},
+        {"Authorization","Content-Type","X-Request-ID","Accept"},
+        false,
+        3600
+    };
+
+    auto cors   = std::make_shared<api::v1::middleware::CorsMiddleware>(corsConfig);
+    auto logger = std::make_shared<api::v1::middleware::LoggingMiddleware>();
+    auto iv     = std::make_shared<api::v1::middleware::InputValidationMiddleware>();
+    auto rl     = m_rl;
+    auto auth   = std::make_shared<api::v1::middleware::AuthMiddleware>(m_svcs.jwtAuth);
+
+    // Protected route: runs full middleware stack (including JWT auth)
+    auto protectedRoute = [&](const std::string& method, const std::string& path, auto handler)
+    {
+        auto h = [cors, logger, iv, rl, auth, handler]
+            (const httplib::Request& req, httplib::Response& res)
+        {
+            logger->logRequest(req);
+            if (!cors->process(req, res)) { logger->logResponse(req, res); return; }
+            if (!iv->process(req, res))   { logger->logResponse(req, res); return; }
+            if (!rl->process(req, res))   { logger->logResponse(req, res); return; }
+            core::internal::ApiContext ctx;
+            ctx.requestId = req.has_header("X-Request-ID")
+                ? req.get_header_value("X-Request-ID") : "";
+            if (!auth->process(req, res, ctx)) { logger->logResponse(req, res); return; }
+            handler(req, res);
+            logger->logResponse(req, res);
+        };
+        if (method == "GET")         m_server.Get(path.c_str(), h);
+        else if (method == "POST")   m_server.Post(path.c_str(), h);
+        else if (method == "PUT")    m_server.Put(path.c_str(), h);
+        else if (method == "DELETE") m_server.Delete(path.c_str(), h);
+    };
+
+    // Semi-protected route: CORS + logging + rate-limit but NO JWT auth middleware.
+    // Role checking is performed inside the controller handler (student token).
+    auto semiProtectedRoute = [&](const std::string& method, const std::string& path, auto handler)
+    {
+        auto h = [cors, logger, iv, rl, handler]
+            (const httplib::Request& req, httplib::Response& res)
+        {
+            logger->logRequest(req);
+            if (!cors->process(req, res)) { logger->logResponse(req, res); return; }
+            if (!iv->process(req, res))   { logger->logResponse(req, res); return; }
+            if (!rl->process(req, res))   { logger->logResponse(req, res); return; }
+            handler(req, res);
+            logger->logResponse(req, res);
+        };
+        if (method == "POST") m_server.Post(path.c_str(), h);
+    };
+
+    // ── IMPORTANT: Register /activate BEFORE /:id to prevent route shadowing ──
+    semiProtectedRoute("POST", "/api/v1/students/activate",
+        [studentCtrl](const httplib::Request& req, httplib::Response& res) {
+            studentCtrl->handleActivateMachine(req, res);
+        });
+
+    // ── Collection routes ─────────────────────────────────────────────────
+    protectedRoute("POST", "/api/v1/students",
+        [studentCtrl](const httplib::Request& req, httplib::Response& res) {
+            studentCtrl->handleCreate(req, res);
+        });
+
+    protectedRoute("GET", "/api/v1/students",
+        [studentCtrl](const httplib::Request& req, httplib::Response& res) {
+            studentCtrl->handleList(req, res);
+        });
+
+    // ── Sub-resource routes — must be registered BEFORE bare /:id ────────
+    protectedRoute("POST", R"(/api/v1/students/([^/]+)/reset-machine)",
+        [studentCtrl](const httplib::Request& req, httplib::Response& res) {
+            studentCtrl->handleResetMachine(req, res);
+        });
+
+    // ── Single-resource routes ────────────────────────────────────────────
+    protectedRoute("GET", R"(/api/v1/students/([^/]+))",
+        [studentCtrl](const httplib::Request& req, httplib::Response& res) {
+            studentCtrl->handleGet(req, res);
+        });
+
+    protectedRoute("PUT", R"(/api/v1/students/([^/]+))",
+        [studentCtrl](const httplib::Request& req, httplib::Response& res) {
+            studentCtrl->handleUpdate(req, res);
+        });
+
+    protectedRoute("DELETE", R"(/api/v1/students/([^/]+))",
+        [studentCtrl](const httplib::Request& req, httplib::Response& res) {
+            studentCtrl->handleDelete(req, res);
+        });
+
+    spdlog::debug("[Router] student routes registered");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Stream (WebRTC signaling) routes
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1741,6 +1906,241 @@ void Router::registerDebug()
         res.status = 200;
         res.set_content(html.str(), "text/html");
     });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Registration routes (public — no JWT required)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * @brief Registers POST /api/v1/register and GET /api/v1/verify.
+ *
+ * Both routes are public. CORS, Logging, and RateLimit middleware are applied;
+ * AuthMiddleware is intentionally omitted.
+ */
+void Router::registerRegisterRoutes()
+{
+    if (!m_svcs.tenantRepo || !m_svcs.teacherRepo || !m_svcs.dbManager) {
+        spdlog::warn("[Router] TenantRepository/TeacherRepository/DatabaseManager not available"
+                     " — registration routes disabled");
+        return;
+    }
+
+    auto regCtrl = std::make_shared<api::v1::RegisterController>(
+        *m_svcs.tenantRepo, *m_svcs.teacherRepo, *m_svcs.dbManager,
+        m_svcs.emailService, m_svcs.appBaseUrl);
+
+    const api::v1::middleware::CorsConfig corsConfig{
+        {"*"},
+        {"GET", "POST", "OPTIONS"},
+        {"Content-Type", "X-Request-ID", "Accept"},
+        false,
+        3600
+    };
+
+    auto cors   = std::make_shared<api::v1::middleware::CorsMiddleware>(corsConfig);
+    auto logger = std::make_shared<api::v1::middleware::LoggingMiddleware>();
+    auto rl     = m_rl;
+
+    // Public route: CORS + Logging + RateLimit (no JWT auth)
+    auto publicRoute = [&](const std::string& method, const std::string& path, auto handler) {
+        auto h = [cors, logger, rl, handler]
+            (const httplib::Request& req, httplib::Response& res)
+        {
+            logger->logRequest(req);
+            if (!cors->process(req, res)) { logger->logResponse(req, res); return; }
+            if (!rl->process(req, res))   { logger->logResponse(req, res); return; }
+            handler(req, res);
+            logger->logResponse(req, res);
+        };
+        if (method == "POST") m_server.Post(path.c_str(), h);
+        else if (method == "GET") m_server.Get(path.c_str(), h);
+    };
+
+    publicRoute("POST", "/api/v1/register",
+        [regCtrl](const httplib::Request& req, httplib::Response& res) {
+            regCtrl->handleRegister(req, res);
+        });
+
+    publicRoute("GET", "/api/v1/verify",
+        [regCtrl](const httplib::Request& req, httplib::Response& res) {
+            regCtrl->handleVerify(req, res);
+        });
+
+    spdlog::debug("[Router] registration routes registered");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Class routes
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * @brief Registers all /api/v1/classes routes.
+ *
+ *  POST   /api/v1/classes          — owner only   — create class
+ *  GET    /api/v1/classes          — owner/teacher — list classes
+ *  GET    /api/v1/classes/:id      — owner/teacher — get single class
+ *  PUT    /api/v1/classes/:id      — owner only    — update class
+ *  DELETE /api/v1/classes/:id      — owner only    — delete class
+ */
+void Router::registerClassRoutes()
+{
+    if (!m_svcs.classRepo || !m_svcs.teacherRepo) {
+        spdlog::warn("[Router] classRepo or teacherRepo not available — skipping class routes");
+        return;
+    }
+
+    auto classCtrl = std::make_shared<api::v1::ClassController>(
+        *m_svcs.classRepo, *m_svcs.teacherRepo, m_svcs.jwtAuth);
+
+    // ── Middleware ────────────────────────────────────────────────────────
+    const api::v1::middleware::CorsConfig corsConfig{
+        {"*"},
+        {"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+        {"Authorization", "Content-Type", "X-Request-ID", "Accept"},
+        false,
+        3600
+    };
+
+    auto cors   = std::make_shared<api::v1::middleware::CorsMiddleware>(corsConfig);
+    auto logger = std::make_shared<api::v1::middleware::LoggingMiddleware>();
+    auto iv     = std::make_shared<api::v1::middleware::InputValidationMiddleware>();
+    auto rl     = m_rl;
+    auto auth   = std::make_shared<api::v1::middleware::AuthMiddleware>(m_svcs.jwtAuth);
+
+    auto protectedRoute = [&](const std::string& method, const std::string& path, auto handler)
+    {
+        auto h = [cors, logger, iv, rl, auth, handler]
+            (const httplib::Request& req, httplib::Response& res)
+        {
+            logger->logRequest(req);
+            if (!cors->process(req, res)) { logger->logResponse(req, res); return; }
+            if (!iv->process(req, res))   { logger->logResponse(req, res); return; }
+            if (!rl->process(req, res))   { logger->logResponse(req, res); return; }
+            core::internal::ApiContext ctx;
+            ctx.requestId = req.has_header("X-Request-ID")
+                ? req.get_header_value("X-Request-ID") : "";
+            if (!auth->process(req, res, ctx)) { logger->logResponse(req, res); return; }
+            handler(req, res);
+            logger->logResponse(req, res);
+        };
+        if (method == "GET")         m_server.Get(path.c_str(), h);
+        else if (method == "POST")   m_server.Post(path.c_str(), h);
+        else if (method == "PUT")    m_server.Put(path.c_str(), h);
+        else if (method == "DELETE") m_server.Delete(path.c_str(), h);
+    };
+
+    // ── Collection routes ─────────────────────────────────────────────────
+    protectedRoute("POST", "/api/v1/classes",
+        [classCtrl](const httplib::Request& req, httplib::Response& res) {
+            classCtrl->handleCreate(req, res);
+        });
+
+    protectedRoute("GET", "/api/v1/classes",
+        [classCtrl](const httplib::Request& req, httplib::Response& res) {
+            classCtrl->handleList(req, res);
+        });
+
+    // ── Single-resource routes ────────────────────────────────────────────
+    protectedRoute("GET", R"(/api/v1/classes/([^/]+))",
+        [classCtrl](const httplib::Request& req, httplib::Response& res) {
+            classCtrl->handleGet(req, res);
+        });
+
+    protectedRoute("PUT", R"(/api/v1/classes/([^/]+))",
+        [classCtrl](const httplib::Request& req, httplib::Response& res) {
+            classCtrl->handleUpdate(req, res);
+        });
+
+    protectedRoute("DELETE", R"(/api/v1/classes/([^/]+))",
+        [classCtrl](const httplib::Request& req, httplib::Response& res) {
+            classCtrl->handleDelete(req, res);
+        });
+
+    spdlog::debug("[Router] class routes registered");
+}
+
+// ---------------------------------------------------------------------------
+// registerRequestRoutes
+// ---------------------------------------------------------------------------
+
+void Router::registerRequestRoutes()
+{
+    if (!m_svcs.requestRepo || !m_svcs.classRepo ||
+        !m_svcs.studentRepo || !m_svcs.teacherRepo) {
+        spdlog::warn("[Router] requestRepo or dependencies not available — skipping request routes");
+        return;
+    }
+
+    auto reqCtrl = std::make_shared<api::v1::RequestController>(
+        *m_svcs.requestRepo,
+        *m_svcs.classRepo,
+        *m_svcs.studentRepo,
+        *m_svcs.teacherRepo,
+        m_svcs.jwtAuth);
+
+    const api::v1::middleware::CorsConfig corsConfig{
+        {"*"},
+        {"GET", "POST", "OPTIONS"},
+        {"Authorization", "Content-Type", "X-Request-ID", "Accept"},
+        false,
+        3600
+    };
+
+    auto cors   = std::make_shared<api::v1::middleware::CorsMiddleware>(corsConfig);
+    auto logger = std::make_shared<api::v1::middleware::LoggingMiddleware>();
+    auto iv     = std::make_shared<api::v1::middleware::InputValidationMiddleware>();
+    auto rl     = m_rl;
+    auto auth   = std::make_shared<api::v1::middleware::AuthMiddleware>(m_svcs.jwtAuth);
+
+    auto protectedRoute = [&](const std::string& method, const std::string& path, auto handler)
+    {
+        auto h = [cors, logger, iv, rl, auth, handler]
+            (const httplib::Request& req, httplib::Response& res)
+        {
+            logger->logRequest(req);
+            if (!cors->process(req, res)) { logger->logResponse(req, res); return; }
+            if (!iv->process(req, res))   { logger->logResponse(req, res); return; }
+            if (!rl->process(req, res))   { logger->logResponse(req, res); return; }
+            core::internal::ApiContext ctx;
+            ctx.requestId = req.has_header("X-Request-ID")
+                ? req.get_header_value("X-Request-ID") : "";
+            if (!auth->process(req, res, ctx)) { logger->logResponse(req, res); return; }
+            handler(req, res);
+            logger->logResponse(req, res);
+        };
+        if (method == "GET")       m_server.Get(path.c_str(), h);
+        else if (method == "POST") m_server.Post(path.c_str(), h);
+    };
+
+    // Fixed-path routes first (before /:id patterns).
+    protectedRoute("POST", "/api/v1/requests/change-password",
+        [reqCtrl](const httplib::Request& req, httplib::Response& res) {
+            reqCtrl->handleSubmitChangePassword(req, res);
+        });
+
+    protectedRoute("GET", "/api/v1/requests/inbox",
+        [reqCtrl](const httplib::Request& req, httplib::Response& res) {
+            reqCtrl->handleListInbox(req, res);
+        });
+
+    protectedRoute("GET", "/api/v1/requests/outbox",
+        [reqCtrl](const httplib::Request& req, httplib::Response& res) {
+            reqCtrl->handleListOutbox(req, res);
+        });
+
+    // Parameterised routes after fixed paths.
+    protectedRoute("POST", R"(/api/v1/requests/([^/]+)/accept)",
+        [reqCtrl](const httplib::Request& req, httplib::Response& res) {
+            reqCtrl->handleAccept(req, res);
+        });
+
+    protectedRoute("POST", R"(/api/v1/requests/([^/]+)/reject)",
+        [reqCtrl](const httplib::Request& req, httplib::Response& res) {
+            reqCtrl->handleReject(req, res);
+        });
+
+    spdlog::debug("[Router] request (inbox/ticket) routes registered");
 }
 
 } // namespace hub32api::server::internal

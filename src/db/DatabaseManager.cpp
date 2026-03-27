@@ -4,8 +4,10 @@
  *        the full HUB32 schema with WAL mode and foreign key enforcement.
  *
  * Tables: schools, locations, computers, teachers, teacher_locations,
- *         active_sessions.
+ *         active_sessions, tenants, classes, students, registration_tokens,
+ *         pending_requests.
  * All timestamps are stored as Unix epoch seconds (INTEGER).
+ * Migration: Adds tenant_id FK to schools, teachers, locations, computers.
  */
 
 #include "../core/PrecompiledHeader.hpp"
@@ -77,6 +79,71 @@ CREATE INDEX IF NOT EXISTS idx_computers_location ON computers(location_id);
 CREATE INDEX IF NOT EXISTS idx_computers_state ON computers(state);
 CREATE INDEX IF NOT EXISTS idx_locations_school ON locations(school_id);
 CREATE INDEX IF NOT EXISTS idx_teachers_username ON teachers(username);
+
+CREATE TABLE IF NOT EXISTS tenants (
+    id           TEXT PRIMARY KEY,
+    slug         TEXT UNIQUE NOT NULL,
+    name         TEXT NOT NULL,
+    owner_email  TEXT UNIQUE NOT NULL,
+    status       TEXT DEFAULT 'pending',
+    plan         TEXT DEFAULT 'trial',
+    created_at   INTEGER NOT NULL,
+    activated_at INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS registration_tokens (
+    token      TEXT PRIMARY KEY,
+    tenant_id  TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    expires_at INTEGER NOT NULL,
+    used       INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS classes (
+    id          TEXT PRIMARY KEY,
+    tenant_id   TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    school_id   TEXT REFERENCES schools(id) ON DELETE CASCADE,  -- nullable: owner can create class without a school
+    name        TEXT NOT NULL,
+    teacher_id  TEXT REFERENCES teachers(id) ON DELETE SET NULL,
+    created_at  INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS students (
+    id               TEXT PRIMARY KEY,
+    tenant_id        TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    class_id         TEXT NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+    full_name        TEXT NOT NULL,
+    username         TEXT NOT NULL,
+    password_hash    TEXT NOT NULL,
+    machine_id       TEXT,
+    is_activated     INTEGER DEFAULT 0,
+    activated_at     INTEGER,
+    created_at       INTEGER NOT NULL,
+    UNIQUE(tenant_id, username)
+);
+
+CREATE INDEX IF NOT EXISTS idx_students_tenant  ON students(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_students_class   ON students(class_id);
+CREATE INDEX IF NOT EXISTS idx_classes_tenant   ON classes(tenant_id);
+
+-- Pending requests: subordinates (teachers, students) submit change_password or other
+-- requests; superiors (owner, teacher) accept or reject via inbox UI.
+CREATE TABLE IF NOT EXISTS pending_requests (
+    id            TEXT PRIMARY KEY,
+    tenant_id     TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    from_id       TEXT NOT NULL,   -- subject UUID (teacher_id or student_id)
+    from_role     TEXT NOT NULL,   -- 'teacher' | 'student'
+    to_id         TEXT NOT NULL,   -- recipient UUID (teacher_id or owner_id/tenant_id)
+    to_role       TEXT NOT NULL,   -- 'teacher' | 'owner'
+    type          TEXT NOT NULL,   -- 'change_password'
+    payload       TEXT NOT NULL,   -- JSON: {"password_hash": "argon2id:..."}
+    status        TEXT DEFAULT 'pending', -- 'pending' | 'accepted' | 'rejected'
+    created_at    INTEGER NOT NULL,
+    resolved_at   INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_pending_requests_to_id     ON pending_requests(to_id);
+CREATE INDEX IF NOT EXISTS idx_pending_requests_from_id   ON pending_requests(from_id);
+CREATE INDEX IF NOT EXISTS idx_pending_requests_tenant    ON pending_requests(tenant_id);
 )";
 
 } // anonymous namespace
@@ -142,6 +209,7 @@ DatabaseManager::DatabaseManager(const std::string& dataDir)
     execPragma("PRAGMA busy_timeout=5000;",  "busy_timeout=5000");
 
     createSchema();
+    runMigrations();
 
     spdlog::info("[DatabaseManager] opened school.db at '{}'", dbPath);
 }
@@ -213,6 +281,85 @@ void DatabaseManager::createSchema()
     } else {
         spdlog::debug("[DatabaseManager] schema created/verified successfully");
     }
+}
+
+// ---------------------------------------------------------------------------
+// Private: idempotent ALTER TABLE migrations
+// ---------------------------------------------------------------------------
+
+/**
+ * @brief Adds tenant_id columns to pre-existing tables if absent.
+ *
+ * SQLite versions before 3.35 do not support ADD COLUMN IF NOT EXISTS,
+ * so we use PRAGMA table_info() to check first, then ALTER TABLE only
+ * when the column is missing. This makes the migration fully idempotent.
+ */
+void DatabaseManager::runMigrations()
+{
+    if (!m_impl->db) return;
+
+    // Returns true when @p column already exists in @p table.
+    auto columnExists = [&](const char* table, const char* column) -> bool {
+        std::string sql = std::string("PRAGMA table_info(") + table + ")";
+        sqlite3_stmt* stmt = nullptr;
+        if (sqlite3_prepare_v2(m_impl->db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+            return false;
+        }
+        bool found = false;
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            const char* colName =
+                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+            if (colName && std::string_view{colName} == column) {
+                found = true;
+                break;
+            }
+        }
+        sqlite3_finalize(stmt);
+        return found;
+    };
+
+    // Runs an ALTER TABLE statement; logs a warning on failure (non-fatal).
+    auto addColumn = [&](const char* alterSql) {
+        char* errMsg = nullptr;
+        int rc = sqlite3_exec(m_impl->db, alterSql, nullptr, nullptr, &errMsg);
+        if (rc != SQLITE_OK) {
+            spdlog::warn("[DatabaseManager] migration failed (non-fatal): {}",
+                         errMsg ? errMsg : "?");
+            sqlite3_free(errMsg);
+        }
+    };
+
+    if (!columnExists("schools", "tenant_id")) {
+        addColumn("ALTER TABLE schools ADD COLUMN tenant_id TEXT REFERENCES tenants(id) ON DELETE CASCADE");
+    }
+    if (!columnExists("teachers", "tenant_id")) {
+        addColumn("ALTER TABLE teachers ADD COLUMN tenant_id TEXT NOT NULL DEFAULT ''");
+    }
+    if (!columnExists("locations", "tenant_id")) {
+        addColumn("ALTER TABLE locations ADD COLUMN tenant_id TEXT REFERENCES tenants(id) ON DELETE CASCADE");
+    }
+    if (!columnExists("computers", "tenant_id")) {
+        addColumn("ALTER TABLE computers ADD COLUMN tenant_id TEXT REFERENCES tenants(id) ON DELETE CASCADE");
+    }
+
+    // Create indexes for legacy tables' newly added tenant_id columns.
+    // These must run AFTER the ALTER TABLE statements to avoid "column does not exist" errors.
+    auto execSql = [&](const char* sql) {
+        char* errMsg = nullptr;
+        int rc = sqlite3_exec(m_impl->db, sql, nullptr, nullptr, &errMsg);
+        if (rc != SQLITE_OK) {
+            spdlog::warn("[DatabaseManager] migration SQL failed (non-fatal): {}",
+                         errMsg ? errMsg : "?");
+            sqlite3_free(errMsg);
+        }
+    };
+
+    execSql("CREATE INDEX IF NOT EXISTS idx_schools_tenant ON schools(tenant_id)");
+    execSql("CREATE INDEX IF NOT EXISTS idx_teachers_tenant ON teachers(tenant_id)");
+    execSql("CREATE INDEX IF NOT EXISTS idx_locations_tenant ON locations(tenant_id)");
+    execSql("CREATE INDEX IF NOT EXISTS idx_computers_tenant ON computers(tenant_id)");
+
+    spdlog::debug("[DatabaseManager] migrations applied/verified");
 }
 
 } // namespace hub32api::db

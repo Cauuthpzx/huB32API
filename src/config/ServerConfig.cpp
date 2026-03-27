@@ -169,6 +169,45 @@ Result<ServerConfig> ServerConfig::from_file(const std::string& path)
     cfg.tlsEnabled            = j.value("tlsEnabled", cfg.tlsEnabled);
     cfg.tlsCertFile           = j.value("tlsCertFile", cfg.tlsCertFile);
     cfg.tlsKeyFile            = j.value("tlsKeyFile", cfg.tlsKeyFile);
+
+    // Support nested "http" object
+    if (j.contains("http") && j["http"].is_object()) {
+        const auto& httpObj   = j["http"];
+        cfg.httpEnabled       = httpObj.value("enabled",     cfg.httpEnabled);
+        cfg.httpPort          = httpObj.value("port",        cfg.httpPort);
+        cfg.bindAddress       = httpObj.value("bindAddress", cfg.bindAddress);
+    }
+
+    // Support nested "tls" object
+    if (j.contains("tls") && j["tls"].is_object()) {
+        const auto& tlsObj    = j["tls"];
+        cfg.tlsEnabled        = tlsObj.value("enabled",  cfg.tlsEnabled);
+        cfg.tlsCertFile       = tlsObj.value("certFile", cfg.tlsCertFile);
+        cfg.tlsKeyFile        = tlsObj.value("keyFile",  cfg.tlsKeyFile);
+    }
+
+    // Support nested "connections" object
+    if (j.contains("connections") && j["connections"].is_object()) {
+        const auto& connObj        = j["connections"];
+        cfg.connectionLimitPerHost = connObj.value("limitPerHost",  cfg.connectionLimitPerHost);
+        cfg.globalConnectionLimit  = connObj.value("globalLimit",   cfg.globalConnectionLimit);
+        cfg.connectionLifetimeSec  = connObj.value("lifetimeSec",   cfg.connectionLifetimeSec);
+        cfg.connectionIdleTimeoutSec = connObj.value("idleTimeoutSec", cfg.connectionIdleTimeoutSec);
+        cfg.authTimeoutSec         = connObj.value("authTimeoutSec", cfg.authTimeoutSec);
+    }
+
+    // Support nested "threads" object
+    if (j.contains("threads") && j["threads"].is_object()) {
+        cfg.workerThreads     = j["threads"].value("workerCount", cfg.workerThreads);
+    }
+
+    // Support nested "auth" object
+    if (j.contains("auth") && j["auth"].is_object()) {
+        const auto& authObj   = j["auth"];
+        cfg.usersFile         = authObj.value("usersFile",  cfg.usersFile);
+        cfg.agentKeyFile      = authObj.value("agentKeyFile", cfg.agentKeyFile);
+        cfg.authKeyFile       = authObj.value("authKeyFile",  cfg.authKeyFile);
+    }
     cfg.connectionLimitPerHost = j.value("connectionLimitPerHost", cfg.connectionLimitPerHost);
     cfg.globalConnectionLimit = j.value("globalConnectionLimit", cfg.globalConnectionLimit);
     cfg.connectionLifetimeSec = j.value("connectionLifetimeSec", cfg.connectionLifetimeSec);
@@ -244,6 +283,37 @@ Result<ServerConfig> ServerConfig::from_file(const std::string& path)
 
     cfg.metricsEnabled        = j.value("metricsEnabled", cfg.metricsEnabled);
     cfg.metricsPort           = j.value("metricsPort", cfg.metricsPort);
+
+    // Môi trường
+    cfg.environment           = j.value("environment", cfg.environment);
+
+    // App base URL (flat key)
+    cfg.appBaseUrl            = j.value("appBaseUrl", cfg.appBaseUrl);
+
+    // SMTP (flat keys — legacy)
+    cfg.smtpHost              = j.value("smtpHost", cfg.smtpHost);
+    cfg.smtpPort              = j.value("smtpPort", cfg.smtpPort);
+    cfg.smtpUseTls            = j.value("smtpUseTls", cfg.smtpUseTls);
+    cfg.smtpUsername          = j.value("smtpUsername", cfg.smtpUsername);
+    cfg.smtpPasswordFile      = j.value("smtpPasswordFile", cfg.smtpPasswordFile);
+    cfg.smtpFromAddress       = j.value("smtpFromAddress", cfg.smtpFromAddress);
+    cfg.smtpFromName          = j.value("smtpFromName", cfg.smtpFromName);
+    cfg.smtpTimeoutSec        = j.value("smtpTimeoutSec", cfg.smtpTimeoutSec);
+    cfg.smtpVerifySsl         = j.value("smtpVerifySsl", cfg.smtpVerifySsl);
+
+    // SMTP nested object (preferred format)
+    if (j.contains("smtp") && j["smtp"].is_object()) {
+        const auto& smtpObj   = j["smtp"];
+        cfg.smtpHost          = smtpObj.value("host", cfg.smtpHost);
+        cfg.smtpPort          = smtpObj.value("port", cfg.smtpPort);
+        cfg.smtpUseTls        = smtpObj.value("useTls", cfg.smtpUseTls);
+        cfg.smtpUsername      = smtpObj.value("username", cfg.smtpUsername);
+        cfg.smtpPasswordFile  = smtpObj.value("passwordFile", cfg.smtpPasswordFile);
+        cfg.smtpFromAddress   = smtpObj.value("fromAddress", cfg.smtpFromAddress);
+        cfg.smtpFromName      = smtpObj.value("fromName", cfg.smtpFromName);
+        cfg.smtpTimeoutSec    = smtpObj.value("timeoutSec", cfg.smtpTimeoutSec);
+        cfg.smtpVerifySsl     = smtpObj.value("verifySsl", cfg.smtpVerifySsl);
+    }
 
     // DEPRECATION: jwtSecret is no longer used (HS256 removed). Log warning if present.
     if (!cfg.jwtSecret.empty()) {
