@@ -880,9 +880,25 @@ void Router::registerV1()
                 return;
             }
 
-            auto teacher = m_svcs.teacherRepo->findByUsername(subject);
+            // subject is a UUID for tenant teachers/owners; try findById first,
+            // fall back to findByUsername for superadmin/admin (UserRoleStore users).
+            auto teacher = m_svcs.teacherRepo->findById(subject);
             if (teacher.is_err()) {
-                api::common::sendError(res, 404, "Teacher not found");
+                teacher = m_svcs.teacherRepo->findByUsername(subject);
+            }
+            if (teacher.is_err()) {
+                // subject is a non-tenant user (admin/superadmin from UserRoleStore)
+                const auto& ctx = req.get_header_value("Authorization");
+                auto authCtx = m_svcs.jwtAuth.authenticate(ctx.substr(7));
+                nlohmann::json j;
+                j["id"]        = subject;
+                j["username"]  = subject;
+                j["fullName"]  = subject;
+                j["role"]      = authCtx.is_ok() && authCtx.value().token
+                                    ? authCtx.value().token->role : "unknown";
+                j["createdAt"] = 0;
+                res.status = 200;
+                res.set_content(j.dump(), "application/json");
                 return;
             }
 
@@ -1956,6 +1972,168 @@ void Router::registerRegisterRoutes()
         if (method == "POST") m_server.Post(path.c_str(), h);
         else if (method == "GET") m_server.Get(path.c_str(), h);
     };
+
+    // Serve registration HTML form at GET /register
+    m_server.Get("/register", [](const httplib::Request&, httplib::Response& res) {
+        res.status = 200;
+        res.set_content(R"html(<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Dang ky Hub32</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,sans-serif;background:#f0f2f5;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
+.card{background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.1),0 8px 24px rgba(0,0,0,.06);width:100%;max-width:480px;overflow:hidden}
+.accent{height:4px;background:linear-gradient(135deg,#1d4ed8,#2563eb)}
+.body{padding:36px 40px 40px}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:28px}
+.icon{width:40px;height:40px;background:#1d4ed8;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;font-weight:800;flex-shrink:0}
+.bname{font-size:20px;font-weight:700;color:#0f172a}
+h1{font-size:20px;font-weight:700;color:#0f172a;margin-bottom:6px}
+.sub{font-size:14px;color:#64748b;margin-bottom:28px}
+.field{margin-bottom:18px}
+label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px}
+input[type=text],input[type=email],input[type=password]{width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;color:#0f172a;outline:none;transition:border-color .15s,box-shadow .15s}
+input:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+input.err{border-color:#ef4444}
+.ferr{font-size:12px;color:#ef4444;margin-top:4px;display:none}
+.crow{display:flex;gap:10px;align-items:flex-end}
+.crow input{flex:1}
+.cbox{flex-shrink:0;padding:10px 18px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;font-family:'Courier New',monospace;font-size:22px;font-weight:700;letter-spacing:6px;color:#1d4ed8;cursor:pointer;user-select:none;white-space:nowrap;transition:opacity .2s;min-width:120px;text-align:center}
+.cbox:hover{opacity:.7}
+.chint{font-size:11px;color:#94a3b8;margin-top:4px}
+.btn{width:100%;padding:12px;background:#1d4ed8;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;margin-top:8px;transition:background .15s}
+.btn:hover{background:#1e40af}
+.btn:disabled{opacity:.6;cursor:not-allowed}
+.alert{border-radius:8px;padding:12px 16px;font-size:14px;margin-bottom:20px;display:none;line-height:1.5}
+.aerr{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:sp .6s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.ok{text-align:center;padding:40px;display:none}
+.okicon{width:64px;height:64px;background:#dcfce7;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px}
+.ok h2{font-size:20px;color:#0f172a;margin-bottom:10px}
+.ok p{font-size:14px;color:#64748b;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="card">
+<div class="accent"></div>
+<div class="body" id="F">
+  <div class="brand"><div class="icon">H</div><span class="bname">Hub32</span></div>
+  <h1>Dang ky to chuc</h1>
+  <p class="sub">Tao tai khoan quan ly phong may cho truong cua ban</p>
+  <div class="alert aerr" id="AE"></div>
+  <form id="form" novalidate>
+    <div class="field">
+      <label>Ten to chuc / truong</label>
+      <input type="text" id="orgName" placeholder="VD: Truong THPT Nguyen Hue" maxlength="100"/>
+      <div class="ferr" id="e1">Vui long nhap ten to chuc</div>
+    </div>
+    <div class="field">
+      <label>Ten dang nhap (username)</label>
+      <input type="text" id="username" placeholder="VD: admin.truong" maxlength="50" autocomplete="username"/>
+      <div class="ferr" id="e6">Chi dung chu, so, dau cham, gach duoi, gach ngang</div>
+    </div>
+    <div class="field">
+      <label>Email quan tri vien</label>
+      <input type="email" id="email" placeholder="admin@truong.edu.vn"/>
+      <div class="ferr" id="e2">Email khong hop le</div>
+    </div>
+    <div class="field">
+      <label>Mat khau</label>
+      <input type="password" id="pw" placeholder="Toi thieu 8 ky tu"/>
+      <div class="ferr" id="e3">Mat khau toi thieu 8 ky tu</div>
+    </div>
+    <div class="field">
+      <label>Nhap lai mat khau</label>
+      <input type="password" id="pw2" placeholder="Nhap lai mat khau"/>
+      <div class="ferr" id="e4">Mat khau khong khop</div>
+    </div>
+    <div class="field">
+      <label>Ma xac nhan (nhap 6 so hien thi ben phai)</label>
+      <div class="crow">
+        <input type="text" id="ca" placeholder="Nhap 6 so" maxlength="6" inputmode="numeric" autocomplete="off"/>
+        <div class="cbox" id="cbox" title="Nhan de lam moi" onclick="lc()">......</div>
+      </div>
+      <div class="chint">Nhan vao day so de lam moi captcha</div>
+      <div class="ferr" id="e5">Ma xac nhan khong dung</div>
+    </div>
+    <button type="submit" class="btn" id="btn">Dang ky</button>
+  </form>
+</div>
+<div class="ok" id="OK">
+  <div class="okicon">&#x2709;</div>
+  <h2>Kiem tra email cua ban!</h2>
+  <p>Chung toi da gui link kich hoat den<br/><strong id="EM"></strong><br/><br/>
+  Vui long nhan vao link trong email de kich hoat tai khoan.<br/>Link co hieu luc trong <strong>24 gio</strong>.</p>
+</div>
+</div>
+<script>
+var cid='';
+function lc(){
+  var b=document.getElementById('cbox');
+  b.style.opacity='.3';
+  document.getElementById('ca').value='';
+  fetch('/api/v1/captcha').then(function(r){return r.json();}).then(function(d){
+    cid=d.captchaId;b.textContent=d.text;b.style.opacity='1';
+  }).catch(function(){b.textContent='ERR';b.style.opacity='1';});
+}
+function se(id,eid,show){
+  var i=document.getElementById(id),e=document.getElementById(eid);
+  if(show){i.classList.add('err');e.style.display='block';}
+  else{i.classList.remove('err');e.style.display='none';}
+  return !show;
+}
+function ve(e){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);}
+document.getElementById('form').addEventListener('submit',function(ev){
+  ev.preventDefault();
+  var org=document.getElementById('orgName').value.trim();
+  var uname=document.getElementById('username').value.trim();
+  var em=document.getElementById('email').value.trim();
+  var pw=document.getElementById('pw').value;
+  var pw2=document.getElementById('pw2').value;
+  var cap=document.getElementById('ca').value.trim();
+  var ok=true;
+  ok=se('orgName','e1',org.length===0)&&ok;
+  ok=se('username','e6',uname.length===0||!/^[a-zA-Z0-9._-]+$/.test(uname))&&ok;
+  ok=se('email','e2',!ve(em))&&ok;
+  ok=se('pw','e3',pw.length<8)&&ok;
+  ok=se('pw2','e4',pw!==pw2)&&ok;
+  ok=se('ca','e5',!/^\d{6}$/.test(cap))&&ok;
+  if(!ok)return;
+  var ae=document.getElementById('AE');ae.style.display='none';
+  var btn=document.getElementById('btn');btn.disabled=true;
+  btn.innerHTML='<span class="spin"></span>Dang xu ly...';
+  fetch('/api/v1/register',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({orgName:org,username:uname,email:em,password:pw,captchaId:cid,captchaAnswer:cap})
+  }).then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});})
+  .then(function(x){
+    if(x.ok){
+      document.getElementById('F').style.display='none';
+      document.getElementById('OK').style.display='block';
+      document.getElementById('EM').textContent=em;
+    } else {
+      var msg=x.d.detail||x.d.title||'Dang ky that bai.';
+      ae.textContent=msg;ae.style.display='block';
+      lc();btn.disabled=false;btn.textContent='Dang ky';
+    }
+  }).catch(function(){
+    ae.textContent='Khong the ket noi den may chu.';ae.style.display='block';
+    lc();btn.disabled=false;btn.textContent='Dang ky';
+  });
+});
+lc();
+</script>
+</body>
+</html>)html", "text/html; charset=utf-8");
+    });
+
+    publicRoute("GET", "/api/v1/captcha",
+        [regCtrl](const httplib::Request& req, httplib::Response& res) {
+            regCtrl->handleCaptcha(req, res);
+        });
 
     publicRoute("POST", "/api/v1/register",
         [regCtrl](const httplib::Request& req, httplib::Response& res) {

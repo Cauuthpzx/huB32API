@@ -99,24 +99,27 @@ void AuthController::handleLogin(const httplib::Request& req, httplib::Response&
     std::string tid;
 
     if (authMethod == AuthMethod::Logon) {
-        if (!tenantId.empty()) {
-            // --- Try teacher first (DB lookup, scoped to tenant) ---
+        // --- Try teacher lookup (scoped to tenant if X-Tenant-ID provided,
+        //     otherwise search across all tenants by username) ---
+        {
             auto teacherResult = m_teacherRepo.authenticate(
                 req_dto.username, req_dto.password, tenantId);
             if (teacherResult.is_ok()) {
                 const auto& rec = teacherResult.value();
                 subject = rec.id;
-                role    = rec.role;   // "teacher" or "admin" (tenant admin role)
+                role    = rec.role;
+                tid     = tenantId.empty() ? rec.tenantId : tenantId;
+            }
+        }
+
+        if (subject.empty() && !tenantId.empty()) {
+            // --- Try student (DB lookup, scoped to tenant) ---
+            auto studentResult = m_studentRepo.authenticate(
+                req_dto.username, req_dto.password, tenantId);
+            if (studentResult.is_ok()) {
+                subject = studentResult.value().username;
+                role    = to_string(UserRole::Student);
                 tid     = tenantId;
-            } else {
-                // --- Try student (DB lookup, scoped to tenant) ---
-                auto studentResult = m_studentRepo.authenticate(
-                    req_dto.username, req_dto.password, tenantId);
-                if (studentResult.is_ok()) {
-                    subject = studentResult.value().username;
-                    role    = to_string(UserRole::Student);
-                    tid     = tenantId;
-                }
             }
         }
 

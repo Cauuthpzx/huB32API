@@ -34,6 +34,7 @@ public:
 
     void handleRegister(const httplib::Request& req, httplib::Response& res);
     void handleVerify(const httplib::Request& req, httplib::Response& res);
+    void handleCaptcha(const httplib::Request& req, httplib::Response& res);
 
 private:
     db::TenantRepository&  m_tenantRepo;
@@ -63,6 +64,12 @@ private:
 
     // Minimal RFC-5322 email format check.
     static bool isValidEmail(const std::string& email);
+
+    // Returns {captchaId, digits} where captchaId is an HMAC-signed token.
+    static std::pair<std::string, std::string> generateCaptcha();
+
+    // Returns true if captchaId signature is valid, answer matches, and not expired.
+    static bool verifyCaptcha(const std::string& captchaId, const std::string& answer);
 };
 
 } // namespace hub32api::api::v1

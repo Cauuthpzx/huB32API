@@ -23,7 +23,7 @@ using hub32api::auth::UserRoleStore;
 
 // ---------------------------------------------------------------------------
 // Helper: populate a TeacherRecord from the current statement row.
-// Column order: 0:id, 1:username, 2:full_name, 3:role, 4:created_at
+// Column order: 0:id, 1:username, 2:full_name, 3:role, 4:created_at, 5:tenant_id
 // ---------------------------------------------------------------------------
 static TeacherRecord recordFromStmt(sqlite3_stmt* stmt)
 {
@@ -38,6 +38,9 @@ static TeacherRecord recordFromStmt(sqlite3_stmt* stmt)
     rec.fullName  = col_text(2);
     rec.role      = col_text(3);
     rec.createdAt = sqlite3_column_int64(stmt, 4);
+    if (sqlite3_column_count(stmt) > 5) {
+        rec.tenantId = col_text(5);
+    }
     return rec;
 }
 
@@ -137,7 +140,7 @@ Result<TeacherRecord> TeacherRepository::findById(const std::string& id)
     std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
 
     constexpr const char* k_sql =
-        "SELECT id, username, full_name, role, created_at "
+        "SELECT id, username, full_name, role, created_at, tenant_id "
         "FROM teachers WHERE id = ? LIMIT 1;";
 
     sqlite3_stmt* stmt = nullptr;
@@ -189,7 +192,7 @@ Result<TeacherRecord> TeacherRepository::findByUsername(const std::string& usern
     std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
 
     constexpr const char* k_sql =
-        "SELECT id, username, full_name, role, created_at "
+        "SELECT id, username, full_name, role, created_at, tenant_id "
         "FROM teachers WHERE username = ? LIMIT 1;";
 
     sqlite3_stmt* stmt = nullptr;
@@ -255,9 +258,9 @@ Result<TeacherRecord> TeacherRepository::authenticate(const std::string& usernam
     // Build SQL dynamically — no string concatenation for values, only for structure.
     // When tenantId is supplied, scope the lookup to that tenant.
     const std::string k_sql = tenantId.empty()
-        ? "SELECT id, username, full_name, role, created_at, password_hash "
+        ? "SELECT id, username, full_name, role, created_at, password_hash, tenant_id "
           "FROM teachers WHERE username = ? LIMIT 1;"
-        : "SELECT id, username, full_name, role, created_at, password_hash "
+        : "SELECT id, username, full_name, role, created_at, password_hash, tenant_id "
           "FROM teachers WHERE username = ? AND tenant_id = ? LIMIT 1;";
 
     sqlite3_stmt* stmt = nullptr;
@@ -277,7 +280,7 @@ Result<TeacherRecord> TeacherRepository::authenticate(const std::string& usernam
     const int rc = sqlite3_step(stmt);
 
     if (rc == SQLITE_ROW) {
-        // Columns: 0:id, 1:username, 2:full_name, 3:role, 4:created_at, 5:password_hash
+        // Columns: 0:id, 1:username, 2:full_name, 3:role, 4:created_at, 5:password_hash, 6:tenant_id
         auto col_text = [&](int col) -> std::string {
             const char* txt = reinterpret_cast<const char*>(sqlite3_column_text(stmt, col));
             return txt ? std::string(txt) : std::string{};
@@ -290,6 +293,7 @@ Result<TeacherRecord> TeacherRepository::authenticate(const std::string& usernam
         rec.role      = col_text(3);
         rec.createdAt = sqlite3_column_int64(stmt, 4);
         const std::string storedHash = col_text(5);
+        rec.tenantId  = col_text(6);
         sqlite3_finalize(stmt);
 
         if (UserRoleStore::verifyPassword(password, storedHash)) {
@@ -332,9 +336,9 @@ Result<std::vector<TeacherRecord>> TeacherRepository::listAll(const std::string&
     std::lock_guard<std::mutex> lock(m_dbManager.dbMutex());
 
     const std::string k_sql = tenantId.empty()
-        ? "SELECT id, username, full_name, role, created_at "
+        ? "SELECT id, username, full_name, role, created_at, tenant_id "
           "FROM teachers ORDER BY username ASC;"
-        : "SELECT id, username, full_name, role, created_at "
+        : "SELECT id, username, full_name, role, created_at, tenant_id "
           "FROM teachers WHERE tenant_id = ? ORDER BY username ASC;";
 
     sqlite3_stmt* stmt = nullptr;

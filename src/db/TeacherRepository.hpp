@@ -15,7 +15,8 @@ struct TeacherRecord {
     std::string id;
     std::string username;
     std::string fullName;
-    std::string role;          // "admin" or "teacher"
+    std::string role;          // "owner", "admin" or "teacher"
+    std::string tenantId;      // tenant this teacher belongs to
     int64_t     createdAt = 0;
     // NOTE: password_hash intentionally NOT included — never expose to API
 };
